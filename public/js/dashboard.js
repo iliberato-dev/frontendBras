@@ -26,7 +26,6 @@ const dashboardGape = document.getElementById("dashboardGape");
 const totalCountsList = document.getElementById("totalCountsList");
 
 // !!! IMPORTANTE: Substitua pela URL PÚBLICA do seu backend no Render !!!
-// Exemplo: const BACKEND_URL = 'https://seu-app-backend.onrender.com';
 const BACKEND_URL = 'https://backendbras.onrender.com';
 
 function showGlobalLoading(show, message = "Carregando...") {
@@ -47,18 +46,24 @@ function showGlobalLoading(show, message = "Carregando...") {
 }
 
 function showMessage(message, type = "info") {
-    if (message.includes("Carregando dados dos membros...") || message.includes("Carregando resumo do dashboard...")) {
+    // Adiciona uma condição para não mostrar mensagens de "Registrando..." no messageArea global
+    if (message.includes("Carregando dados dos membros...") || 
+        message.includes("Carregando resumo do dashboard...") ||
+        message.includes("Registrando presença para ")) { // Nova condição
         return;
     }
+    
     messageArea.textContent = message;
     messageArea.className = "message-box show";
     messageArea.classList.remove("hidden");
 
-    messageArea.classList.remove("message-success", "message-error", "bg-blue-100", "text-blue-800");
+    messageArea.classList.remove("message-success", "message-error", "bg-blue-100", "text-blue-800", "bg-yellow-100", "text-yellow-800"); // Adicionado bg-yellow-100 para warning
     if (type === "success") {
         messageArea.classList.add("message-success");
     } else if (type === "error") {
         messageArea.classList.add("message-error");
+    } else if (type === "warning") { // Para mensagens como "já registrado"
+        messageArea.classList.add("bg-yellow-100", "text-yellow-800");
     } else {
         messageArea.classList.add("bg-blue-100", "text-blue-800");
     }
@@ -66,7 +71,7 @@ function showMessage(message, type = "info") {
     setTimeout(() => {
         messageArea.classList.remove("show");
         setTimeout(() => messageArea.classList.add("hidden"), 500);
-    }, 5000);
+    }, 4000); // Reduzido para 4 segundos para notificações de presença
 }
 
 async function fetchMembers() {
@@ -82,7 +87,6 @@ async function fetchMembers() {
     `;
 
     try {
-        // Usa a BACKEND_URL para buscar os membros
         const response = await fetch(`${BACKEND_URL}/get-membros`);
         if (!response.ok) {
             throw new Error(`Erro HTTP: ${response.status} - ${response.statusText}`);
@@ -169,11 +173,17 @@ function displayMembers(members) {
                 confirmBtn.classList.add("hidden");
                 infoDiv.textContent = "";
                 infoDiv.classList.add("hidden");
+                // Garante que o estado do botão e checkbox seja redefinido se desmarcar
+                confirmBtn.disabled = false;
+                checkbox.disabled = false;
+                card.classList.remove('animate-pulse-green', 'animate-shake-red'); // Remove animações
             }
         });
 
         confirmBtn.addEventListener("click", async function () {
-            showGlobalLoading(true, `Registrando presença para ${member.Nome}...`);
+            // Não usamos showGlobalLoading aqui para não bloquear a tela
+            // showGlobalLoading(true, `Registrando presença para ${member.Nome}...`); // REMOVIDO!
+
             const now = new Date();
             const dia = String(now.getDate()).padStart(2, "0");
             const mes = String(now.getMonth() + 1).padStart(2, "0");
@@ -183,14 +193,19 @@ function displayMembers(members) {
             const seg = String(now.getSeconds()).padStart(2, "0");
             const dataHora = `${dia}/${mes}/${ano} ${hora}:${min}:${seg}`;
 
+            // Feedback visual no próprio cartão
             infoDiv.textContent = `Registrando...`;
-            infoDiv.classList.remove("hidden", "text-green-700");
-            infoDiv.classList.add("text-blue-700");
+            infoDiv.classList.remove("hidden", "text-green-700", "text-red-600", "text-yellow-700"); // Limpa todas as cores
+            infoDiv.classList.add("text-blue-700"); // Cor para "registrando"
+            
+            // Desabilita o botão e checkbox para evitar cliques múltiplos
             confirmBtn.disabled = true;
             checkbox.disabled = true;
 
+            // Remove quaisquer animações anteriores
+            card.classList.remove('animate-pulse-green', 'animate-shake-red');
+
             try {
-                // Usa a BACKEND_URL para registrar a presença
                 const response = await fetch(`${BACKEND_URL}/presenca`, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
@@ -205,15 +220,52 @@ function displayMembers(members) {
                 const responseData = await response.json();
 
                 if (response.ok) {
-                    infoDiv.textContent = `Presença marcada em ${dataHora}`;
-                    infoDiv.classList.remove("text-blue-700");
-                    infoDiv.classList.add("text-green-700");
-                    showMessage("Presença registrada com sucesso!", "success");
+                    if (responseData.success) { // Verifique se o backend envia `success: true` para sucesso
+                        infoDiv.textContent = `Presença marcada em ${dataHora}`;
+                        infoDiv.classList.remove("text-blue-700");
+                        infoDiv.classList.add("text-green-700");
+                        
+                        // Opcional: Animação de sucesso no card
+                        card.classList.add('animate-pulse-green');
+                        setTimeout(() => card.classList.remove('animate-pulse-green'), 1000);
+
+                        // Opcional: Você pode querer atualizar a contagem total de presenças no dashboard aqui
+                        // Se `fetchAndDisplaySummary` não for muito pesada, pode chamá-la.
+                        // Ou, de forma mais eficiente, atualize o contador específico do membro se você tiver um.
+                        // Exemplo: fetchAndDisplaySummary();
+                        // Ou se tiver um contador no membro: member.presencas++; updateMemberCardPresences(member);
+
+                    } else { // O backend retornou OK, mas com uma mensagem de erro específica (ex: "já registrado")
+                        infoDiv.textContent = `Erro: ${responseData.message || "Falha ao registrar"}`;
+                        infoDiv.classList.remove("text-blue-700", "text-green-700");
+                        if (responseData.message && responseData.message.includes("já foi registrada")) {
+                             infoDiv.classList.add("text-yellow-700"); // Para "já registrada"
+                             showMessage(`Presença de ${member.Nome} já foi registrada hoje.`, "warning");
+                        } else {
+                             infoDiv.classList.add("text-red-600"); // Para outros erros
+                             showMessage(`Erro ao registrar presença: ${responseData.message || "Erro desconhecido"}`, "error");
+                        }
+                       
+                        // Animação de erro no card
+                        card.classList.add('animate-shake-red');
+                        setTimeout(() => card.classList.remove('animate-shake-red'), 1000);
+
+                        // Reabilita o botão e checkbox apenas em caso de falha para permitir nova tentativa
+                        confirmBtn.disabled = false;
+                        checkbox.disabled = false;
+                    }
                 } else {
-                    infoDiv.textContent = `Erro: ${responseData.details || responseData.message || "Falha ao registrar"}`;
+                    // Erro HTTP (4xx, 5xx)
+                    infoDiv.textContent = `Erro: ${responseData.message || "Falha ao registrar"}`;
                     infoDiv.classList.remove("text-blue-700", "text-green-700");
                     infoDiv.classList.add("text-red-600");
-                    showMessage(`Erro ao registrar presença: ${responseData.details || responseData.message || "Erro desconhecido"}`, "error");
+                    showMessage(`Erro ao registrar presença: ${responseData.message || "Erro desconhecido"} (HTTP ${response.status})`, "error");
+                    
+                    // Animação de erro no card
+                    card.classList.add('animate-shake-red');
+                    setTimeout(() => card.classList.remove('animate-shake-red'), 1000);
+
+                    // Reabilita o botão e checkbox
                     confirmBtn.disabled = false;
                     checkbox.disabled = false;
                 }
@@ -223,11 +275,25 @@ function displayMembers(members) {
                 infoDiv.classList.remove("text-blue-700", "text-green-700");
                 infoDiv.classList.add("text-red-600");
                 showMessage("Falha ao enviar presença para o servidor. Verifique sua conexão.", "error");
+                
+                // Animação de erro no card
+                card.classList.add('animate-shake-red');
+                setTimeout(() => card.classList.remove('animate-shake-red'), 1000);
+
+                // Reabilita o botão e checkbox
                 confirmBtn.disabled = false;
                 checkbox.disabled = false;
             } finally {
-                confirmBtn.classList.add("hidden");
-                showGlobalLoading(false);
+                // Remove o botão de confirmar presença após a tentativa (sucesso ou falha)
+                // Se for um sucesso, o usuário não precisará mais dele.
+                // Se for falha, ele desabilitou para nova tentativa.
+                confirmBtn.classList.add("hidden"); 
+                checkbox.checked = false; // Desmarca o checkbox para "resetar" o estado
+                
+                // Se o backend indicou sucesso, ou que já foi registrado, 
+                // manter o checkbox desabilitado é uma opção para evitar duplicações.
+                // Ou, se quiser permitir marcar novamente após erro, reabilite aqui.
+                // Atualmente, ele só reabilita em caso de erro.
             }
         });
     });
@@ -258,7 +324,6 @@ function applyFiltersWithMessage() {
 async function fetchAndDisplaySummary() {
     showGlobalLoading(true, "Carregando resumo do dashboard...");
     try {
-        // Usa a BACKEND_URL para buscar presenças totais
         const responseTotal = await fetch(`${BACKEND_URL}/get-presencas-total`);
         if (!responseTotal.ok) {
             throw new Error(`Erro ao buscar presenças totais: ${responseTotal.statusText}`);
@@ -375,6 +440,7 @@ function toggleDashboardVisibility() {
     }
 }
 
+// Event Listeners
 applyFiltersBtn.addEventListener("click", applyFiltersWithMessage);
 clearFiltersBtn.addEventListener("click", clearFilters);
 
