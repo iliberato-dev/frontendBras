@@ -28,16 +28,23 @@ const totalCountsList = document.getElementById("totalCountsList");
 // !!! IMPORTANTE: Substitua pela URL PÚBLICA do seu backend no Render !!!
 const BACKEND_URL = 'https://backendbras.onrender.com';
 
+/**
+ * Exibe ou oculta o indicador de carregamento global.
+ * @param {boolean} show - Se `true`, exibe o indicador; se `false`, oculta.
+ * @param {string} message - A mensagem a ser exibida no indicador.
+ */
 function showGlobalLoading(show, message = "Carregando...") {
     if (globalLoadingIndicator && loadingMessageSpan) {
         loadingMessageSpan.textContent = message;
         if (show) {
             globalLoadingIndicator.style.display = "flex";
+            // Pequeno atraso para garantir que a transição de opacidade funcione
             setTimeout(() => {
                 globalLoadingIndicator.classList.add("show");
             }, 10);
         } else {
             globalLoadingIndicator.classList.remove("show");
+            // Atraso para permitir que a transição de opacidade termine antes de ocultar
             setTimeout(() => {
                 globalLoadingIndicator.style.display = "none";
             }, 300);
@@ -45,35 +52,46 @@ function showGlobalLoading(show, message = "Carregando...") {
     }
 }
 
+/**
+ * Exibe uma mensagem de feedback para o usuário.
+ * @param {string} message - A mensagem a ser exibida.
+ * @param {string} type - O tipo da mensagem ('success', 'error', 'info', 'warning').
+ */
 function showMessage(message, type = "info") {
-    // Adiciona uma condição para não mostrar mensagens de "Registrando..." no messageArea global
+    // Adiciona uma condição para não mostrar mensagens específicas no messageArea global
     if (message.includes("Carregando dados dos membros...") || 
         message.includes("Carregando resumo do dashboard...") ||
-        message.includes("Registrando presença para ")) { // Nova condição
-        return;
+        message.includes("Registrando presença para ")) { 
+        return; // Não mostra essas mensagens no toast global
     }
     
     messageArea.textContent = message;
-    messageArea.className = "message-box show";
-    messageArea.classList.remove("hidden");
-
-    messageArea.classList.remove("message-success", "message-error", "bg-blue-100", "text-blue-800", "bg-yellow-100", "text-yellow-800"); // Adicionado bg-yellow-100 para warning
+    messageArea.className = "message-box show"; // Remove 'hidden' e adiciona 'show' para animação
+    
+    // Limpa todas as classes de tipo antes de adicionar a nova
+    messageArea.classList.remove("message-success", "message-error", "bg-blue-100", "text-blue-800", "bg-yellow-100", "text-yellow-800"); 
+    
     if (type === "success") {
         messageArea.classList.add("message-success");
     } else if (type === "error") {
         messageArea.classList.add("message-error");
-    } else if (type === "warning") { // Para mensagens como "já registrado"
+    } else if (type === "warning") { 
         messageArea.classList.add("bg-yellow-100", "text-yellow-800");
-    } else {
+    } else { // Default para 'info' ou qualquer outro tipo
         messageArea.classList.add("bg-blue-100", "text-blue-800");
     }
 
+    // Esconde a mensagem após um tempo
     setTimeout(() => {
         messageArea.classList.remove("show");
-        setTimeout(() => messageArea.classList.add("hidden"), 4000);
-    }, 4000); // Reduzido para 4 segundos para notificações de presença
+        // Espera a transição de opacidade terminar antes de esconder completamente
+        setTimeout(() => messageArea.classList.add("hidden"), 500); // tempo da transição no CSS
+    }, 4000); // Tempo que a mensagem fica visível
 }
 
+/**
+ * Busca os dados dos membros do backend.
+ */
 async function fetchMembers() {
     showGlobalLoading(true, "Carregando dados dos membros...");
     membersCardsContainer.innerHTML = `
@@ -92,25 +110,29 @@ async function fetchMembers() {
             throw new Error(`Erro HTTP: ${response.status} - ${response.statusText}`);
         }
         const data = await response.json();
+        // Assume que os dados dos membros estão em data.membros ou data.data
         allMembersData = data.membros || data.data || [];
 
         if (allMembersData.length === 0) {
             showMessage("Nenhum membro encontrado ou dados vazios.", "info");
         } else {
-            showMessage(`Membros carregados com sucesso! Total: ${allMembersData.length}`, "success");
+            // showMessage(`Membros carregados com sucesso! Total: ${allMembersData.length}`, "success"); // Comentado para evitar mensagem extra
         }
 
-        fillSelectOptions();
-        applyFilters();
+        fillSelectOptions(); // Preenche os filtros de Líder e GAPE
+        applyFilters(); // Aplica os filtros e exibe os membros
     } catch (error) {
         console.error("Erro ao carregar membros:", error);
         showMessage(`Erro ao carregar membros: ${error.message}`, "error");
         membersCardsContainer.innerHTML = `<div class="col-span-full text-center py-4 text-red-600">Falha ao carregar dados dos membros. Verifique o console para detalhes.</div>`;
     } finally {
-        showGlobalLoading(false);
+        showGlobalLoading(false); // Oculta o loading global
     }
 }
 
+/**
+ * Aplica os filtros e atualiza a lista de membros exibida.
+ */
 function applyFilters() {
     const nameFilter = filterNameInput.value.toLowerCase().trim();
     const periodoFilter = filterPeriodoSelect.value.toLowerCase().trim();
@@ -131,13 +153,17 @@ function applyFilters() {
         return matchesName && matchesPeriodo && matchesLider && matchesGape;
     });
 
-    displayMembers(filteredMembers);
+    displayMembers(filteredMembers); // Renderiza os membros filtrados
 }
 
+/**
+ * Renderiza os cartões dos membros no container.
+ * @param {Array} members - Array de objetos de membros a serem exibidos.
+ */
 function displayMembers(members) {
     const container = document.getElementById("membersCardsContainer");
-    container.classList.remove("hidden");
-    container.innerHTML = "";
+    container.classList.remove("hidden"); // Garante que o container esteja visível
+    container.innerHTML = ""; // Limpa o conteúdo anterior
 
     if (members.length === 0) {
         container.innerHTML = `<div class="col-span-full text-center py-4 text-gray-500">Nenhum membro encontrado com os filtros aplicados.</div>`;
@@ -147,7 +173,7 @@ function displayMembers(members) {
     members.forEach((member, idx) => {
         const card = document.createElement("div");
         card.className = "fade-in-row bg-white rounded-xl shadow-md p-4 flex flex-col gap-2 relative";
-        card.style.animationDelay = `${idx * 0.04}s`;
+        card.style.animationDelay = `${idx * 0.04}s`; // Adiciona delay para animação em cascata
         card.innerHTML = `
             <div class="font-bold text-lg text-gray-800">${member.Nome || "N/A"}</div>
             <div class="text-sm text-gray-600"><b>Período:</b> ${member.Periodo || "N/A"}</div>
@@ -166,13 +192,15 @@ function displayMembers(members) {
         const infoDiv = card.querySelector(".presence-info");
         const confirmBtn = card.querySelector(".btn-confirm-presence");
 
+        // Event listener para o checkbox
         checkbox.addEventListener("change", function () {
             if (this.checked) {
-                confirmBtn.classList.remove("hidden");
+                confirmBtn.classList.remove("hidden"); // Mostra o botão
             } else {
-                confirmBtn.classList.add("hidden");
-                infoDiv.textContent = "";
-                infoDiv.classList.add("hidden");
+                confirmBtn.classList.add("hidden"); // Esconde o botão
+                infoDiv.textContent = ""; // Limpa a mensagem de info
+                infoDiv.classList.add("hidden"); // Esconde a div de info
+                
                 // Garante que o estado do botão e checkbox seja redefinido se desmarcar
                 confirmBtn.disabled = false;
                 checkbox.disabled = false;
@@ -180,6 +208,7 @@ function displayMembers(members) {
             }
         });
 
+        // Event listener para o botão de confirmar presença
         confirmBtn.addEventListener("click", async function () {
             const now = new Date();
             const dia = String(now.getDate()).padStart(2, "0");
@@ -190,13 +219,16 @@ function displayMembers(members) {
             const seg = String(now.getSeconds()).padStart(2, "0");
             const dataHora = `${dia}/${mes}/${ano} ${hora}:${min}:${seg}`;
 
+            // Exibe mensagem de "Registrando..." no card
             infoDiv.textContent = `Registrando...`;
             infoDiv.classList.remove("hidden", "text-green-700", "text-red-600", "text-yellow-700"); 
-            infoDiv.classList.add("text-blue-700"); 
+            infoDiv.classList.add("text-blue-700"); // Cor azul para "registrando"
             
+            // Desabilita o botão e o checkbox para evitar cliques múltiplos
             confirmBtn.disabled = true;
             checkbox.disabled = true;
 
+            // Remove quaisquer animações anteriores para que possam ser re-aplicadas
             card.classList.remove('animate-pulse-green', 'animate-shake-red');
 
             try {
@@ -207,44 +239,48 @@ function displayMembers(members) {
                         nome: member.Nome,
                         data: `${dia}/${mes}/${ano}`,
                         hora: `${hora}:${min}:${seg}`,
-                        sheet: "PRESENCAS",
+                        sheet: "PRESENCAS", // Nome da aba na planilha
                     }),
                 });
 
                 const responseData = await response.json();
 
-                // *** ALTERAÇÃO PRINCIPAL AQUI ***
-                // Verifica a resposta do backend de forma mais granular
-                if (response.ok) {
+                // Lógica de tratamento da resposta do backend
+                if (response.ok) { // Se a requisição HTTP foi bem-sucedida (status 2xx)
                     if (responseData.message && responseData.message.includes("já foi registrada")) {
-                        // Caso de sucesso (HTTP 200 OK) mas presença já existia
+                        // Caso de sucesso (HTTP 200 OK) mas presença já existia para o dia
                         infoDiv.textContent = `Presença de ${member.Nome} já registrada hoje.`;
                         infoDiv.classList.remove("text-blue-700", "text-green-700");
-                        infoDiv.classList.add("text-yellow-700"); // Cor de aviso
+                        infoDiv.classList.add("text-yellow-700"); // Cor de aviso para "já registrado"
                         showMessage(`Presença de ${member.Nome} já foi registrada hoje.`, "warning");
                         
-                        card.classList.add('animate-shake-red'); // Uma leve "chacoalhada" para aviso
+                        // Animação de "chacoalhada" para indicar aviso/já existente
+                        card.classList.add('animate-shake-red'); 
                         setTimeout(() => card.classList.remove('animate-shake-red'), 1000);
 
-                        // Mantém desabilitado, pois já está "resolvido"
+                        // Mantém desabilitado, pois a "ação" foi concluída (reconhecimento da presença)
                         // confirmBtn.disabled = true; // Já está desabilitado
                         // checkbox.disabled = true; // Já está desabilitado
 
-                    } else if (responseData.success) { // Sucesso de registro de fato
+                    } else if (responseData.success) { // Sucesso de registro de fato (primeira vez no dia)
                         infoDiv.textContent = `Presença marcada em ${dataHora}`;
                         infoDiv.classList.remove("text-blue-700", "text-yellow-700");
-                        infoDiv.classList.add("text-green-700");
+                        infoDiv.classList.add("text-green-700"); // Cor verde para sucesso
                         showMessage("Presença registrada com sucesso!", "success");
                         
+                        // Animação de pulso verde para sucesso
                         card.classList.add('animate-pulse-green');
                         setTimeout(() => card.classList.remove('animate-pulse-green'), 1000);
 
-                    } else { // response.ok é true, mas responseData.success é false ou não existe, e não é "já registrada"
+                    } else { 
+                        // response.ok é true, mas responseData.success é false ou não existe, 
+                        // e não é a mensagem de "já registrada". Indica um erro lógico do backend.
                         infoDiv.textContent = `Erro: ${responseData.details || responseData.message || "Falha ao registrar"}`;
                         infoDiv.classList.remove("text-blue-700", "text-green-700", "text-yellow-700");
-                        infoDiv.classList.add("text-red-600");
+                        infoDiv.classList.add("text-red-600"); // Cor vermelha para erro
                         showMessage(`Erro ao registrar presença: ${responseData.details || responseData.message || "Erro desconhecido"}`, "error");
                         
+                        // Animação de "chacoalhada" para erro
                         card.classList.add('animate-shake-red');
                         setTimeout(() => card.classList.remove('animate-shake-red'), 1000);
 
@@ -252,12 +288,13 @@ function displayMembers(members) {
                         confirmBtn.disabled = false;
                         checkbox.disabled = false;
                     }
-                } else { // Erro HTTP (status 4xx, 5xx)
+                } else { // Erro HTTP (status 4xx, 5xx - problema de rede ou servidor)
                     infoDiv.textContent = `Erro: ${responseData.details || responseData.message || "Falha ao enviar para o servidor."}`;
                     infoDiv.classList.remove("text-blue-700", "text-green-700", "text-yellow-700");
-                    infoDiv.classList.add("text-red-600");
+                    infoDiv.classList.add("text-red-600"); // Cor vermelha para erro
                     showMessage(`Erro de rede ou servidor: ${responseData.details || responseData.message || "Erro desconhecido"} (HTTP ${response.status})`, "error");
                     
+                    // Animação de "chacoalhada" para erro
                     card.classList.add('animate-shake-red');
                     setTimeout(() => card.classList.remove('animate-shake-red'), 1000);
 
@@ -266,12 +303,14 @@ function displayMembers(members) {
                     checkbox.disabled = false;
                 }
             } catch (e) {
+                // Erro de conexão ou parsing do JSON
                 console.error("Erro na requisição POST do frontend:", e);
                 infoDiv.textContent = "Falha de conexão com o servidor.";
                 infoDiv.classList.remove("text-blue-700", "text-green-700", "text-yellow-700");
-                infoDiv.classList.add("text-red-600");
+                infoDiv.classList.add("text-red-600"); // Cor vermelha para erro
                 showMessage("Falha ao enviar presença para o servidor. Verifique sua conexão.", "error");
                 
+                // Animação de "chacoalhada" para erro
                 card.classList.add('animate-shake-red');
                 setTimeout(() => card.classList.remove('animate-shake-red'), 1000);
 
@@ -280,7 +319,7 @@ function displayMembers(members) {
                 checkbox.disabled = false;
             } finally {
                 // Esconde o botão e desmarca o checkbox SEMPRE, 
-                // mas o estado de 'disabled' para o checkbox/botão é controlado acima
+                // mas o estado de 'disabled' para o checkbox/botão é controlado na lógica acima
                 confirmBtn.classList.add("hidden"); 
                 checkbox.checked = false; // Desmarca o checkbox visualmente
             }
@@ -288,6 +327,9 @@ function displayMembers(members) {
     });
 }
 
+/**
+ * Preenche as opções dos seletores de filtro (Líder e GAPE) com base nos dados dos membros.
+ */
 function fillSelectOptions() {
     const lideres = [...new Set(allMembersData.map((m) => m.Lider).filter(Boolean)),].sort();
     const gapes = [...new Set(allMembersData.map((m) => m.GAPE).filter(Boolean)),].sort();
@@ -296,6 +338,9 @@ function fillSelectOptions() {
     filterGapeInput.innerHTML = '<option value="">Todos</option>' + gapes.map((g) => `<option value="${g}">${g}</option>`).join("");
 }
 
+/**
+ * Limpa todos os campos de filtro e reaplica-os.
+ */
 function clearFilters() {
     showMessage("Limpando filtros...", "info");
     filterNameInput.value = "";
@@ -305,11 +350,17 @@ function clearFilters() {
     applyFilters();
 }
 
+/**
+ * Aplica os filtros e exibe uma mensagem de "Aplicando filtros...".
+ */
 function applyFiltersWithMessage() {
     showMessage("Aplicando filtros...", "info");
     applyFilters();
 }
 
+/**
+ * Busca e exibe o resumo do dashboard (total de presenças, etc.).
+ */
 async function fetchAndDisplaySummary() {
     showGlobalLoading(true, "Carregando resumo do dashboard...");
     try {
@@ -322,6 +373,7 @@ async function fetchAndDisplaySummary() {
         const currentLiderFilter = filterLiderInput.value.toLowerCase().trim();
         const currentGapeFilter = filterGapeInput.value.toLowerCase().trim();
 
+        // Filtra membros que correspondem aos filtros de Líder e GAPE para o resumo
         const membersMatchingLiderAndGape = allMembersData.filter(member => {
             const memberLider = String(member.Lider || "").toLowerCase();
             const memberGape = String(member.GAPE || "").toLowerCase();
@@ -330,12 +382,14 @@ async function fetchAndDisplaySummary() {
             const matchesGape = currentGapeFilter === "" || memberGape.includes(currentGapeFilter);
 
             return matchesLider && matchesGape;
-        }).map(member => member.Nome);
+        }).map(member => member.Nome); // Pega apenas os nomes dos membros filtrados
 
         const filteredTotalCounts = {};
         let totalFilteredPresences = 0;
 
+        // Itera sobre as presenças totais e filtra com base nos membros encontrados
         for (const memberName in dataTotal) {
+            // Inclui o membro se não há filtros aplicados OU se o membro está na lista de membros filtrados
             if (membersMatchingLiderAndGape.includes(memberName) || (currentLiderFilter === "" && currentGapeFilter === "")) {
                 filteredTotalCounts[memberName] = dataTotal[memberName];
                 totalFilteredPresences += dataTotal[memberName];
@@ -348,6 +402,7 @@ async function fetchAndDisplaySummary() {
 
         if (totalCountsList) {
             totalCountsList.innerHTML = '';
+            // Ordena as contagens de presença por valor decrescente
             const sortedCounts = Object.entries(filteredTotalCounts).sort(([, countA], [, countB]) => countB - countA);
 
             if (sortedCounts.length > 0) {
@@ -365,6 +420,7 @@ async function fetchAndDisplaySummary() {
             }
         }
 
+        // Pega períodos, líderes e gapes únicos dos membros ATUALMENTE FILTRADOS (filteredMembers)
         const uniquePeriods = [...new Set(filteredMembers.map(m => m.Periodo).filter(Boolean))];
         const uniqueLiders = [...new Set(filteredMembers.map(m => m.Lider).filter(Boolean))];
         const uniqueGapes = [...new Set(filteredMembers.map(m => m.GAPE).filter(Boolean))];
@@ -398,20 +454,24 @@ async function fetchAndDisplaySummary() {
                 dashboardGape.textContent = "Vários";
             }
         }
-        showMessage("Resumo carregado com sucesso!", "success");
+        // showMessage("Resumo carregado com sucesso!", "success"); // Comentado para evitar mensagem extra
 
     } catch (error) {
         console.error("Erro ao carregar o resumo:", error);
         showMessage(`Erro ao carregar o resumo: ${error.message}`, "error");
     } finally {
-        showGlobalLoading(false);
+        showGlobalLoading(false); // Oculta o loading global
     }
 }
 
+/**
+ * Alterna a visibilidade do container do dashboard.
+ */
 function toggleDashboardVisibility() {
     const isDashboardVisible = dashboardContainer.classList.contains("max-h-screen");
 
     if (isDashboardVisible) {
+        // Oculta o dashboard
         dashboardContainer.classList.remove("max-h-screen", "opacity-100");
         dashboardContainer.classList.add("max-h-0", "opacity-0");
         dashboardOpenIcon.classList.remove("hidden");
@@ -419,7 +479,8 @@ function toggleDashboardVisibility() {
         dashboardCloseIcon.classList.add("hidden");
         dashboardCloseText.classList.add("hidden");
     } else {
-        fetchAndDisplaySummary();
+        // Exibe o dashboard e busca os dados de resumo
+        fetchAndDisplaySummary(); // Busca dados do resumo ao abrir
         dashboardContainer.classList.remove("max-h-0", "opacity-0");
         dashboardContainer.classList.add("max-h-screen", "opacity-100");
         dashboardOpenIcon.classList.add("hidden");
@@ -429,17 +490,20 @@ function toggleDashboardVisibility() {
     }
 }
 
-// Event Listeners
+// --- Event Listeners ---
 applyFiltersBtn.addEventListener("click", applyFiltersWithMessage);
 clearFiltersBtn.addEventListener("click", clearFilters);
 
+// Event listeners para aplicar filtros ao digitar ou selecionar
 filterNameInput.addEventListener("input", applyFilters);
 filterPeriodoSelect.addEventListener("change", applyFilters);
 filterLiderInput.addEventListener("change", applyFilters);
 filterGapeInput.addEventListener("change", applyFilters);
 
+// Event listener para o botão de alternar o dashboard
 if (toggleDashboardBtn) {
     toggleDashboardBtn.addEventListener("click", toggleDashboardVisibility);
 }
 
+// Carrega os membros quando a página é completamente carregada
 window.addEventListener("load", fetchMembers);
