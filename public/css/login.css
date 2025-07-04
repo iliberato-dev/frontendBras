@@ -92,32 +92,62 @@ body {
     filter: brightness(1.08);
 }
 
+/* --- ESTILOS PARA MENSAGENS DE FEEDBACK --- */
 .message-box {
     padding: 1rem;
     margin-top: 1rem;
     border-radius: 0.375rem;
     box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
     text-align: center;
-    transition: all 0.5s;
+    transition: opacity 0.5s ease-in-out, transform 0.5s ease-in-out; /* Transições combinadas */
     opacity: 0;
-    transform: translateY(-10px);
-    pointer-events: none;
+    transform: translateY(-10px); /* Começa um pouco acima para animar a entrada */
+    pointer-events: none; /* Impede que o elemento bloqueie cliques quando invisível */
 }
 
 .message-box.show {
-    opacity: 1;
-    transform: translateY(0);
-    pointer-events: auto;
+    opacity: 1; /* Torna visível */
+    transform: translateY(0); /* Move para a posição final */
+    pointer-events: auto; /* Permite cliques quando visível */
+}
+
+.message-box.hidden {
+    display: none; /* Garante que o elemento não ocupe espaço quando não estiver em uso */
+    /* Remove a opacidade e transform para que, ao reaparecer, a transição seja correta */
+    opacity: 0; 
+    transform: translateY(-10px);
 }
 
 .message-success {
-    background-color: #d1fae5;
-    color: #065f46;
+    background-color: #d1fae5; /* Verde claro */
+    color: #065f46; /* Verde escuro */
+    border: 1px solid #a7f3d0; /* Borda verde */
 }
 
 .message-error {
-    background-color: #fee2e2;
-    color: #991b1b;
+    background-color: #fee2e2; /* Vermelho claro */
+    color: #991b1b; /* Vermelho escuro */
+    border: 1px solid #fca5a5; /* Borda vermelha */
+}
+
+/* Estilo para mensagem de info (carregamento) */
+/* Essas classes devem ser aplicadas pelo Tailwind, mas aqui para garantir */
+.bg-blue-100 {
+    background-color: #dbeafe; /* Azul bem claro */
+    color: #1e40af; /* Azul escuro */
+    border: 1px solid #93c5fd; /* Borda azul */
+}
+.text-blue-800 {
+    color: #1e40af; /* Azul escuro */
+}
+
+/* --- ESTILO PARA BOTÃO DESABILITADO --- */
+.btn-primary:disabled {
+    opacity: 0.6; /* Torna o botão mais transparente */
+    cursor: not-allowed; /* Altera o cursor para "não permitido" */
+    background-image: linear-gradient(to right, #9ca3af 0%, #d1d5db 100%); /* Um tom de cinza para indicar inatividade */
+    box-shadow: none; /* Remove a sombra forte para indicar inatividade */
+    transform: none; /* Remove a escala no hover quando desabilitado */
 }
 
 /* Responsividade */
