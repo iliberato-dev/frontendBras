@@ -1,6 +1,9 @@
+// ------------------------------------------------------
+// Frontend (js/dashboard.js)
+// ------------------------------------------------------
 let allMembersData = [];
 let filteredMembers = [];
-let lastPresencesData = {}; // <--- NOVA VARIÁVEL para armazenar todas as últimas presenças
+let lastPresencesData = {}; // Variável para armazenar todas as últimas presenças
 
 const filterNameInput = document.getElementById("filterName");
 const filterPeriodoSelect = document.getElementById("filterPeriodo");
@@ -27,7 +30,8 @@ const dashboardGape = document.getElementById("dashboardGape");
 const totalCountsList = document.getElementById("totalCountsList");
 
 // !!! IMPORTANTE: Substitua pela URL PÚBLICA do seu backend no Render !!!
-const BACKEND_URL = 'https://backendbras.onrender.com';
+// Deve ser a mesma URL definida na variável de ambiente FRONTEND_URL no seu backend Render
+const BACKEND_URL = 'https://backendbras.onrender.com'; 
 
 function showGlobalLoading(show, message = "Carregando...") {
     if (globalLoadingIndicator && loadingMessageSpan) {
@@ -47,6 +51,7 @@ function showGlobalLoading(show, message = "Carregando...") {
 }
 
 function showMessage(message, type = "info") {
+    // Evita mostrar mensagens de "Carregando..." na área de mensagem principal
     if (message.includes("Carregando dados dos membros...") ||
         message.includes("Carregando resumo do dashboard...") ||
         message.includes("Registrando presença para ")) {
@@ -75,25 +80,7 @@ function showMessage(message, type = "info") {
 }
 
 /**
- * Busca todas as últimas presenças do backend de uma vez.
- */
-async function fetchAllLastPresences() {
-    try {
-        // Removi o parâmetro de cache-busting, pois o servidor deve controlar o cache para este endpoint.
-        const response = await fetch(`${BACKEND_URL}/get-all-last-presences`); 
-        if (!response.ok) {
-            throw new Error(`Erro HTTP ao buscar todas as presenças: ${response.status} - ${response.statusText}`);
-        }
-        lastPresencesData = await response.json();
-    } catch (error) {
-        console.error("Erro ao carregar todas as últimas presenças:", error);
-        showMessage(`Erro ao carregar status de presença: ${error.message}`, "error");
-        lastPresencesData = {}; // Garante que seja um objeto vazio em caso de erro
-    }
-}
-
-/**
- * Busca os dados dos membros do backend e as últimas presenças.
+ * Busca os dados dos membros e todas as últimas presenças do backend.
  */
 async function fetchMembers() {
     showGlobalLoading(true, "Carregando dados dos membros...");
@@ -111,7 +98,7 @@ async function fetchMembers() {
         // Busca membros e últimas presenças em paralelo para maior eficiência
         const [membersResponse, presencesResponse] = await Promise.all([
             fetch(`${BACKEND_URL}/get-membros`),
-            fetch(`${BACKEND_URL}/get-all-last-presences`) // <--- CHAMA O NOVO ENDPOINT AQUI
+            fetch(`${BACKEND_URL}/get-all-last-presences`) 
         ]);
 
         if (!membersResponse.ok) {
@@ -124,14 +111,14 @@ async function fetchMembers() {
         const membersData = await membersResponse.json();
         allMembersData = membersData.membros || membersData.data || [];
 
-        lastPresencesData = await presencesResponse.json(); // <--- ATRIBUI AQUI
+        lastPresencesData = await presencesResponse.json(); // Atribui as presenças carregadas
 
         if (allMembersData.length === 0) {
             showMessage("Nenhum membro encontrado ou dados vazios.", "info");
         }
 
         fillSelectOptions();
-        applyFilters(); // Isso vai chamar displayMembers que usará lastPresencesData
+        applyFilters(); 
     } catch (error) {
         console.error("Erro ao carregar membros ou presenças:", error);
         showMessage(`Erro ao carregar dados: ${error.message}`, "error");
@@ -140,7 +127,6 @@ async function fetchMembers() {
         showGlobalLoading(false);
     }
 }
-
 
 function applyFilters() {
     const nameFilter = filterNameInput.value.toLowerCase().trim();
@@ -164,7 +150,6 @@ function applyFilters() {
 
     displayMembers(filteredMembers);
 }
-
 
 function displayMembers(members) {
     const container = document.getElementById("membersCardsContainer");
@@ -199,13 +184,13 @@ function displayMembers(members) {
         const confirmBtn = card.querySelector(".btn-confirm-presence");
 
         // Função para atualizar o status da presença no card usando os dados já carregados
-        const updatePresenceStatus = () => { // <--- Função modificada para NÃO FAZER REQUISIÇÃO
+        const updatePresenceStatus = () => { 
             infoDiv.classList.remove("text-green-700", "text-red-600", "text-yellow-700", "text-blue-700");
             infoDiv.classList.add("block");
 
-            const presence = lastPresencesData[member.Nome]; // <--- Busca diretamente na variável global
+            const presence = lastPresencesData[member.Nome]; 
 
-            if (presence) {
+            if (presence && presence.data && presence.hora) { // Verifica se presence e seus campos são válidos
                 infoDiv.textContent = `Últ. presença: ${presence.data} às ${presence.hora}`;
                 infoDiv.classList.add("text-green-700");
             } else {
@@ -226,7 +211,7 @@ function displayMembers(members) {
                 infoDiv.classList.add("text-gray-500");
             } else {
                 confirmBtn.classList.add("hidden");
-                updatePresenceStatus(); // Volta a exibir o status da última presença ao desmarcar
+                updatePresenceStatus(); 
 
                 confirmBtn.disabled = false;
                 checkbox.disabled = false;
@@ -242,8 +227,7 @@ function displayMembers(members) {
             const hora = String(now.getHours()).padStart(2, "0");
             const min = String(now.getMinutes()).padStart(2, "0");
             const seg = String(now.getSeconds()).padStart(2, "0");
-            const dataHoraAtual = `${dia}/${mes}/${ano} ${hora}:${min}:${seg}`;
-
+            
             infoDiv.textContent = `Registrando presença para ${member.Nome}...`;
             infoDiv.classList.remove("hidden", "text-green-700", "text-red-600", "text-yellow-700");
             infoDiv.classList.add("text-blue-700");
@@ -268,7 +252,7 @@ function displayMembers(members) {
                 const responseData = await response.json();
 
                 if (response.ok) {
-                    if (responseData.message && responseData.message.includes("já foi registrada")) {
+                    if (!responseData.success && responseData.message && responseData.message.includes("já foi registrada")) {
                         infoDiv.textContent = `Presença de ${member.Nome} já registrada hoje.`;
                         infoDiv.classList.remove("text-blue-700", "text-green-700");
                         infoDiv.classList.add("text-yellow-700");
@@ -277,11 +261,8 @@ function displayMembers(members) {
                         card.classList.add('animate-shake-red');
                         setTimeout(() => card.classList.remove('animate-shake-red'), 1000);
 
-                        // Otimização: Atualiza o cache local de presenças para este membro
-                        if (responseData.lastPresence) { // Se o backend retornar a última presença nesse cenário
+                        if (responseData.lastPresence) { 
                             lastPresencesData[member.Nome] = responseData.lastPresence;
-                        } else { // Se não, tenta usar a data e hora atuais como fallback ou busca de novo
-                             lastPresencesData[member.Nome] = { data: `${dia}/${mes}/${ano}`, hora: `${hora}:${min}:${seg}` };
                         }
                         updatePresenceStatus();
 
@@ -293,7 +274,6 @@ function displayMembers(members) {
                         card.classList.add('animate-pulse-green');
                         setTimeout(() => card.classList.remove('animate-pulse-green'), 1000);
 
-                        // Otimização: Atualiza o cache local de presenças para este membro
                         lastPresencesData[member.Nome] = { data: `${dia}/${mes}/${ano}`, hora: `${hora}:${min}:${seg}` };
                         updatePresenceStatus();
 
@@ -363,6 +343,20 @@ function applyFiltersWithMessage() {
     applyFilters();
 }
 
+// Lógica de toggle dashboard para a sidebar
+function toggleDashboardVisibility() {
+    dashboardContainer.classList.toggle('hidden');
+    dashboardOpenIcon.classList.toggle('hidden');
+    dashboardCloseIcon.classList.toggle('hidden');
+    dashboardOpenText.classList.toggle('hidden');
+    dashboardCloseText.classList.toggle('hidden');
+
+    // Se o dashboard está visível, force a atualização dos totais
+    if (!dashboardContainer.classList.contains('hidden')) {
+        fetchAndDisplaySummary();
+    }
+}
+
 async function fetchAndDisplaySummary() {
     showGlobalLoading(true, "Carregando resumo do dashboard...");
     try {
@@ -372,9 +366,11 @@ async function fetchAndDisplaySummary() {
         }
         const dataTotal = await responseTotal.json();
 
+        // Filtra os membros com base nos filtros atuais para o resumo
         const currentLiderFilter = filterLiderInput.value.toLowerCase().trim();
         const currentGapeFilter = filterGapeInput.value.toLowerCase().trim();
 
+        // Members list filtered by lider/gape
         const membersMatchingLiderAndGape = allMembersData.filter(member => {
             const memberLider = String(member.Lider || "").toLowerCase();
             const memberGape = String(member.GAPE || "").toLowerCase();
@@ -383,12 +379,13 @@ async function fetchAndDisplaySummary() {
             const matchesGape = currentGapeFilter === "" || memberGape.includes(currentGapeFilter);
 
             return matchesLider && matchesGape;
-        }).map(member => member.Nome);
+        }).map(member => member.Nome); // Get only names
 
         const filteredTotalCounts = {};
         let totalFilteredPresences = 0;
 
         for (const memberName in dataTotal) {
+            // Include if no lider/gape filters are applied, or if member matches
             if (membersMatchingLiderAndGape.includes(memberName) || (currentLiderFilter === "" && currentGapeFilter === "")) {
                 filteredTotalCounts[memberName] = dataTotal[memberName];
                 totalFilteredPresences += dataTotal[memberName];
@@ -418,6 +415,13 @@ async function fetchAndDisplaySummary() {
             }
         }
 
+        // Fetch dashboard summary for period, lider, gape (this is likely redundant if the data comes from 'getMembros' and is fixed)
+        // You might want to get this data from the `getMembros` response instead of a separate endpoint
+        // Or, if `presencasMes` truly provides dashboard-level period/lider/gape, call it here.
+        // For now, let's assume `getMembros` gives all data for filtering in dashboard.
+        
+        // This part below uses `filteredMembers` which are already filtered by the user inputs,
+        // so it makes sense for Periodo/Lider/GAPE of the *filtered view*.
         const uniquePeriods = [...new Set(filteredMembers.map(m => m.Periodo).filter(Boolean))];
         const uniqueLiders = [...new Set(filteredMembers.map(m => m.Lider).filter(Boolean))];
         const uniqueGapes = [...new Set(filteredMembers.map(m => m.GAPE).filter(Boolean))];
@@ -473,4 +477,5 @@ if (toggleDashboardBtn) {
     toggleDashboardBtn.addEventListener("click", toggleDashboardVisibility);
 }
 
+// Carrega os membros ao carregar a página
 window.addEventListener("load", fetchMembers);
