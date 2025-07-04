@@ -59,23 +59,23 @@ function showGlobalLoading(show, message = "Carregando...") {
  */
 function showMessage(message, type = "info") {
     // Adiciona uma condição para não mostrar mensagens específicas no messageArea global
-    if (message.includes("Carregando dados dos membros...") || 
+    if (message.includes("Carregando dados dos membros...") ||
         message.includes("Carregando resumo do dashboard...") ||
-        message.includes("Registrando presença para ")) { 
+        message.includes("Registrando presença para ")) {
         return; // Não mostra essas mensagens no toast global
     }
-    
+
     messageArea.textContent = message;
     messageArea.className = "message-box show"; // Remove 'hidden' e adiciona 'show' para animação
-    
+
     // Limpa todas as classes de tipo antes de adicionar a nova
-    messageArea.classList.remove("message-success", "message-error", "bg-blue-100", "text-blue-800", "bg-yellow-100", "text-yellow-800"); 
-    
+    messageArea.classList.remove("message-success", "message-error", "bg-blue-100", "text-blue-800", "bg-yellow-100", "text-yellow-800");
+
     if (type === "success") {
         messageArea.classList.add("message-success");
     } else if (type === "error") {
         messageArea.classList.add("message-error");
-    } else if (type === "warning") { 
+    } else if (type === "warning") {
         messageArea.classList.add("bg-yellow-100", "text-yellow-800");
     } else { // Default para 'info' ou qualquer outro tipo
         messageArea.classList.add("bg-blue-100", "text-blue-800");
@@ -184,7 +184,7 @@ function displayMembers(members) {
                 <span class="text-sm text-gray-700">Presente</span>
             </label>
             <button class="btn-confirm-presence w-full mt-2 hidden bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg shadow-md transition duration-300">Confirmar Presença</button>
-            <div class="text-xs text-green-700 mt-1 hidden presence-info"></div>
+            <div class="text-xs text-gray-500 mt-1 hidden presence-info"></div>
         `;
         container.appendChild(card);
 
@@ -192,14 +192,53 @@ function displayMembers(members) {
         const infoDiv = card.querySelector(".presence-info");
         const confirmBtn = card.querySelector(".btn-confirm-presence");
 
+        // Função para atualizar o status da presença no card
+        const updatePresenceStatus = async () => {
+            infoDiv.classList.remove("text-green-700", "text-red-600", "text-yellow-700"); // Limpa classes de cor
+            infoDiv.classList.add("text-blue-700", "block"); // Temporariamente azul e visível
+
+            try {
+                // Adicionado um parâmetro de cache-busting para garantir que não pegue dados antigos
+                const response = await fetch(`${BACKEND_URL}/get-last-presence?nome=${encodeURIComponent(member.Nome)}&_=${new Date().getTime()}`);
+                if (!response.ok) {
+                    throw new Error(`Erro ao buscar última presença: ${response.statusText}`);
+                }
+                const data = await response.json();
+
+                if (data.lastPresence) {
+                    infoDiv.textContent = `Últ. presença: ${data.lastPresence.data} às ${data.lastPresence.hora}`;
+                    infoDiv.classList.remove("text-blue-700");
+                    infoDiv.classList.add("text-green-700"); // Verde para presença encontrada
+                    infoDiv.classList.remove("hidden");
+                } else {
+                    infoDiv.textContent = `Nenhuma presença registrada ainda.`;
+                    infoDiv.classList.remove("text-blue-700");
+                    infoDiv.classList.add("text-gray-500"); // Cinza para nenhuma presença
+                    infoDiv.classList.remove("hidden");
+                }
+            } catch (error) {
+                console.error("Erro ao buscar última presença:", error);
+                infoDiv.textContent = `Erro ao carregar status da presença.`;
+                infoDiv.classList.remove("text-blue-700");
+                infoDiv.classList.add("text-red-600"); // Vermelho para erro ao buscar
+                infoDiv.classList.remove("hidden");
+            }
+        };
+
+        // Atualiza o status ao carregar o card pela primeira vez
+        updatePresenceStatus();
+
         // Event listener para o checkbox
         checkbox.addEventListener("change", function () {
             if (this.checked) {
                 confirmBtn.classList.remove("hidden"); // Mostra o botão
+                infoDiv.textContent = "Clique em confirmar para registrar."; // Mensagem temporária
+                infoDiv.classList.remove("hidden", "text-green-700", "text-red-600", "text-yellow-700");
+                infoDiv.classList.add("text-gray-500");
             } else {
                 confirmBtn.classList.add("hidden"); // Esconde o botão
-                infoDiv.textContent = ""; // Limpa a mensagem de info
-                infoDiv.classList.add("hidden"); // Esconde a div de info
+                // Volta a exibir o status da última presença ao desmarcar
+                updatePresenceStatus();
                 
                 // Garante que o estado do botão e checkbox seja redefinido se desmarcar
                 confirmBtn.disabled = false;
@@ -217,13 +256,13 @@ function displayMembers(members) {
             const hora = String(now.getHours()).padStart(2, "0");
             const min = String(now.getMinutes()).padStart(2, "0");
             const seg = String(now.getSeconds()).padStart(2, "0");
-            const dataHora = `${dia}/${mes}/${ano} ${hora}:${min}:${seg}`;
+            const dataHoraAtual = `${dia}/${mes}/${ano} ${hora}:${min}:${seg}`;
 
             // Exibe mensagem de "Registrando..." no card
-            infoDiv.textContent = `Registrando...`;
-            infoDiv.classList.remove("hidden", "text-green-700", "text-red-600", "text-yellow-700"); 
+            infoDiv.textContent = `Registrando presença para ${member.Nome}...`;
+            infoDiv.classList.remove("hidden", "text-green-700", "text-red-600", "text-yellow-700");
             infoDiv.classList.add("text-blue-700"); // Cor azul para "registrando"
-            
+
             // Desabilita o botão e o checkbox para evitar cliques múltiplos
             confirmBtn.disabled = true;
             checkbox.disabled = true;
@@ -249,37 +288,40 @@ function displayMembers(members) {
                 if (response.ok) { // Se a requisição HTTP foi bem-sucedida (status 2xx)
                     if (responseData.message && responseData.message.includes("já foi registrada")) {
                         // Caso de sucesso (HTTP 200 OK) mas presença já existia para o dia
-                        infoDiv.textContent = `Presença de ${member.Nome} já registrada hoje.`;
+                        infoDiv.textContent = `Presença de ${member.Nome} já registrada hoje.`; // Melhorar para puxar a data da resposta?
                         infoDiv.classList.remove("text-blue-700", "text-green-700");
                         infoDiv.classList.add("text-yellow-700"); // Cor de aviso para "já registrado"
                         showMessage(`Presença de ${member.Nome} já foi registrada hoje.`, "warning");
-                        
+
                         // Animação de "chacoalhada" para indicar aviso/já existente
-                        card.classList.add('animate-shake-red'); 
+                        card.classList.add('animate-shake-red');
                         setTimeout(() => card.classList.remove('animate-shake-red'), 1000);
 
                         // Mantém desabilitado, pois a "ação" foi concluída (reconhecimento da presença)
-                        // confirmBtn.disabled = true; // Já está desabilitado
-                        // checkbox.disabled = true; // Já está desabilitado
+                        // E atualiza a info de última presença para a que já existe (ou busca novamente)
+                        updatePresenceStatus();
 
                     } else if (responseData.success) { // Sucesso de registro de fato (primeira vez no dia)
-                        infoDiv.textContent = `Presença marcada em ${dataHora}`;
+                        // infoDiv.textContent = `Presença marcada em ${dataHoraAtual}`; // Será atualizado por updatePresenceStatus
                         infoDiv.classList.remove("text-blue-700", "text-yellow-700");
                         infoDiv.classList.add("text-green-700"); // Cor verde para sucesso
                         showMessage("Presença registrada com sucesso!", "success");
-                        
+
                         // Animação de pulso verde para sucesso
                         card.classList.add('animate-pulse-green');
                         setTimeout(() => card.classList.remove('animate-pulse-green'), 1000);
 
-                    } else { 
-                        // response.ok é true, mas responseData.success é false ou não existe, 
+                        // Atualiza a informação de última presença no card
+                        updatePresenceStatus();
+
+                    } else {
+                        // response.ok é true, mas responseData.success é false ou não existe,
                         // e não é a mensagem de "já registrada". Indica um erro lógico do backend.
                         infoDiv.textContent = `Erro: ${responseData.details || responseData.message || "Falha ao registrar"}`;
                         infoDiv.classList.remove("text-blue-700", "text-green-700", "text-yellow-700");
                         infoDiv.classList.add("text-red-600"); // Cor vermelha para erro
                         showMessage(`Erro ao registrar presença: ${responseData.details || responseData.message || "Erro desconhecido"}`, "error");
-                        
+
                         // Animação de "chacoalhada" para erro
                         card.classList.add('animate-shake-red');
                         setTimeout(() => card.classList.remove('animate-shake-red'), 1000);
@@ -293,7 +335,7 @@ function displayMembers(members) {
                     infoDiv.classList.remove("text-blue-700", "text-green-700", "text-yellow-700");
                     infoDiv.classList.add("text-red-600"); // Cor vermelha para erro
                     showMessage(`Erro de rede ou servidor: ${responseData.details || responseData.message || "Erro desconhecido"} (HTTP ${response.status})`, "error");
-                    
+
                     // Animação de "chacoalhada" para erro
                     card.classList.add('animate-shake-red');
                     setTimeout(() => card.classList.remove('animate-shake-red'), 1000);
@@ -309,7 +351,7 @@ function displayMembers(members) {
                 infoDiv.classList.remove("text-blue-700", "text-green-700", "text-yellow-700");
                 infoDiv.classList.add("text-red-600"); // Cor vermelha para erro
                 showMessage("Falha ao enviar presença para o servidor. Verifique sua conexão.", "error");
-                
+
                 // Animação de "chacoalhada" para erro
                 card.classList.add('animate-shake-red');
                 setTimeout(() => card.classList.remove('animate-shake-red'), 1000);
@@ -318,9 +360,9 @@ function displayMembers(members) {
                 confirmBtn.disabled = false;
                 checkbox.disabled = false;
             } finally {
-                // Esconde o botão e desmarca o checkbox SEMPRE, 
+                // Esconde o botão e desmarca o checkbox SEMPRE,
                 // mas o estado de 'disabled' para o checkbox/botão é controlado na lógica acima
-                confirmBtn.classList.add("hidden"); 
+                confirmBtn.classList.add("hidden");
                 checkbox.checked = false; // Desmarca o checkbox visualmente
             }
         });
