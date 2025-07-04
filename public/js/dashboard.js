@@ -348,27 +348,33 @@ function applyFiltersWithMessage() {
 
 // Lógica de toggle dashboard para a sidebar
 function toggleDashboardVisibility() {
-    // Inverte o estado da variável de controle
     isDashboardOpen = !isDashboardOpen;
 
     if (isDashboardOpen) {
-        // Abre o dashboard
-        dashboardContainer.classList.remove('hidden');
+        // Remove as classes que ocultam e adiciona a altura máxima para animar
+        dashboardContainer.classList.remove('max-h-0', 'opacity-0', 'overflow-hidden');
+        // Opcional: Adicione uma altura máxima maior se 'max-h-screen' não for suficiente ou causar scroll indesejado
+        // Ex: dashboardContainer.classList.add('max-h-[500px]', 'opacity-100'); // Ou max-h-screen
+        
+        // Ajusta os ícones e textos do botão
         dashboardOpenIcon.classList.add('hidden');
         dashboardCloseIcon.classList.remove('hidden');
         dashboardOpenText.classList.add('hidden');
         dashboardCloseText.classList.remove('hidden');
+        
         console.log("Dashboard: Abrindo. Buscando resumo...");
-        fetchAndDisplaySummary(); // Chama apenas na abertura
+        fetchAndDisplaySummary();
     } else {
-        // Fecha o dashboard
-        dashboardContainer.classList.add('hidden');
+        // Adiciona as classes para ocultar e animar o fechamento
+        dashboardContainer.classList.add('max-h-0', 'opacity-0', 'overflow-hidden');
+        
+        // Ajusta os ícones e textos do botão
         dashboardOpenIcon.classList.remove('hidden');
         dashboardCloseIcon.classList.add('hidden');
         dashboardOpenText.classList.remove('hidden');
         dashboardCloseText.classList.add('hidden');
+        
         console.log("Dashboard: Fechando.");
-        // Não chama fetchAndDisplaySummary ao fechar
     }
 }
 
