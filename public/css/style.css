@@ -42,6 +42,30 @@ body {
     }
 }
 
+/* --- Animações de Feedback do Cartão --- */
+
+/* Animação para sucesso (verde claro piscando no box-shadow) */
+@keyframes pulse-green {
+    0% { box-shadow: 0 0 0 0 rgba(0, 255, 0, 0.4); } /* Começa sem sombra */
+    70% { box-shadow: 0 0 0 10px rgba(0, 255, 0, 0); } /* Expande e some */
+    100% { box-shadow: 0 0 0 0 rgba(0, 255, 0, 0); } /* Volta ao normal */
+}
+
+.animate-pulse-green {
+    animation: pulse-green 1s ease-out; /* Aplica a animação */
+}
+
+/* Animação para erro (vermelho balançando) */
+@keyframes shake-red {
+    0%, 100% { transform: translateX(0); box-shadow: 0 0 0 0 rgba(255, 0, 0, 0); }
+    20%, 60% { transform: translateX(-5px); box-shadow: 0 0 0 5px rgba(255, 0, 0, 0.4); } /* Move para esquerda, sombra vermelha */
+    40%, 80% { transform: translateX(5px); box-shadow: 0 0 0 5px rgba(255, 0, 0, 0.4); } /* Move para direita, sombra vermelha */
+}
+
+.animate-shake-red {
+    animation: shake-red 0.5s ease-out; /* Mais rápido para indicar erro */
+}
+
 /* --- Estilos de Campos de Input --- */
 .input-field {
     padding: 0.75rem; /* p-3 */
@@ -134,6 +158,15 @@ body {
     transform: scale(1.05); /* Leve aumento no hover */
 }
 
+/* Estilo para o botão de confirmar presença desabilitado */
+.btn-confirm-presence:disabled {
+    opacity: 0.6; /* Diminui a opacidade */
+    cursor: not-allowed; /* Altera o cursor para "não permitido" */
+    background: linear-gradient(90deg, #9ca3af 0%, #6b7280 100%); /* Cor cinza para indicar desabilitado */
+    box-shadow: none; /* Remove a sombra quando desabilitado */
+    transform: none; /* Remove qualquer transformação no estado desabilitado */
+}
+
 /* --- Estilos da Tabela (se aplicável, mas os cards substituem) --- */
 .table-header th {
     padding: 0.5rem 1rem; /* px-4 py-2 */
@@ -155,32 +188,60 @@ body {
 
 /* --- Estilos das Mensagens de Status --- */
 .message-box {
-    padding: 1rem; /* p-4 */
-    margin-top: 1rem; /* mt-4 */
-    border-radius: 0.375rem; /* rounded-md */
-    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05); /* shadow-sm */
+    position: fixed; /* Fixa na tela */
+    top: 20px;
+    right: 20px;
+    z-index: 1000; /* Garante que fique acima de outros elementos */
+    max-width: 300px; /* Limita a largura para ser uma notificação discreta */
+    padding: 1rem;
+    border-radius: 0.375rem;
+    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
     text-align: center;
-    transition: all 0.5s; /* transition-all duration-500 */
+    transition: all 0.5s ease-in-out; /* Transição suave */
     opacity: 0; /* Inicia invisível */
-    transform: translateY(-10px); /* Começa um pouco acima */
+    transform: translateY(-50px); /* Começa acima e desce */
     pointer-events: none; /* Não interage com o mouse quando invisível */
+    /* Cores padrão para info, se não estiverem vindo do Tailwind CDN */
+    background-color: #e0f2fe; /* blue-100 */
+    color: #1e40af; /* blue-800 */
+    border: 1px solid #93c5fd; /* blue-300 */
 }
 
 .message-box.show {
     opacity: 1; /* Torna visível */
-    transform: translateY(0); /* Volta à posição original */
+    transform: translateY(0); /* Desce para a posição original */
     pointer-events: auto; /* Permite interação quando visível */
 }
 
 .message-success {
     background-color: #d1fae5; /* bg-green-100 */
     color: #065f46; /* text-green-800 */
+    border: 1px solid #a7f3d0;
 }
 
 .message-error {
     background-color: #fee2e2; /* bg-red-100 */
     color: #991b1b; /* text-red-800 */
+    border: 1px solid #fca5a5;
 }
+
+/* Cores Adicionais para Mensagens e Texto (complementando o Tailwind) */
+.text-blue-700 {
+    color: #1d4ed8; 
+}
+
+.text-yellow-700 {
+    color: #b45309; 
+}
+
+.bg-yellow-100 { 
+    background-color: #fef9c3; 
+}
+
+.text-yellow-800 { 
+    color: #92400e; 
+}
+
 
 /* --- Estilos do Card Principal (Filtros e Dashboard) --- */
 .main-card {
