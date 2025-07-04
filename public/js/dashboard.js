@@ -27,7 +27,7 @@ const totalCountsList = document.getElementById("totalCountsList");
 
 // !!! IMPORTANTE: Substitua pela URL PÚBLICA do seu backend no Render !!!
 // Exemplo: const BACKEND_URL = 'https://seu-app-backend.onrender.com';
-const BACKEND_URL = 'https://presencasbras.onrender.com';
+const BACKEND_URL = 'https://backendbras.onrender.com';
 
 function showGlobalLoading(show, message = "Carregando...") {
     if (globalLoadingIndicator && loadingMessageSpan) {
