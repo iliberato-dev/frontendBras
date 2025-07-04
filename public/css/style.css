@@ -1,0 +1,330 @@
+/* Importação da fonte Inter do Google Fonts */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+/* Estilos globais do body */
+body {
+    font-family: 'Inter', sans-serif;
+    /* Fundo branco transparente para a tela inteira */
+    background: rgba(255, 255, 255, 0.8); /* Branco com 80% de opacidade */
+    min-height: 100vh; /* Garante que o body ocupe a altura total da viewport */
+    margin: 0; /* Remove margem padrão do body */
+    padding: 0; /* Remove padding padrão do body */
+}
+
+/* --- Animações de Fade-in --- */
+.fade-in {
+    animation: fadeIn 0.8s cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(30px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.fade-in-row {
+    animation: fadeInRow 0.6s cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
+@keyframes fadeInRow {
+    from {
+        opacity: 0;
+        transform: translateX(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+/* --- Estilos de Campos de Input --- */
+.input-field {
+    padding: 0.75rem; /* p-3 */
+    border-width: 1px; /* border */
+    border-color: #d1d5db; /* border-gray-300 */
+    border-radius: 0.375rem; /* rounded-md */
+    outline: none; /* focus:outline-none */
+    box-shadow: 0 0 0 0 rgba(0, 0, 0, 0); /* reset default focus ring */
+    transition: all 0.2s ease-in-out; /* transition duration-200 ease-in-out */
+    background-color: rgba(255, 255, 255, 0.8); /* bg-white/80 */
+    width: 100%; /* Garante que o input ocupe a largura total disponível */
+    box-sizing: border-box; /* Inclui padding e borda na largura total */
+}
+
+.input-field:focus {
+    box-shadow: 0 0 0 4px rgba(147, 197, 253, 0.27); /* #93c5fd44 */
+    transform: scale(1.03); /* Leve aumento no foco */
+    border-color: #3b82f6; /* focus:ring-blue-500 */
+}
+
+/* --- Estilos de Botões Primários --- */
+.btn-primary {
+    background-image: linear-gradient(to right, #1d4ed8 0%, #3b82f6 100%); /* from-blue-700 to-blue-500 */
+    color: white;
+    padding: 0.75rem; /* p-3 */
+    border-radius: 0.375rem; /* rounded-md */
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05); /* shadow-lg */
+    transition: transform 0.15s, box-shadow 0.15s;
+    font-weight: 600; /* font-semibold */
+    letter-spacing: 0.025em; /* tracking-wide */
+    border: none;
+    outline: none;
+    cursor: pointer;
+    width: 100%; /* Garante que o botão ocupe a largura total disponível */
+    box-sizing: border-box;
+}
+
+.btn-primary:hover {
+    background-image: linear-gradient(to right, #1e40af 0%, #2563eb 100%); /* from-blue-800 to-blue-600 */
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.05); /* shadow-xl */
+    transform: scale(1.07); /* Aumenta um pouco no hover */
+    filter: brightness(1.08); /* Clareia um pouco no hover */
+}
+
+/* --- Estilos de Botões Secundários (Clear Filters) --- */
+.btn-secondary {
+    background-image: linear-gradient(to right, #fecaca 0%, #fef9c3 100%); /* from-red-200 to-yellow-100 */
+    color: #1f2937; /* text-gray-800 */
+    padding: 0.75rem; /* p-3 */
+    border-radius: 0.375rem; /* rounded-md */
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06); /* shadow-md */
+    transition: transform 0.15s, box-shadow 0.15s;
+    font-weight: 600; /* font-semibold */
+    letter-spacing: 0.025em; /* tracking-wide */
+    border: none;
+    outline: none;
+    cursor: pointer;
+    width: 100%; /* Garante que o botão ocupe a largura total disponível */
+    box-sizing: border-box;
+}
+
+.btn-secondary:hover {
+    background-color: #ef4444; /* bg-red-300 */
+    color: #7f1d1d; /* text-red-900 */
+    transform: scale(1.07); /* Aumenta um pouco no hover */
+    filter: brightness(1.08); /* Clareia um pouco no hover */
+}
+
+/* --- Estilos do Botão de Confirmar Presença (dentro do card) --- */
+.btn-confirm-presence {
+    background: linear-gradient(90deg, #22c55e 0%, #16a34a 100%);
+    color: #fff;
+    font-size: 1rem;
+    border: none;
+    border-radius: 0.5rem;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    box-shadow: 0 4px 16px 0 rgba(34, 197, 94, 0.2); /* Sombra suave do verde */
+    transition: transform 0.15s, box-shadow 0.15s, filter 0.15s;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.75rem 0; /* Padding vertical */
+}
+
+.btn-confirm-presence:hover {
+    background: linear-gradient(90deg, #16a34a 0%, #15803d 100%);
+    filter: brightness(1.08);
+    transform: scale(1.05); /* Leve aumento no hover */
+}
+
+/* --- Estilos da Tabela (se aplicável, mas os cards substituem) --- */
+.table-header th {
+    padding: 0.5rem 1rem; /* px-4 py-2 */
+    text-align: left;
+    font-size: 0.75rem; /* text-xs */
+    font-weight: 700; /* font-bold */
+    color: #374151; /* text-gray-700 */
+    text-transform: uppercase; /* uppercase */
+    letter-spacing: 0.05em; /* tracking-wider */
+    background-color: #f3f4f6; /* bg-gray-100 */
+}
+
+.table-row td {
+    padding: 0.5rem 1rem; /* px-4 py-2 */
+    white-space: nowrap; /* whitespace-nowrap */
+    font-size: 0.875rem; /* text-sm */
+    color: #111827; /* text-gray-900 */
+}
+
+/* --- Estilos das Mensagens de Status --- */
+.message-box {
+    padding: 1rem; /* p-4 */
+    margin-top: 1rem; /* mt-4 */
+    border-radius: 0.375rem; /* rounded-md */
+    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05); /* shadow-sm */
+    text-align: center;
+    transition: all 0.5s; /* transition-all duration-500 */
+    opacity: 0; /* Inicia invisível */
+    transform: translateY(-10px); /* Começa um pouco acima */
+    pointer-events: none; /* Não interage com o mouse quando invisível */
+}
+
+.message-box.show {
+    opacity: 1; /* Torna visível */
+    transform: translateY(0); /* Volta à posição original */
+    pointer-events: auto; /* Permite interação quando visível */
+}
+
+.message-success {
+    background-color: #d1fae5; /* bg-green-100 */
+    color: #065f46; /* text-green-800 */
+}
+
+.message-error {
+    background-color: #fee2e2; /* bg-red-100 */
+    color: #991b1b; /* text-red-800 */
+}
+
+/* --- Estilos do Card Principal (Filtros e Dashboard) --- */
+.main-card {
+    background: rgba(255, 255, 255, 0.97);
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.25);
+    border-radius: 1.5rem;
+    border: 1px solid rgba(35, 39, 47, 0.137); /* Borda suave */
+}
+
+/* --- Estilos do Logo da AD --- */
+.logo-ad {
+    width: 72px;
+    height: 72px;
+    border-radius: 50%;
+    box-shadow: 0 4px 24px 0 rgba(0, 0, 0, 0.376); /* Sombra mais escura */
+    border: 3px solid #fff;
+    background: #18181b;
+    object-fit: cover;
+    margin-bottom: 0.5rem;
+    transition: transform 0.2s;
+}
+
+.logo-ad:hover {
+    transform: scale(1.07) rotate(-2deg); /* Efeito de zoom e rotação no hover */
+}
+
+/* --- Media Queries para Responsividade --- */
+@media (max-width: 640px) {
+    .main-card {
+        padding: 0.5rem !important; /* Menor padding em telas pequenas */
+        border-radius: 0.75rem !important; /* Menor border-radius */
+    }
+
+    .logo-ad {
+        width: 7rem !important; /* Logo maior em telas pequenas (se for o caso) */
+        height: 7rem !important;
+    }
+}
+
+/* --- Estilos para Botões do Dashboard (Toggle Dashboard) --- */
+.btn-primary-dark {
+    background: linear-gradient(90deg, #1e293b 0%, #334155 100%); /* Tons de cinza escuro/azul */
+    color: #fff;
+    font-size: .8rem !important;
+    border: none;
+    border-radius: 0.5rem;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    box-shadow: 0 4px 16px 0 rgba(30, 41, 59, 0.2); /* Sombra sutil */
+    transition: transform 0.15s, box-shadow 0.15s, filter 0.15s;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.75rem 1rem; /* Adicionado padding para melhor aparência */
+}
+
+.btn-primary-dark:hover {
+    background: linear-gradient(90deg, #0f172a 0%, #1e293b 100%);
+    filter: brightness(1.1);
+    transform: scale(1.06);
+}
+
+.btn-secondary-dark {
+    background: linear-gradient(90deg, #7f1d1d 0%, #b91c1c 100%); /* Tons de vermelho */
+    color: #fff;
+    border: none;
+    border-radius: 0.5rem;
+    font-weight: 700;
+    font-size: .8rem !important;
+    letter-spacing: 0.03em;
+    box-shadow: 0 4px 16px 0 rgba(127, 29, 29, 0.2); /* Sombra sutil */
+    transition: transform 0.15s, box-shadow 0.15s, filter 0.15s;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.75rem 1rem; /* Adicionado padding para melhor aparência */
+}
+
+.btn-secondary-dark:hover {
+    background: linear-gradient(90deg, #991b1b 0%, #dc2626 100%);
+    filter: brightness(1.1);
+    transform: scale(1.06);
+}
+
+/* --- ESTILOS PARA O LOADING INDICATOR GLOBAL --- */
+#globalLoadingIndicator {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 9999; /* Garante que ele esteja acima de tudo */
+    background: rgba(255, 255, 255, 0.8); /* Fundo branco transparente */
+    display: flex; /* Sempre flex para centralizar o conteúdo */
+    align-items: center;
+    justify-content: center;
+    opacity: 0; /* Inicia invisível */
+    pointer-events: none; /* Não interage com o mouse quando invisível */
+    transition: opacity 0.3s ease-in-out; /* Transição suave de opacidade */
+}
+
+/* Adiciona a classe 'show' para tornar o indicador visível */
+#globalLoadingIndicator.show {
+    opacity: 1;
+    pointer-events: auto; /* Permite interagir com o mouse quando visível (se houver algo clicável) */
+}
+
+/* Forçando opacidade e cor do texto do loading */
+#loadingMessage {
+    color: #3b82f6 !important; /* Texto azul */
+    /* Adicionada uma sombra de texto para melhor contraste em fundos claros */
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5), 0 0 1em rgba(0, 0, 0, 0.3), 0 0 0.2em rgba(0, 0, 0, 0.2);
+}
+
+/* Estilos para o Dashboard Container (seção de resumo) */
+#dashboardContainer {
+    max-height: 0; /* Inicia escondido */
+    overflow: hidden; /* Esconde o conteúdo extra */
+    opacity: 0; /* Inicia invisível */
+    transition: max-height 0.7s ease-out, opacity 0.7s ease-out; /* Transição suave */
+}
+
+#dashboardContainer.max-h-screen {
+    max-height: 100vh; /* Expande para a altura máxima da tela */
+    opacity: 1; /* Torna visível */
+}
+
+/* Estilo para barra de rolagem customizada */
+.custom-scrollbar::-webkit-scrollbar {
+    width: 8px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+    background: #4a5568; /* bg-slate-600 */
+    border-radius: 10px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+    background: #64748b; /* bg-slate-500 */
+    border-radius: 10px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8; /* bg-slate-400 */
+}

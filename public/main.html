@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gerenciador de Presenças</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="css/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body class="min-h-screen bg-gray-100 flex flex-col items-center p-4">
+    <div class="main-card bg-white p-6 md:p-8 rounded-xl shadow-xl w-full max-w-4xl fade-in flex flex-col items-center">
+        <div class="flex justify-center mb-6">
+            <img src="img/logo.jpg" alt="Logo AD" class="logo-ad">
+        </div>
+        <h1 class="text-3xl font-extrabold text-gray-900 mb-6 text-center">Controle de Presenças</h1>
+
+        <div class="w-full mb-8">
+            <h2 class="text-xl font-bold text-gray-800 mb-4 text-center">Filtrar Membros</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+                <input type="text" id="filterName" placeholder="Nome do Membro" class="input-field">
+                <select id="filterPeriodo" class="input-field">
+                    <option value="">Todos os Períodos</option>
+                    <option value="Manhã">Manhã</option>
+                    <option value="Tarde">Tarde</option>
+                    <option value="Noite">Noite</option>
+                </select>
+                <select id="filterLider" class="input-field">
+                    <option value="">Todos os Líderes</option>
+                    </select>
+                <select id="filterGape" class="input-field">
+                    <option value="">Todos os GAPEs</option>
+                    </select>
+            </div>
+            <div class="flex flex-col sm:flex-row gap-4">
+                <button id="applyFiltersBtn" class="btn-primary">Aplicar Filtros</button>
+                <button id="clearFiltersBtn" class="btn-secondary">Limpar Filtros</button>
+            </div>
+        </div>
+
+        <div id="messageArea" class="message-box hidden"></div>
+
+        <div class="w-full mb-8">
+            <button id="toggleDashboardBtn" class="btn-primary-dark w-full p-3 rounded-lg flex items-center justify-center gap-2 mb-4">
+                <svg id="dashboardOpenIcon" class="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                </svg>
+                <span id="dashboardOpenText">Mostrar Resumo do Dashboard</span>
+                <svg id="dashboardCloseIcon" class="h-5 w-5 text-white hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span id="dashboardCloseText" class="hidden">Ocultar Resumo do Dashboard</span>
+            </button>
+
+            <div id="dashboardContainer" class="max-h-0 opacity-0 transition-all duration-700 ease-out bg-slate-700 p-6 rounded-lg shadow-inner overflow-hidden">
+                <h3 class="text-xl font-bold text-white mb-4 text-center">Resumo Atual dos Filtros</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-white">
+                    <div class="bg-slate-800 p-4 rounded-md shadow-sm">
+                        <p class="text-md font-semibold text-slate-300">Total de Presenças (Membros Filtrados):</p>
+                        <p id="dashboardPresencasMes" class="text-4xl font-extrabold text-blue-400">0</p>
+                    </div>
+                    <div class="bg-slate-800 p-4 rounded-md shadow-sm">
+                        <p class="text-md font-semibold text-slate-300">Período Selecionado:</p>
+                        <p id="dashboardPeriodo" class="text-2xl font-bold text-green-400">N/A</p>
+                    </div>
+                    <div class="bg-slate-800 p-4 rounded-md shadow-sm">
+                        <p class="text-md font-semibold text-slate-300">Líder Selecionado:</p>
+                        <p id="dashboardLider" class="text-2xl font-bold text-yellow-400">N/A</p>
+                    </div>
+                    <div class="bg-slate-800 p-4 rounded-md shadow-sm">
+                        <p class="text-md font-semibold text-slate-300">GAPE Selecionado:</p>
+                        <p id="dashboardGape" class="text-2xl font-bold text-purple-400">N/A</p>
+                    </div>
+                </div>
+                <div class="mt-6 bg-slate-800 p-4 rounded-md shadow-sm">
+                    <h4 class="text-lg font-bold text-white mb-3">Presenças Totais por Membro (Filtrados):</h4>
+                    <ul id="totalCountsList" class="space-y-2 max-h-40 overflow-y-auto custom-scrollbar">
+                        </ul>
+                </div>
+            </div>
+        </div>
+
+        <div id="membersCardsContainer" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 w-full hidden">
+            </div>
+    </div>
+
+    <div id="globalLoadingIndicator" class="hidden">
+        <div class="flex flex-col items-center">
+            <svg class="animate-spin h-10 w-10 text-blue-500 mb-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+            </svg>
+            <span id="loadingMessage" class="text-xl font-semibold text-gray-700">Carregando...</span>
+        </div>
+    </div>
+
+    <script src="js/dashboard.js"></script>
+</body>
+</html>
