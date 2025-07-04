@@ -351,29 +351,30 @@ function toggleDashboardVisibility() {
     isDashboardOpen = !isDashboardOpen;
 
     if (isDashboardOpen) {
-        // Remove as classes que ocultam e adiciona a altura máxima para animar
+        // Remove as classes que ocultam e permite a expansão
         dashboardContainer.classList.remove('max-h-0', 'opacity-0', 'overflow-hidden');
-        // Opcional: Adicione uma altura máxima maior se 'max-h-screen' não for suficiente ou causar scroll indesejado
-        // Ex: dashboardContainer.classList.add('max-h-[500px]', 'opacity-100'); // Ou max-h-screen
-        
+        dashboardContainer.classList.add('max-h-screen'); // Adiciona a classe que garante a expansão
+
         // Ajusta os ícones e textos do botão
         dashboardOpenIcon.classList.add('hidden');
         dashboardCloseIcon.classList.remove('hidden');
         dashboardOpenText.classList.add('hidden');
         dashboardCloseText.classList.remove('hidden');
-        
+
         console.log("Dashboard: Abrindo. Buscando resumo...");
         fetchAndDisplaySummary();
     } else {
         // Adiciona as classes para ocultar e animar o fechamento
+        dashboardContainer.classList.remove('max-h-screen'); // Remove a classe de expansão
         dashboardContainer.classList.add('max-h-0', 'opacity-0', 'overflow-hidden');
-        
+
+
         // Ajusta os ícones e textos do botão
         dashboardOpenIcon.classList.remove('hidden');
         dashboardCloseIcon.classList.add('hidden');
         dashboardOpenText.classList.remove('hidden');
         dashboardCloseText.classList.add('hidden');
-        
+
         console.log("Dashboard: Fechando.");
     }
 }
