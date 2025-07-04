@@ -31,7 +31,10 @@ const totalCountsList = document.getElementById("totalCountsList");
 
 // !!! IMPORTANTE: Substitua pela URL PÚBLICA do seu backend no Render !!!
 // Deve ser a mesma URL definida na variável de ambiente FRONTEND_URL no seu backend Render
-const BACKEND_URL = 'https://backendbras.onrender.com'; 
+const BACKEND_URL = 'https://backendbras.onrender.com';
+
+// --- NOVA VARIÁVEL DE CONTROLE DE ESTADO DO DASHBOARD ---
+let isDashboardOpen = false;
 
 function showGlobalLoading(show, message = "Carregando...") {
     if (globalLoadingIndicator && loadingMessageSpan) {
@@ -345,15 +348,27 @@ function applyFiltersWithMessage() {
 
 // Lógica de toggle dashboard para a sidebar
 function toggleDashboardVisibility() {
-    dashboardContainer.classList.toggle('hidden');
-    dashboardOpenIcon.classList.toggle('hidden');
-    dashboardCloseIcon.classList.toggle('hidden');
-    dashboardOpenText.classList.toggle('hidden');
-    dashboardCloseText.classList.toggle('hidden');
+    // Inverte o estado da variável de controle
+    isDashboardOpen = !isDashboardOpen;
 
-    // Se o dashboard está visível, force a atualização dos totais
-    if (!dashboardContainer.classList.contains('hidden')) {
-        fetchAndDisplaySummary();
+    if (isDashboardOpen) {
+        // Abre o dashboard
+        dashboardContainer.classList.remove('hidden');
+        dashboardOpenIcon.classList.add('hidden');
+        dashboardCloseIcon.classList.remove('hidden');
+        dashboardOpenText.classList.add('hidden');
+        dashboardCloseText.classList.remove('hidden');
+        console.log("Dashboard: Abrindo. Buscando resumo...");
+        fetchAndDisplaySummary(); // Chama apenas na abertura
+    } else {
+        // Fecha o dashboard
+        dashboardContainer.classList.add('hidden');
+        dashboardOpenIcon.classList.remove('hidden');
+        dashboardCloseIcon.classList.add('hidden');
+        dashboardOpenText.classList.remove('hidden');
+        dashboardCloseText.classList.add('hidden');
+        console.log("Dashboard: Fechando.");
+        // Não chama fetchAndDisplaySummary ao fechar
     }
 }
 
@@ -366,11 +381,14 @@ async function fetchAndDisplaySummary() {
         }
         const dataTotal = await responseTotal.json();
 
+        // --- CONSOLE.LOGS PARA DEPURAR (MANTIDOS TEMPORARIAMENTE) ---
+        console.log("Dados brutos de presenças totais (dataTotal):", dataTotal); 
+        // --- FIM DOS CONSOLE.LOGS ---
+
         // Filtra os membros com base nos filtros atuais para o resumo
         const currentLiderFilter = filterLiderInput.value.toLowerCase().trim();
         const currentGapeFilter = filterGapeInput.value.toLowerCase().trim();
 
-        // Members list filtered by lider/gape
         const membersMatchingLiderAndGape = allMembersData.filter(member => {
             const memberLider = String(member.Lider || "").toLowerCase();
             const memberGape = String(member.GAPE || "").toLowerCase();
@@ -379,18 +397,24 @@ async function fetchAndDisplaySummary() {
             const matchesGape = currentGapeFilter === "" || memberGape.includes(currentGapeFilter);
 
             return matchesLider && matchesGape;
-        }).map(member => member.Nome); // Get only names
+        }).map(member => member.Nome); 
 
         const filteredTotalCounts = {};
         let totalFilteredPresences = 0;
 
         for (const memberName in dataTotal) {
-            // Include if no lider/gape filters are applied, or if member matches
+            // Inclui se não há filtros de líder/GAPE aplicados, ou se o membro corresponde
             if (membersMatchingLiderAndGape.includes(memberName) || (currentLiderFilter === "" && currentGapeFilter === "")) {
                 filteredTotalCounts[memberName] = dataTotal[memberName];
                 totalFilteredPresences += dataTotal[memberName];
             }
         }
+
+        // --- CONSOLE.LOGS PARA DEPURAR (MANTIDOS TEMPORARIAMENTE) ---
+        console.log("Membros filtrados para o resumo:", membersMatchingLiderAndGape);
+        console.log("Contagens totais filtradas (filteredTotalCounts):", filteredTotalCounts);
+        console.log("Total de presenças filtradas:", totalFilteredPresences);
+        // --- FIM DOS CONSOLE.LOGS ---
 
         if (dashboardPresencasMes) {
             dashboardPresencasMes.textContent = totalFilteredPresences;
@@ -399,6 +423,10 @@ async function fetchAndDisplaySummary() {
         if (totalCountsList) {
             totalCountsList.innerHTML = '';
             const sortedCounts = Object.entries(filteredTotalCounts).sort(([, countA], [, countB]) => countB - countA);
+
+            // --- CONSOLE.LOGS PARA DEPURAR (MANTIDOS TEMPORARIAMENTE) ---
+            console.log("Contagens ordenadas para exibição (sortedCounts):", sortedCounts);
+            // --- FIM DOS CONSOLE.LOGS ---
 
             if (sortedCounts.length > 0) {
                 sortedCounts.forEach(([name, count]) => {
@@ -415,13 +443,8 @@ async function fetchAndDisplaySummary() {
             }
         }
 
-        // Fetch dashboard summary for period, lider, gape (this is likely redundant if the data comes from 'getMembros' and is fixed)
-        // You might want to get this data from the `getMembros` response instead of a separate endpoint
-        // Or, if `presencasMes` truly provides dashboard-level period/lider/gape, call it here.
-        // For now, let's assume `getMembros` gives all data for filtering in dashboard.
-        
-        // This part below uses `filteredMembers` which are already filtered by the user inputs,
-        // so it makes sense for Periodo/Lider/GAPE of the *filtered view*.
+        // Esta parte abaixo usa `filteredMembers` que já são filtrados pelas entradas do usuário,
+        // então faz sentido para Período/Líder/GAPE da *visão filtrada*.
         const uniquePeriods = [...new Set(filteredMembers.map(m => m.Periodo).filter(Boolean))];
         const uniqueLiders = [...new Set(filteredMembers.map(m => m.Lider).filter(Boolean))];
         const uniqueGapes = [...new Set(filteredMembers.map(m => m.GAPE).filter(Boolean))];
