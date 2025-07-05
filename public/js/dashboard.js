@@ -57,27 +57,30 @@ function showMessage(message, type = "info") {
     // Evita mostrar mensagens de "Carregando..." na área de mensagem principal
     if (message.includes("Carregando dados dos membros...") ||
         message.includes("Carregando resumo do dashboard...") ||
-        message.includes("Registrando presença para ")) {
+        message.includes("Registrando presença para ") || // Adicionado para evitar poluição durante o registro
+        !message.trim()) { // Adicionado para não mostrar mensagens vazias
         return;
     }
 
     messageArea.textContent = message;
     messageArea.className = "message-box show";
 
-    messageArea.classList.remove("message-success", "message-error", "bg-blue-100", "text-blue-800", "bg-yellow-100", "text-yellow-800");
+    // Remove todas as classes de tipo antes de adicionar a nova
+    messageArea.classList.remove("message-success", "message-error", "bg-blue-100", "text-blue-800", "bg-yellow-100", "text-yellow-800", "bg-red-100", "text-red-800", "bg-green-100", "text-green-800");
 
     if (type === "success") {
-        messageArea.classList.add("message-success");
+        messageArea.classList.add("message-success", "bg-green-100", "text-green-800");
     } else if (type === "error") {
-        messageArea.classList.add("message-error");
+        messageArea.classList.add("message-error", "bg-red-100", "text-red-800");
     } else if (type === "warning") {
         messageArea.classList.add("bg-yellow-100", "text-yellow-800");
-    } else {
+    } else { // Default to info
         messageArea.classList.add("bg-blue-100", "text-blue-800");
     }
 
     setTimeout(() => {
         messageArea.classList.remove("show");
+        // Dá um pequeno atraso para a transição de fade-out antes de ocultar totalmente
         setTimeout(() => messageArea.classList.add("hidden"), 500);
     }, 4000);
 }
@@ -101,7 +104,7 @@ async function fetchMembers() {
         // Busca membros e últimas presenças em paralelo para maior eficiência
         const [membersResponse, presencesResponse] = await Promise.all([
             fetch(`${BACKEND_URL}/get-membros`),
-            fetch(`${BACKEND_URL}/get-all-last-presences`) 
+            fetch(`${BACKEND_URL}/get-all-last-presences`)
         ]);
 
         if (!membersResponse.ok) {
@@ -112,16 +115,20 @@ async function fetchMembers() {
         }
 
         const membersData = await membersResponse.json();
+        // Apps Script agora retorna { success: true, membros: [...] }
+        // Use 'membros' se disponível, caso contrário 'data' (para compatibilidade, se necessário)
         allMembersData = membersData.membros || membersData.data || [];
 
-        lastPresencesData = await presencesResponse.json(); // Atribui as presenças carregadas
+        const lastPresencesRawData = await presencesResponse.json();
+        // Apps Script agora retorna { success: true, data: {...} }
+        lastPresencesData = lastPresencesRawData.data || {}; // Atribui as presenças carregadas
 
         if (allMembersData.length === 0) {
             showMessage("Nenhum membro encontrado ou dados vazios.", "info");
         }
 
         fillSelectOptions();
-        applyFilters(); 
+        applyFilters();
     } catch (error) {
         console.error("Erro ao carregar membros ou presenças:", error);
         showMessage(`Erro ao carregar dados: ${error.message}`, "error");
@@ -187,11 +194,12 @@ function displayMembers(members) {
         const confirmBtn = card.querySelector(".btn-confirm-presence");
 
         // Função para atualizar o status da presença no card usando os dados já carregados
-        const updatePresenceStatus = () => { 
-            infoDiv.classList.remove("text-green-700", "text-red-600", "text-yellow-700", "text-blue-700");
+        const updatePresenceStatus = () => {
+            infoDiv.classList.remove("text-green-700", "text-red-600", "text-yellow-700", "text-blue-700", "text-gray-500"); // Limpa todas as cores
             infoDiv.classList.add("block");
 
-            const presence = lastPresencesData[member.Nome]; 
+            // lastPresencesData agora é um objeto: { "Nome do Membro": { data: "DD/MM/YYYY", hora: "HH:MM:SS" } }
+            const presence = lastPresencesData[member.Nome];
 
             if (presence && presence.data && presence.hora) { // Verifica se presence e seus campos são válidos
                 infoDiv.textContent = `Últ. presença: ${presence.data} às ${presence.hora}`;
@@ -214,7 +222,7 @@ function displayMembers(members) {
                 infoDiv.classList.add("text-gray-500");
             } else {
                 confirmBtn.classList.add("hidden");
-                updatePresenceStatus(); 
+                updatePresenceStatus(); // Volta para a última presença conhecida
 
                 confirmBtn.disabled = false;
                 checkbox.disabled = false;
@@ -230,9 +238,9 @@ function displayMembers(members) {
             const hora = String(now.getHours()).padStart(2, "0");
             const min = String(now.getMinutes()).padStart(2, "0");
             const seg = String(now.getSeconds()).padStart(2, "0");
-            
+
             infoDiv.textContent = `Registrando presença para ${member.Nome}...`;
-            infoDiv.classList.remove("hidden", "text-green-700", "text-red-600", "text-yellow-700");
+            infoDiv.classList.remove("hidden", "text-green-700", "text-red-600", "text-yellow-700", "text-gray-500");
             infoDiv.classList.add("text-blue-700");
 
             confirmBtn.disabled = true;
@@ -248,55 +256,47 @@ function displayMembers(members) {
                         nome: member.Nome,
                         data: `${dia}/${mes}/${ano}`,
                         hora: `${hora}:${min}:${seg}`,
-                        sheet: "PRESENCAS",
+                        sheet: "PRESENCAS", // Nome da aba no Apps Script, pode ser fixo aqui
                     }),
                 });
 
                 const responseData = await response.json();
 
-                if (response.ok) {
-                    if (!responseData.success && responseData.message && responseData.message.includes("já foi registrada")) {
-                        infoDiv.textContent = `Presença de ${member.Nome} já registrada hoje.`;
-                        infoDiv.classList.remove("text-blue-700", "text-green-700");
-                        infoDiv.classList.add("text-yellow-700");
-                        showMessage(`Presença de ${member.Nome} já foi registrada hoje.`, "warning");
+                // `response.ok` verifica o status HTTP (2xx), enquanto `responseData.success` verifica a lógica de negócio do Apps Script/Backend
+                if (response.ok && responseData.success === true) {
+                    infoDiv.textContent = `Presença de ${member.Nome} registrada com sucesso em ${responseData.lastPresence?.data || `${dia}/${mes}/${ano}`} às ${responseData.lastPresence?.hora || `${hora}:${min}:${seg}`}.`;
+                    infoDiv.classList.remove("text-blue-700", "text-yellow-700");
+                    infoDiv.classList.add("text-green-700");
+                    showMessage("Presença registrada com sucesso!", "success");
 
-                        card.classList.add('animate-shake-red');
-                        setTimeout(() => card.classList.remove('animate-shake-red'), 1000);
+                    card.classList.add('animate-pulse-green');
+                    setTimeout(() => card.classList.remove('animate-pulse-green'), 1000);
 
-                        if (responseData.lastPresence) { 
-                            lastPresencesData[member.Nome] = responseData.lastPresence;
-                        }
-                        updatePresenceStatus();
+                    // Atualiza `lastPresencesData` com os dados mais recentes do registro
+                    lastPresencesData[member.Nome] = responseData.lastPresence || { data: `${dia}/${mes}/${ano}`, hora: `${hora}:${min}:${seg}` };
+                    updatePresenceStatus(); // Re-renderiza a infoDiv com a nova data/hora
 
-                    } else if (responseData.success) {
-                        infoDiv.classList.remove("text-blue-700", "text-yellow-700");
-                        infoDiv.classList.add("text-green-700");
-                        showMessage("Presença registrada com sucesso!", "success");
+                } else if (responseData.success === false && responseData.message && responseData.message.includes("já foi registrada")) {
+                    // Este bloco é para quando o Apps Script/Backend informa que já foi registrada (success: false)
+                    infoDiv.textContent = `Presença de ${member.Nome} já registrada hoje.`;
+                    infoDiv.classList.remove("text-blue-700", "text-green-700");
+                    infoDiv.classList.add("text-yellow-700");
+                    showMessage(`Presença de ${member.Nome} já foi registrada hoje.`, "warning");
 
-                        card.classList.add('animate-pulse-green');
-                        setTimeout(() => card.classList.remove('animate-pulse-green'), 1000);
+                    card.classList.add('animate-shake-red');
+                    setTimeout(() => card.classList.remove('animate-shake-red'), 1000);
 
-                        lastPresencesData[member.Nome] = { data: `${dia}/${mes}/${ano}`, hora: `${hora}:${min}:${seg}` };
-                        updatePresenceStatus();
-
-                    } else {
-                        infoDiv.textContent = `Erro: ${responseData.details || responseData.message || "Falha ao registrar"}`;
-                        infoDiv.classList.remove("text-blue-700", "text-green-700", "text-yellow-700");
-                        infoDiv.classList.add("text-red-600");
-                        showMessage(`Erro ao registrar presença: ${responseData.details || responseData.message || "Erro desconhecido"}`, "error");
-
-                        card.classList.add('animate-shake-red');
-                        setTimeout(() => card.classList.remove('animate-shake-red'), 1000);
-
-                        confirmBtn.disabled = false;
-                        checkbox.disabled = false;
+                    // Atualiza `lastPresencesData` com os dados retornados pelo Apps Script (se existirem)
+                    if (responseData.lastPresence) {
+                        lastPresencesData[member.Nome] = responseData.lastPresence;
                     }
+                    updatePresenceStatus(); // Re-renderiza a infoDiv para refletir a última presença
                 } else {
-                    infoDiv.textContent = `Erro: ${responseData.details || responseData.message || "Falha ao enviar para o servidor."}`;
+                    // Para qualquer outro caso de `responseData.success === false` ou erro lógico
+                    infoDiv.textContent = `Erro: ${responseData.message || "Falha ao registrar"}`;
                     infoDiv.classList.remove("text-blue-700", "text-green-700", "text-yellow-700");
                     infoDiv.classList.add("text-red-600");
-                    showMessage(`Erro de rede ou servidor: ${responseData.details || responseData.message || "Erro desconhecido"} (HTTP ${response.status})`, "error");
+                    showMessage(`Erro ao registrar presença: ${responseData.message || "Erro desconhecido"}`, "error");
 
                     card.classList.add('animate-shake-red');
                     setTimeout(() => card.classList.remove('animate-shake-red'), 1000);
@@ -317,8 +317,12 @@ function displayMembers(members) {
                 confirmBtn.disabled = false;
                 checkbox.disabled = false;
             } finally {
+                // Após a operação (sucesso, aviso ou erro), oculta o botão e desmarca o checkbox.
+                // Isso prepara o card para uma nova interação.
                 confirmBtn.classList.add("hidden");
                 checkbox.checked = false;
+                // Os campos disabled são reabilitados dentro dos blocos de sucesso/erro/aviso,
+                // ou permanecem desabilitados se o try/catch não os reativar por algum motivo crítico.
             }
         });
     });
@@ -339,11 +343,19 @@ function clearFilters() {
     filterLiderInput.value = "";
     filterGapeInput.value = "";
     applyFilters();
+    // Atualiza o resumo do dashboard após limpar os filtros
+    if (isDashboardOpen) {
+        fetchAndDisplaySummary();
+    }
 }
 
 function applyFiltersWithMessage() {
     showMessage("Aplicando filtros...", "info");
     applyFilters();
+    // Atualiza o resumo do dashboard após aplicar os filtros
+    if (isDashboardOpen) {
+        fetchAndDisplaySummary();
+    }
 }
 
 // Lógica de toggle dashboard para a sidebar
@@ -362,7 +374,7 @@ function toggleDashboardVisibility() {
         dashboardCloseText.classList.remove('hidden');
 
         console.log("Dashboard: Abrindo. Buscando resumo...");
-        fetchAndDisplaySummary();
+        fetchAndDisplaySummary(); // Busca e exibe o resumo quando o dashboard é aberto
     } else {
         // Adiciona as classes para ocultar e animar o fechamento
         dashboardContainer.classList.remove('max-h-screen'); // Remove a classe de expansão
@@ -386,10 +398,13 @@ async function fetchAndDisplaySummary() {
         if (!responseTotal.ok) {
             throw new Error(`Erro ao buscar presenças totais: ${responseTotal.statusText}`);
         }
-        const dataTotal = await responseTotal.json();
+        const rawDataTotal = await responseTotal.json();
+        // Apps Script agora retorna { success: true, data: {...} }
+        const dataTotal = rawDataTotal.data || {}; // Acessa o objeto 'data' dentro da resposta
 
-        // --- CONSOLE.LOGS PARA DEPURAR (MANTIDOS TEMPORARIAMENTE) ---
-        console.log("Dados brutos de presenças totais (dataTotal):", dataTotal); 
+        // --- CONSOLE.LOGS PARA DEPURAR ---
+        console.log("Dados brutos de presenças totais (rawDataTotal):", rawDataTotal);
+        console.log("Dados de presenças totais (dataTotal):", dataTotal);
         // --- FIM DOS CONSOLE.LOGS ---
 
         // Filtra os membros com base nos filtros atuais para o resumo
@@ -404,7 +419,7 @@ async function fetchAndDisplaySummary() {
             const matchesGape = currentGapeFilter === "" || memberGape.includes(currentGapeFilter);
 
             return matchesLider && matchesGape;
-        }).map(member => member.Nome); 
+        }).map(member => member.Nome);
 
         const filteredTotalCounts = {};
         let totalFilteredPresences = 0;
@@ -417,7 +432,7 @@ async function fetchAndDisplaySummary() {
             }
         }
 
-        // --- CONSOLE.LOGS PARA DEPURAR (MANTIDOS TEMPORARIAMENTE) ---
+        // --- CONSOLE.LOGS PARA DEPURAR ---
         console.log("Membros filtrados para o resumo:", membersMatchingLiderAndGape);
         console.log("Contagens totais filtradas (filteredTotalCounts):", filteredTotalCounts);
         console.log("Total de presenças filtradas:", totalFilteredPresences);
@@ -431,7 +446,7 @@ async function fetchAndDisplaySummary() {
             totalCountsList.innerHTML = '';
             const sortedCounts = Object.entries(filteredTotalCounts).sort(([, countA], [, countB]) => countB - countA);
 
-            // --- CONSOLE.LOGS PARA DEPURAR (MANTIDOS TEMPORARIAMENTE) ---
+            // --- CONSOLE.LOGS PARA DEPURAR ---
             console.log("Contagens ordenadas para exibição (sortedCounts):", sortedCounts);
             // --- FIM DOS CONSOLE.LOGS ---
 
@@ -498,10 +513,18 @@ async function fetchAndDisplaySummary() {
 applyFiltersBtn.addEventListener("click", applyFiltersWithMessage);
 clearFiltersBtn.addEventListener("click", clearFilters);
 
+// Adicionado event listeners para inputs de filtro para que o dashboard se atualize dinamicamente
 filterNameInput.addEventListener("input", applyFilters);
 filterPeriodoSelect.addEventListener("change", applyFilters);
 filterLiderInput.addEventListener("change", applyFilters);
 filterGapeInput.addEventListener("change", applyFilters);
+
+// Adicionado event listeners para atualizar o resumo do dashboard ao mudar os filtros
+// (Isso é redundante com o applyFiltersWithMessage/clearFilters que já chamam, mas garante para mudanças diretas)
+filterNameInput.addEventListener("input", () => { if (isDashboardOpen) fetchAndDisplaySummary(); });
+filterPeriodoSelect.addEventListener("change", () => { if (isDashboardOpen) fetchAndDisplaySummary(); });
+filterLiderInput.addEventListener("change", () => { if (isDashboardOpen) fetchAndDisplaySummary(); });
+filterGapeInput.addEventListener("change", () => { if (isDashboardOpen) fetchAndDisplaySummary(); });
 
 if (toggleDashboardBtn) {
     toggleDashboardBtn.addEventListener("click", toggleDashboardVisibility);
