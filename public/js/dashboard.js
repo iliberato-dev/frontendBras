@@ -1,5 +1,5 @@
 // ------------------------------------------------------
-// Frontend (js/dashboard.js)
+// Frontend (js/dashboard.js) - Versão Atualizada para Filtros no Dashboard
 // ------------------------------------------------------
 let allMembersData = [];
 let filteredMembers = [];
@@ -115,20 +115,20 @@ async function fetchMembers() {
         }
 
         const membersData = await membersResponse.json();
-        // Apps Script agora retorna { success: true, membros: [...] }
-        // Use 'membros' se disponível, caso contrário 'data' (para compatibilidade, se necessário)
         allMembersData = membersData.membros || membersData.data || [];
 
         const lastPresencesRawData = await presencesResponse.json();
-        // Apps Script agora retorna { success: true, data: {...} }
-        lastPresencesData = lastPresencesRawData.data || {}; // Atribui as presenças carregadas
+        lastPresencesData = lastPresencesRawData.data || {};
 
         if (allMembersData.length === 0) {
             showMessage("Nenhum membro encontrado ou dados vazios.", "info");
         }
 
         fillSelectOptions();
-        applyFilters();
+        applyFilters(); // Aplica os filtros e exibe os cards
+        if (isDashboardOpen) {
+            fetchAndDisplaySummary(); // Atualiza o dashboard se estiver aberto
+        }
     } catch (error) {
         console.error("Erro ao carregar membros ou presenças:", error);
         showMessage(`Erro ao carregar dados: ${error.message}`, "error");
@@ -159,6 +159,8 @@ function applyFilters() {
     });
 
     displayMembers(filteredMembers);
+    // IMPORTANTE: Não chame fetchAndDisplaySummary aqui, ele já será chamado pelos event listeners
+    // ou pela função applyFiltersWithMessage/clearFilters. Evita chamadas duplicadas.
 }
 
 function displayMembers(members) {
@@ -193,15 +195,13 @@ function displayMembers(members) {
         const infoDiv = card.querySelector(".presence-info");
         const confirmBtn = card.querySelector(".btn-confirm-presence");
 
-        // Função para atualizar o status da presença no card usando os dados já carregados
         const updatePresenceStatus = () => {
-            infoDiv.classList.remove("text-green-700", "text-red-600", "text-yellow-700", "text-blue-700", "text-gray-500"); // Limpa todas as cores
+            infoDiv.classList.remove("text-green-700", "text-red-600", "text-yellow-700", "text-blue-700", "text-gray-500");
             infoDiv.classList.add("block");
 
-            // lastPresencesData agora é um objeto: { "Nome do Membro": { data: "DD/MM/YYYY", hora: "HH:MM:SS" } }
             const presence = lastPresencesData[member.Nome];
 
-            if (presence && presence.data && presence.hora) { // Verifica se presence e seus campos são válidos
+            if (presence && presence.data && presence.hora) {
                 infoDiv.textContent = `Últ. presença: ${presence.data} às ${presence.hora}`;
                 infoDiv.classList.add("text-green-700");
             } else {
@@ -211,7 +211,6 @@ function displayMembers(members) {
             infoDiv.classList.remove("hidden");
         };
 
-        // Atualiza o status ao carregar o card pela primeira vez
         updatePresenceStatus();
 
         checkbox.addEventListener("change", function () {
@@ -222,7 +221,7 @@ function displayMembers(members) {
                 infoDiv.classList.add("text-gray-500");
             } else {
                 confirmBtn.classList.add("hidden");
-                updatePresenceStatus(); // Volta para a última presença conhecida
+                updatePresenceStatus();
 
                 confirmBtn.disabled = false;
                 checkbox.disabled = false;
@@ -256,13 +255,12 @@ function displayMembers(members) {
                         nome: member.Nome,
                         data: `${dia}/${mes}/${ano}`,
                         hora: `${hora}:${min}:${seg}`,
-                        sheet: "PRESENCAS", // Nome da aba no Apps Script, pode ser fixo aqui
+                        sheet: "PRESENCAS",
                     }),
                 });
 
                 const responseData = await response.json();
 
-                // `response.ok` verifica o status HTTP (2xx), enquanto `responseData.success` verifica a lógica de negócio do Apps Script/Backend
                 if (response.ok && responseData.success === true) {
                     infoDiv.textContent = `Presença de ${member.Nome} registrada com sucesso em ${responseData.lastPresence?.data || `${dia}/${mes}/${ano}`} às ${responseData.lastPresence?.hora || `${hora}:${min}:${seg}`}.`;
                     infoDiv.classList.remove("text-blue-700", "text-yellow-700");
@@ -272,12 +270,13 @@ function displayMembers(members) {
                     card.classList.add('animate-pulse-green');
                     setTimeout(() => card.classList.remove('animate-pulse-green'), 1000);
 
-                    // Atualiza `lastPresencesData` com os dados mais recentes do registro
                     lastPresencesData[member.Nome] = responseData.lastPresence || { data: `${dia}/${mes}/${ano}`, hora: `${hora}:${min}:${seg}` };
-                    updatePresenceStatus(); // Re-renderiza a infoDiv com a nova data/hora
+                    updatePresenceStatus();
+                    if (isDashboardOpen) { // Atualiza o dashboard após registrar uma presença
+                        fetchAndDisplaySummary();
+                    }
 
                 } else if (responseData.success === false && responseData.message && responseData.message.includes("já foi registrada")) {
-                    // Este bloco é para quando o Apps Script/Backend informa que já foi registrada (success: false)
                     infoDiv.textContent = `Presença de ${member.Nome} já registrada hoje.`;
                     infoDiv.classList.remove("text-blue-700", "text-green-700");
                     infoDiv.classList.add("text-yellow-700");
@@ -286,13 +285,11 @@ function displayMembers(members) {
                     card.classList.add('animate-shake-red');
                     setTimeout(() => card.classList.remove('animate-shake-red'), 1000);
 
-                    // Atualiza `lastPresencesData` com os dados retornados pelo Apps Script (se existirem)
                     if (responseData.lastPresence) {
                         lastPresencesData[member.Nome] = responseData.lastPresence;
                     }
-                    updatePresenceStatus(); // Re-renderiza a infoDiv para refletir a última presença
+                    updatePresenceStatus();
                 } else {
-                    // Para qualquer outro caso de `responseData.success === false` ou erro lógico
                     infoDiv.textContent = `Erro: ${responseData.message || "Falha ao registrar"}`;
                     infoDiv.classList.remove("text-blue-700", "text-green-700", "text-yellow-700");
                     infoDiv.classList.add("text-red-600");
@@ -317,12 +314,8 @@ function displayMembers(members) {
                 confirmBtn.disabled = false;
                 checkbox.disabled = false;
             } finally {
-                // Após a operação (sucesso, aviso ou erro), oculta o botão e desmarca o checkbox.
-                // Isso prepara o card para uma nova interação.
                 confirmBtn.classList.add("hidden");
                 checkbox.checked = false;
-                // Os campos disabled são reabilitados dentro dos blocos de sucesso/erro/aviso,
-                // ou permanecem desabilitados se o try/catch não os reativar por algum motivo crítico.
             }
         });
     });
@@ -358,30 +351,24 @@ function applyFiltersWithMessage() {
     }
 }
 
-// Lógica de toggle dashboard para a sidebar
 function toggleDashboardVisibility() {
     isDashboardOpen = !isDashboardOpen;
 
     if (isDashboardOpen) {
-        // Remove as classes que ocultam e permite a expansão
         dashboardContainer.classList.remove('max-h-0', 'opacity-0', 'overflow-hidden');
-        dashboardContainer.classList.add('max-h-screen'); // Adiciona a classe que garante a expansão
+        dashboardContainer.classList.add('max-h-screen');
 
-        // Ajusta os ícones e textos do botão
         dashboardOpenIcon.classList.add('hidden');
         dashboardCloseIcon.classList.remove('hidden');
         dashboardOpenText.classList.add('hidden');
         dashboardCloseText.classList.remove('hidden');
 
         console.log("Dashboard: Abrindo. Buscando resumo...");
-        fetchAndDisplaySummary(); // Busca e exibe o resumo quando o dashboard é aberto
+        fetchAndDisplaySummary();
     } else {
-        // Adiciona as classes para ocultar e animar o fechamento
-        dashboardContainer.classList.remove('max-h-screen'); // Remove a classe de expansão
+        dashboardContainer.classList.remove('max-h-screen');
         dashboardContainer.classList.add('max-h-0', 'opacity-0', 'overflow-hidden');
 
-
-        // Ajusta os ícones e textos do botão
         dashboardOpenIcon.classList.remove('hidden');
         dashboardCloseIcon.classList.add('hidden');
         dashboardOpenText.classList.remove('hidden');
@@ -394,49 +381,32 @@ function toggleDashboardVisibility() {
 async function fetchAndDisplaySummary() {
     showGlobalLoading(true, "Carregando resumo do dashboard...");
     try {
-        const responseTotal = await fetch(`${BACKEND_URL}/get-presencas-total`);
+        const periodoFilter = filterPeriodoSelect.value.trim();
+        const liderFilter = filterLiderInput.value.trim();
+        const gapeFilter = filterGapeInput.value.trim();
+
+        // Constrói a URL com os parâmetros de consulta (query parameters)
+        // Apenas inclui o parâmetro se o valor do filtro não for vazio
+        const queryParams = new URLSearchParams();
+        if (periodoFilter) queryParams.append('periodo', periodoFilter);
+        if (liderFilter) queryParams.append('lider', liderFilter);
+        if (gapeFilter) queryParams.append('gape', gapeFilter);
+
+        const url = `${BACKEND_URL}/get-presencas-total?${queryParams.toString()}`;
+        console.log("URL da API para resumo do dashboard:", url); // Para depuração
+
+        const responseTotal = await fetch(url);
         if (!responseTotal.ok) {
             throw new Error(`Erro ao buscar presenças totais: ${responseTotal.statusText}`);
         }
         const rawDataTotal = await responseTotal.json();
-        // Apps Script agora retorna { success: true, data: {...} }
-        const dataTotal = rawDataTotal.data || {}; // Acessa o objeto 'data' dentro da resposta
+        const dataTotal = rawDataTotal.data || {};
 
-        // --- CONSOLE.LOGS PARA DEPURAR ---
         console.log("Dados brutos de presenças totais (rawDataTotal):", rawDataTotal);
         console.log("Dados de presenças totais (dataTotal):", dataTotal);
-        // --- FIM DOS CONSOLE.LOGS ---
 
-        // Filtra os membros com base nos filtros atuais para o resumo
-        const currentLiderFilter = filterLiderInput.value.toLowerCase().trim();
-        const currentGapeFilter = filterGapeInput.value.toLowerCase().trim();
-
-        const membersMatchingLiderAndGape = allMembersData.filter(member => {
-            const memberLider = String(member.Lider || "").toLowerCase();
-            const memberGape = String(member.GAPE || "").toLowerCase();
-
-            const matchesLider = currentLiderFilter === "" || memberLider.includes(currentLiderFilter);
-            const matchesGape = currentGapeFilter === "" || memberGape.includes(currentGapeFilter);
-
-            return matchesLider && matchesGape;
-        }).map(member => member.Nome);
-
-        const filteredTotalCounts = {};
-        let totalFilteredPresences = 0;
-
-        for (const memberName in dataTotal) {
-            // Inclui se não há filtros de líder/GAPE aplicados, ou se o membro corresponde
-            if (membersMatchingLiderAndGape.includes(memberName) || (currentLiderFilter === "" && currentGapeFilter === "")) {
-                filteredTotalCounts[memberName] = dataTotal[memberName];
-                totalFilteredPresences += dataTotal[memberName];
-            }
-        }
-
-        // --- CONSOLE.LOGS PARA DEPURAR ---
-        console.log("Membros filtrados para o resumo:", membersMatchingLiderAndGape);
-        console.log("Contagens totais filtradas (filteredTotalCounts):", filteredTotalCounts);
-        console.log("Total de presenças filtradas:", totalFilteredPresences);
-        // --- FIM DOS CONSOLE.LOGS ---
+        const filteredTotalCounts = dataTotal; // O backend já enviará os dados filtrados
+        let totalFilteredPresences = Object.values(dataTotal).reduce((sum, count) => sum + count, 0);
 
         if (dashboardPresencasMes) {
             dashboardPresencasMes.textContent = totalFilteredPresences;
@@ -445,10 +415,6 @@ async function fetchAndDisplaySummary() {
         if (totalCountsList) {
             totalCountsList.innerHTML = '';
             const sortedCounts = Object.entries(filteredTotalCounts).sort(([, countA], [, countB]) => countB - countA);
-
-            // --- CONSOLE.LOGS PARA DEPURAR ---
-            console.log("Contagens ordenadas para exibição (sortedCounts):", sortedCounts);
-            // --- FIM DOS CONSOLE.LOGS ---
 
             if (sortedCounts.length > 0) {
                 sortedCounts.forEach(([name, count]) => {
@@ -465,45 +431,24 @@ async function fetchAndDisplaySummary() {
             }
         }
 
-        // Esta parte abaixo usa `filteredMembers` que já são filtrados pelas entradas do usuário,
-        // então faz sentido para Período/Líder/GAPE da *visão filtrada*.
-        const uniquePeriods = [...new Set(filteredMembers.map(m => m.Periodo).filter(Boolean))];
-        const uniqueLiders = [...new Set(filteredMembers.map(m => m.Lider).filter(Boolean))];
-        const uniqueGapes = [...new Set(filteredMembers.map(m => m.GAPE).filter(Boolean))];
+        // Os campos do dashboard (Periodo, Lider, GAPE) devem refletir os filtros ATUAIS
+        // do formulário, e não serem derivados dos membros filtrados da lista.
+        // Isso porque a lista de membros já está filtrada por TODOS os campos,
+        // mas o resumo de presenças totais só será filtrado por Periodo, Lider, GAPE (se o backend aceitar).
+        dashboardPeriodo.textContent = periodoFilter || "Todos";
+        dashboardLider.textContent = liderFilter || "Todos";
+        dashboardGape.textContent = gapeFilter || "Todos";
 
-        if (dashboardPeriodo) {
-            if (uniquePeriods.length === 0) {
-                dashboardPeriodo.textContent = "N/A";
-            } else if (uniquePeriods.length === 1) {
-                dashboardPeriodo.textContent = uniquePeriods[0];
-            } else {
-                dashboardPeriodo.textContent = "Vários";
-            }
-        }
-
-        if (dashboardLider) {
-            if (uniqueLiders.length === 0) {
-                dashboardLider.textContent = "N/A";
-            } else if (uniqueLiders.length === 1) {
-                dashboardLider.textContent = uniqueLiders[0];
-            } else {
-                dashboardLider.textContent = "Vários";
-            }
-        }
-
-        if (dashboardGape) {
-            if (uniqueGapes.length === 0) {
-                dashboardGape.textContent = "N/A";
-            } else if (uniqueGapes.length === 1) {
-                dashboardGape.textContent = uniqueGapes[0];
-            } else {
-                dashboardGape.textContent = "Vários";
-            }
-        }
 
     } catch (error) {
         console.error("Erro ao carregar o resumo:", error);
         showMessage(`Erro ao carregar o resumo: ${error.message}`, "error");
+        // Limpar os campos do dashboard em caso de erro
+        dashboardPresencasMes.textContent = "Erro";
+        dashboardPeriodo.textContent = "Erro";
+        dashboardLider.textContent = "Erro";
+        dashboardGape.textContent = "Erro";
+        totalCountsList.innerHTML = `<li class="text-sm text-red-300 text-center">Falha ao carregar o resumo.</li>`;
     } finally {
         showGlobalLoading(false);
     }
@@ -514,17 +459,20 @@ applyFiltersBtn.addEventListener("click", applyFiltersWithMessage);
 clearFiltersBtn.addEventListener("click", clearFilters);
 
 // Adicionado event listeners para inputs de filtro para que o dashboard se atualize dinamicamente
-filterNameInput.addEventListener("input", applyFilters);
-filterPeriodoSelect.addEventListener("change", applyFilters);
-filterLiderInput.addEventListener("change", applyFilters);
-filterGapeInput.addEventListener("change", applyFilters);
-
-// Adicionado event listeners para atualizar o resumo do dashboard ao mudar os filtros
-// (Isso é redundante com o applyFiltersWithMessage/clearFilters que já chamam, mas garante para mudanças diretas)
-filterNameInput.addEventListener("input", () => { if (isDashboardOpen) fetchAndDisplaySummary(); });
-filterPeriodoSelect.addEventListener("change", () => { if (isDashboardOpen) fetchAndDisplaySummary(); });
-filterLiderInput.addEventListener("change", () => { if (isDashboardOpen) fetchAndDisplaySummary(); });
-filterGapeInput.addEventListener("change", () => { if (isDashboardOpen) fetchAndDisplaySummary(); });
+// É importante chamar fetchAndDisplaySummary APENAS se o dashboard estiver aberto
+filterNameInput.addEventListener("input", applyFilters); // Apenas aplica o filtro nos cards
+filterPeriodoSelect.addEventListener("change", () => {
+    applyFilters(); // Aplica o filtro nos cards
+    if (isDashboardOpen) fetchAndDisplaySummary(); // Se dashboard aberto, atualiza o resumo
+});
+filterLiderInput.addEventListener("change", () => {
+    applyFilters(); // Aplica o filtro nos cards
+    if (isDashboardOpen) fetchAndDisplaySummary(); // Se dashboard aberto, atualiza o resumo
+});
+filterGapeInput.addEventListener("change", () => {
+    applyFilters(); // Aplica o filtro nos cards
+    if (isDashboardOpen) fetchAndDisplaySummary(); // Se dashboard aberto, atualiza o resumo
+});
 
 if (toggleDashboardBtn) {
     toggleDashboardBtn.addEventListener("click", toggleDashboardVisibility);
