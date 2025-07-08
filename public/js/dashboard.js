@@ -55,6 +55,9 @@ const downloadPdfBtn = document.getElementById("downloadPdfBtn");
 // Elemento para exibir informações do relatório no PDF
 const reportInfo = document.getElementById("reportInfo");
 
+// NOVO: Elemento da seção de filtros dentro do modal de resumo
+const summaryFilterSection = document.getElementById("summaryFilterSection");
+
 
 // !!! IMPORTANTE: Substitua pela URL PÚBLICA do seu backend no Render !!!
 // Deve ser a mesma URL definida na variável de ambiente FRONTEND_URL no seu backend Render
@@ -936,16 +939,17 @@ function updateDetailedSummaryChart() {
  * Lida com o download do resumo detalhado como PDF.
  */
 async function handleDownloadPdf() {
-    if (!detailedSummaryContent || !downloadPdfBtn) {
-        showMessage("Erro: Conteúdo do resumo detalhado ou botão de PDF não encontrado para PDF.", "error");
+    if (!detailedSummaryContent || !downloadPdfBtn || !summaryFilterSection) {
+        showMessage("Erro: Conteúdo do resumo detalhado, botão de PDF ou seção de filtros não encontrados para PDF.", "error");
         console.error("Elementos necessários para PDF não encontrados.");
         return;
     }
 
     showGlobalLoading(true, "Gerando PDF...");
 
-    // Oculta o botão de download de PDF antes de capturar
+    // Oculta o botão de download de PDF e a seção de filtros antes de capturar
     downloadPdfBtn.style.display = 'none';
+    summaryFilterSection.style.display = 'none';
 
     try {
         // html2canvas para capturar o conteúdo do modal
@@ -980,9 +984,12 @@ async function handleDownloadPdf() {
         console.error("Erro ao gerar PDF:", error);
         showMessage(`Erro ao gerar PDF: ${error.message}`, "error");
     } finally {
-        // Reexibe o botão de download de PDF após a tentativa de geração
+        // Reexibe o botão de download de PDF e a seção de filtros após a tentativa de geração
         if (downloadPdfBtn) {
             downloadPdfBtn.style.display = 'block';
+        }
+        if (summaryFilterSection) {
+            summaryFilterSection.style.display = 'block'; // Ou 'flex' se for um container flex
         }
         showGlobalLoading(false);
     }
