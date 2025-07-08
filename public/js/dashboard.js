@@ -1,5 +1,5 @@
 // ------------------------------------------------------
-// Frontend (js/dashboard.js) - Versão Atualizada para Filtros no Dashboard
+// Frontend (js/dashboard.js) - Versão Atualizada para Filtros no Dashboard e Download PDF
 // ------------------------------------------------------
 let allMembersData = [];
 let filteredMembers = [];
@@ -13,7 +13,7 @@ const filterGapeInput = document.getElementById("filterGape");
 const applyFiltersBtn = document.getElementById("applyFiltersBtn");
 const clearFiltersBtn = document.getElementById("clearFiltersBtn");
 const membersCardsContainer = document.getElementById("membersCardsContainer");
-const messageArea = document.getElementById("messageArea"); // messageArea is defined here
+const messageArea = document.getElementById("messageArea");
 const globalLoadingIndicator = document.getElementById("globalLoadingIndicator");
 const loadingMessageSpan = document.getElementById("loadingMessage");
 
@@ -39,12 +39,16 @@ const closeModalBtn = document.getElementById("closeModalBtn");
 const summaryChartCanvas = document.getElementById("summaryChart");
 const detailedSummaryText = document.getElementById("detailedSummaryText");
 const showDetailedSummaryBtn = document.getElementById("showDetailedSummaryBtn");
+const detailedSummaryContent = document.getElementById("detailedSummaryContent"); // Novo: Referência ao conteúdo do modal para PDF
 
 // Novos elementos de filtro dentro do modal
 const summaryStartDateInput = document.getElementById("summaryStartDate");
 const summaryEndDateInput = document.getElementById("summaryEndDate");
 const summaryMemberSelect = document.getElementById("summaryMemberSelect");
 const applySummaryFiltersBtn = document.getElementById("applySummaryFiltersBtn");
+
+// Novo: Botão de Download PDF
+const downloadPdfBtn = document.getElementById("downloadPdfBtn");
 
 
 // !!! IMPORTANTE: Substitua pela URL PÚBLICA do seu backend no Render !!!
@@ -756,6 +760,55 @@ function updateDetailedSummaryChart() {
     }
 }
 
+/**
+ * Lida com o download do resumo detalhado como PDF.
+ */
+async function handleDownloadPdf() {
+    if (!detailedSummaryContent) {
+        showMessage("Erro: Conteúdo do resumo detalhado não encontrado para PDF.", "error");
+        console.error("Elemento 'detailedSummaryContent' não encontrado no DOM.");
+        return;
+    }
+
+    showGlobalLoading(true, "Gerando PDF...");
+
+    try {
+        // html2canvas para capturar o conteúdo do modal
+        const canvas = await html2canvas(detailedSummaryContent, {
+            scale: 2, // Aumenta a escala para melhor qualidade no PDF
+            useCORS: true, // Importante se houver imagens de outras origens
+            logging: true // Ativa o log para depuração
+        });
+
+        const imgData = canvas.toDataURL('image/png');
+        const pdf = new window.jspdf.jsPDF('p', 'mm', 'a4'); // 'p' (portrait), 'mm' (unidade), 'a4' (tamanho)
+        const imgWidth = 210; // A4 width in mm
+        const pageHeight = 297; // A4 height in mm
+        const imgHeight = canvas.height * imgWidth / canvas.width;
+        let heightLeft = imgHeight;
+        let position = 0;
+
+        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+        heightLeft -= pageHeight;
+
+        while (heightLeft >= 0) {
+            position = heightLeft - imgHeight;
+            pdf.addPage();
+            pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+            heightLeft -= pageHeight;
+        }
+
+        pdf.save('resumo_presencas.pdf');
+        showMessage("PDF gerado com sucesso!", "success");
+
+    } catch (error) {
+        console.error("Erro ao gerar PDF:", error);
+        showMessage(`Erro ao gerar PDF: ${error.message}`, "error");
+    } finally {
+        showGlobalLoading(false);
+    }
+}
+
 
 // --- Event Listeners ---
 // Adiciona verificação de existência antes de adicionar event listeners
@@ -809,6 +862,11 @@ if (summaryEndDateInput) {
 }
 if (summaryMemberSelect) {
     summaryMemberSelect.addEventListener("change", updateDetailedSummaryChart);
+}
+
+// NOVO: Event listener para o botão de Download PDF
+if (downloadPdfBtn) {
+    downloadPdfBtn.addEventListener("click", handleDownloadPdf);
 }
 
 
