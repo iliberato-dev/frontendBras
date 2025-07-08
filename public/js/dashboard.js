@@ -483,3 +483,20 @@ if (toggleDashboardBtn) {
 
 // Carrega os membros ao carregar a página
 window.addEventListener("load", fetchMembers);
+
+// NOVO: Função para exibir o nome do líder logado
+function displayLoggedInLeaderName() {
+    const leaderName = localStorage.getItem('loggedInLeaderName');
+    if (loggedInLeaderNameElement) {
+        if (leaderName) {
+            loggedInLeaderNameElement.textContent = `Logado como: ${leaderName}`;
+        } else {
+            loggedInLeaderNameElement.textContent = `Logado como: Não identificado`;
+            // Redirecionar para a tela de login se não houver líder logado
+            // window.location.href = "/index.html"; // Descomente se quiser forçar o login
+        }
+    }
+}
+
+// NOVO: Chama a função para exibir o nome do líder quando o DOM estiver completamente carregado
+document.addEventListener("DOMContentLoaded", displayLoggedInLeaderName);
