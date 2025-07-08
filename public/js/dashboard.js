@@ -489,7 +489,7 @@ function displayLoggedInLeaderName() {
     const leaderName = localStorage.getItem('loggedInLeaderName');
     if (loggedInLeaderNameElement) {
         if (leaderName) {
-            loggedInLeaderNameElement.textContent = `Logado como: ${leaderName}`;
+            loggedInLeaderNameElement.innerHTML = `Logado como: <span class="text-blue-600 font-bold">${leaderName}</span>`; // Adicionado span para destaque
         } else {
             loggedInLeaderNameElement.textContent = `Logado como: Não identificado`;
             // Redirecionar para a tela de login se não houver líder logado
