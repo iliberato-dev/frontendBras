@@ -6,7 +6,6 @@ let filteredMembers = [];
 let lastPresencesData = {}; // Variável para armazenar todas as últimas presenças
 let myChart = null; // Variável para armazenar a instância do Chart.js (Pizza)
 let myBarChart = null; // Variável para armazenar a instância do Chart.js (Barras)
-let calendar = null; // Variável para armazenar a instância do FullCalendar
 
 const filterNameInput = document.getElementById("filterName");
 const filterPeriodoSelect = document.getElementById("filterPeriodo");
@@ -48,7 +47,7 @@ const detailedSummaryContent = document.getElementById("detailedSummaryContent")
 const summaryStartDateInput = document.getElementById("summaryStartDate");
 const summaryEndDateInput = document.getElementById("summaryEndDate");
 const summaryMemberSelect = document.getElementById("summaryMemberSelect");
-// const applySummaryFiltersBtn = document.getElementById("applySummaryFiltersBtn"); // Este botão não estava no seu HTML, comentei.
+const applySummaryFiltersBtn = document.getElementById("applySummaryFiltersBtn");
 
 // Botão de Download PDF
 const downloadPdfBtn = document.getElementById("downloadPdfBtn");
@@ -59,12 +58,6 @@ const reportInfo = document.getElementById("reportInfo");
 // Elemento da seção de filtros dentro do modal de resumo
 const summaryFilterSection = document.getElementById("summaryFilterSection");
 
-// Contêiner do calendário
-const calendarContainer = document.getElementById("calendar");
-
-
-// NOVO: Botão Trocar Usuário
-const changeUserBtn = document.getElementById("changeUserBtn");
 
 // !!! IMPORTANTE: Substitua pela URL PÚBLICA do seu backend no Render !!!
 // Deve ser a mesma URL definida na variável de ambiente FRONTEND_URL no seu backend Render
@@ -200,7 +193,7 @@ async function fetchMembers() {
         }
     } finally {
         showGlobalLoading(false);
-        setupLeaderView(); // Chama a função para configurar a visualização do líder
+        setupLeaderView(); // NOVO: Chama a função para configurar a visualização do líder
     }
 }
 
@@ -595,7 +588,7 @@ function showDetailedSummary() {
     if (summaryStartDateInput) summaryStartDateInput.value = firstDayOfMonth.toISOString().split('T')[0];
     if (summaryEndDateInput) summaryEndDateInput.value = lastDayOfMonth.toISOString().split('T')[0];
 
-    // Recalcula e renderiza o gráfico e o calendário quando o modal é aberto ou filtros aplicados
+    // Recalcula e renderiza o gráfico quando o modal é aberto ou filtros aplicados
     updateDetailedSummaryChart();
 
     // Exibe o modal
@@ -627,19 +620,13 @@ function populateSummaryMemberSelect() {
 /**
  * Atualiza os gráficos e o texto do resumo detalhado com base nos filtros do modal.
  */
-async function updateDetailedSummaryChart() {
-    showGlobalLoading(true, "Gerando resumo detalhado...");
-
+function updateDetailedSummaryChart() {
     let membersToAnalyze = filteredMembers;
     const selectedMemberName = summaryMemberSelect ? summaryMemberSelect.value.trim() : '';
     let summaryTitle = "Estatísticas do Grupo Filtrado";
     let reportEntityName = "o grupo filtrado";
     let reportLeader = "N/A";
     let reportGape = "N/A";
-
-    // Pega as datas dos inputs do modal
-    const startDate = summaryStartDateInput ? summaryStartDateInput.value : '';
-    const endDate = summaryEndDateInput ? summaryEndDateInput.value : '';
 
     if (selectedMemberName !== "") {
         membersToAnalyze = filteredMembers.filter(member => String(member.Nome || '').trim() === selectedMemberName);
@@ -654,12 +641,6 @@ async function updateDetailedSummaryChart() {
             if (myChart) myChart.destroy();
             if (myBarChart) myBarChart.destroy(); // Destrói o gráfico de barras também
             if (reportInfo) reportInfo.innerHTML = `<p class="text-red-600">Nenhum dado de membro encontrado para o relatório.</p>`;
-            // Destrói o calendário se não houver dados
-            if (calendar) {
-                calendar.destroy();
-                calendar = null;
-            }
-            showGlobalLoading(false);
             return;
         }
     } else {
@@ -681,576 +662,500 @@ async function updateDetailedSummaryChart() {
         }
     }
 
-    try {
-        const queryParams = new URLSearchParams();
-        // Adiciona filtros de período e GAPE do formulário principal
-        const mainPeriodoFilter = filterPeriodoSelect ? filterPeriodoSelect.value.trim() : '';
-        const mainLiderFilter = filterLiderInput ? filterLiderInput.value.trim() : '';
-        const mainGapeFilter = filterGapeInput ? filterGapeInput.value.trim() : '';
 
-        if (mainPeriodoFilter) queryParams.append('periodo', mainPeriodoFilter);
-        if (mainLiderFilter) queryParams.append('lider', mainLiderFilter);
-        if (mainGapeFilter) queryParams.append('gape', mainGapeFilter);
+    // Obtém os filtros de intervalo de datas
+    const startDateStr = summaryStartDateInput ? summaryStartDateInput.value : '';
+    const endDateStr = summaryEndDateInput ? summaryEndDateInput.value : '';
 
-        // Adiciona filtros de data e membro específico do modal
-        if (startDate) queryParams.append('startDate', startDate);
-        if (endDate) queryParams.append('endDate', endDate);
-        if (selectedMemberName) queryParams.append('memberName', selectedMemberName);
-        else {
-            // Se "Todos os Membros Filtrados" estiver selecionado no modal,
-            // precisamos enviar os nomes dos membros atualmente filtrados na lista principal.
-            // Isso garante que o resumo "Todos os Membros Filtrados" respeite os filtros de nome, período, líder e GAPE aplicados na tela principal.
-            const filteredMemberNames = filteredMembers.map(m => m.Nome);
-            if (filteredMemberNames.length > 0) {
-                queryParams.append('filteredMemberNames', JSON.stringify(filteredMemberNames));
-            }
-        }
+    let startDate = null;
+    let endDate = null;
 
+    if (startDateStr) {
+        startDate = new Date(startDateStr);
+        startDate.setHours(0, 0, 0, 0); // Início do dia
+    }
+    if (endDateStr) {
+        endDate = new Date(endDateStr);
+        endDate.setHours(23, 59, 59, 999); // Fim do dia
+    }
 
-        const url = `${BACKEND_URL}/get-detailed-presences?${queryParams.toString()}`;
-        console.log("URL da API para resumo detalhado:", url);
+    let membersWithPresenceCount = 0;
+    let totalMembersInAnalysis = membersToAnalyze.length; // Este será o denominador para as porcentagens
 
-        const response = await fetch(url);
-        if (!response.ok) {
-            throw new Error(`Erro ao buscar presenças detalhadas: ${response.statusText}`);
-        }
-        const detailedData = await response.json();
-
-        // Processa os dados para o gráfico de pizza (presenças vs. faltas)
-        let totalPresencesCount = 0;
-        let membersWithPresences = new Set();
-        let allFilteredMembersNames = new Set(filteredMembers.map(m => m.Nome));
-        let membersPresentInPeriod = new Set();
-        let presencesByMember = {};
-        let datesWithPresences = new Set();
-
-        // Inicializa contadores para todos os membros filtrados para o período
-        membersToAnalyze.forEach(member => {
-            presencesByMember[member.Nome] = 0;
-        });
-
-        detailedData.forEach(p => {
-            if (membersToAnalyze.some(m => m.Nome === p.Nome)) { // Garante que a presença é para um membro que estamos analisando
-                totalPresencesCount++;
-                membersPresentInPeriod.add(p.Nome);
-                presencesByMember[p.Nome]++;
-                datesWithPresences.add(p.Data); // Adiciona a data para o calendário
-            }
-        });
-
-        const totalExpectedPresences = membersToAnalyze.length; // Quantidade de membros filtrados
-        const totalAbsentCount = totalExpectedPresences - membersPresentInPeriod.size; // Membros que não apareceram no período
-
-        let dataForPieChart = [membersPresentInPeriod.size, totalAbsentCount];
-        let labelsForPieChart = ['Membros Presentes (ao menos 1x)', 'Membros Ausentes (no período)'];
-        let colorsForPieChart = ['#4CAF50', '#F44336']; // Verde para presente, Vermelho para ausente
-
-        if (selectedMemberName) {
-            // Se for um membro específico, o gráfico de pizza deve mostrar o total de presenças vs. o total de dias no período
-            const date1 = new Date(startDate);
-            const date2 = new Date(endDate);
-            const diffTime = Math.abs(date2 - date1);
-            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1; // +1 para incluir o dia final
-
-            dataForPieChart = [totalPresencesCount, diffDays - totalPresencesCount];
-            labelsForPieChart = ['Presenças Registradas', 'Dias Sem Presença'];
-            colorsForPieChart = ['#2196F3', '#FFC107']; // Azul para presenças, Amarelo para dias sem presença
-        } else if (membersPresentInPeriod.size === 0 && totalExpectedPresences === 0) {
-             // Caso não haja membros no filtro principal, nem no modal, mostra um gráfico "vazio"
-             dataForPieChart = [1];
-             labelsForPieChart = ["Nenhum Membro para Análise"];
-             colorsForPieChart = ["#9E9E9E"]; // Cinza
-        } else if (membersPresentInPeriod.size === 0 && totalExpectedPresences > 0) {
-            // Caso existam membros mas nenhum presente
-            dataForPieChart = [0, totalExpectedPresences];
-            labelsForPieChart = ['Membros Presentes (ao menos 1x)', 'Membros Ausentes (no período)'];
-            colorsForPieChart = ['#4CAF50', '#F44336'];
-        }
-
-        renderPieChart(labelsForPieChart, dataForPieChart, colorsForPieChart);
-
-        // Renderiza o gráfico de barras (Top 5 Membros com Mais Presenças)
-        renderBarChart(presencesByMember);
-
-        // Atualiza o texto do resumo
-        updateSummaryText(totalPresencesCount, membersPresentInPeriod.size, totalExpectedPresences, selectedMemberName, presencesByMember);
-
-        // Atualiza as informações do relatório (para PDF)
-        updateReportInfo(summaryTitle, reportEntityName, reportLeader, reportGape, startDate, endDate);
-
-        // Renderiza o calendário
-        renderCalendar(detailedData, datesWithPresences);
-
-    } catch (error) {
-        console.error("Erro ao carregar o resumo detalhado:", error);
-        showMessage(`Erro ao carregar o resumo detalhado: ${error.message}`, "error");
-        if (detailedSummaryText) detailedSummaryText.innerHTML = `<p class="text-red-600">Falha ao carregar o resumo detalhado. ${error.message}</p>`;
+    if (totalMembersInAnalysis === 0) {
+        if (detailedSummaryText) detailedSummaryText.innerHTML = `<p class="text-lg font-semibold text-gray-800 mb-2">Nenhum membro para analisar com os filtros aplicados.</p>`;
         if (myChart) myChart.destroy();
-        myChart = null;
         if (myBarChart) myBarChart.destroy();
-        myBarChart = null;
-        if (calendar) calendar.destroy();
-        calendar = null;
-        if (reportInfo) reportInfo.innerHTML = `<p class="text-red-600">Falha ao carregar informações do relatório.</p>`;
-    } finally {
-        showGlobalLoading(false);
-    }
-}
-
-
-/**
- * Renderiza o gráfico de pizza de presenças.
- * @param {Array<string>} labels - Rótulos para o gráfico.
- * @param {Array<number>} data - Dados para o gráfico.
- * @param {Array<string>} colors - Cores para as fatias.
- */
-function renderPieChart(labels, data, colors) {
-    if (myChart) {
-        myChart.destroy(); // Destrói a instância anterior do gráfico
-    }
-    if (!summaryChartCanvas) {
-        console.error("Canvas para o gráfico de pizza (summaryChart) não encontrado.");
+        if (reportInfo) reportInfo.innerHTML = `<p class="text-red-600">Nenhum dado de membro encontrado para o relatório.</p>`;
         return;
     }
-    const ctx = summaryChartCanvas.getContext('2d');
-    myChart = new Chart(ctx, {
-        type: 'pie',
-        data: {
-            labels: labels,
-            datasets: [{
-                data: data,
-                backgroundColor: colors,
-                borderColor: '#fff',
-                borderWidth: 2
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: {
-                    position: 'bottom',
-                    labels: {
-                        color: '#333'
-                    }
-                },
-                title: {
-                    display: true,
-                    text: 'Resumo de Presenças',
-                    font: {
-                        size: 16
-                    },
-                    color: '#333'
-                },
-                tooltip: {
-                    callbacks: {
-                        label: function(context) {
-                            let label = context.label || '';
-                            if (label) {
-                                label += ': ';
-                            }
-                            if (context.parsed !== null) {
-                                label += context.parsed;
-                            }
-                            return label;
-                        }
-                    }
-                },
-                datalabels: { // Configuração do plugin datalabels
-                    color: '#fff',
-                    formatter: (value, context) => {
-                        const total = context.chart.data.datasets[0].data.reduce((sum, current) => sum + current, 0);
-                        if (total === 0) return '0%'; // Evita divisão por zero
-                        const percentage = ((value / total) * 100).toFixed(1) + '%';
-                        return percentage;
-                    },
-                    font: {
-                        weight: 'bold'
-                    },
-                    display: function(context) {
-                        return context.dataset.data[context.dataIndex] > 0; // Mostra o rótulo apenas se o valor for maior que 0
-                    }
-                }
+
+    for (const member of membersToAnalyze) {
+        const presence = lastPresencesData[member.Nome];
+        let hasPresenceInPeriod = false;
+
+        if (presence && presence.data) {
+            // Analisa a string de data "dd/MM/yyyy" em um objeto Date
+            const [day, month, year] = presence.data.split('/').map(Number);
+            const lastPresenceDate = new Date(year, month - 1, day); // month - 1 porque é baseado em 0
+            lastPresenceDate.setHours(0, 0, 0, 0); // Normaliza para o início do dia para comparação
+
+            let dateMatches = true;
+            if (startDate && lastPresenceDate < startDate) dateMatches = false;
+            if (endDate && lastPresenceDate > endDate) dateMatches = false;
+
+            if (dateMatches) {
+                membersWithPresenceCount++;
+                hasPresenceInPeriod = true;
             }
-        },
-        plugins: [ChartDataLabels] // Habilita o plugin datalabels
-    });
-}
-
-/**
- * Renderiza o gráfico de barras horizontais para as presenças por membro.
- * @param {object} presencesByMember - Objeto com contagem de presenças por membro.
- */
-function renderBarChart(presencesByMember) {
-    if (myBarChart) {
-        myBarChart.destroy(); // Destrói a instância anterior do gráfico
+        }
     }
-    if (!summaryBarChartCanvas) {
-        console.error("Canvas para o gráfico de barras (summaryBarChart) não encontrado.");
-        return;
+
+    const membersWithZeroPresenceCount = totalMembersInAnalysis - membersWithPresenceCount;
+
+    let presencePercentage = 0;
+    let absencePercentage = 0;
+
+    if (totalMembersInAnalysis > 0) {
+        presencePercentage = (membersWithPresenceCount / totalMembersInAnalysis) * 100;
+        absencePercentage = (membersWithZeroPresenceCount / totalMembersInAnalysis) * 100;
     }
-    const ctx = summaryBarChartCanvas.getContext('2d');
 
-    const sortedMembers = Object.entries(presencesByMember)
-        .sort(([, countA], [, countB]) => countB - countA)
-        .filter(([, count]) => count > 0) // Filtra membros com 0 presenças
-        .slice(0, 5); // Pega apenas os 5 primeiros (Top 5)
+    // Formata o intervalo de datas para exibição
+    let dateRangeDisplay = "Todo o período disponível";
+    if (startDateStr && endDateStr) {
+        const formattedStartDate = new Date(startDateStr).toLocaleDateString('pt-BR');
+        const formattedEndDate = new Date(endDateStr).toLocaleDateString('pt-BR');
+        dateRangeDisplay = `Período: ${formattedStartDate} a ${formattedEndDate}`;
+    } else if (startDateStr) {
+        const formattedStartDate = new Date(startDateStr).toLocaleDateString('pt-BR');
+        dateRangeDisplay = `A partir de: ${formattedStartDate}`;
+    } else if (endDateStr) {
+        const formattedEndDate = new Date(endDateStr).toLocaleDateString('pt-BR');
+        dateRangeDisplay = `Até: ${formattedEndDate}`;
+    }
 
-    const labels = sortedMembers.map(([name]) => name);
-    const data = sortedMembers.map(([, count]) => count);
+    // Atualiza o contêiner de informações do relatório
+    if (reportInfo) {
+        const todayFormatted = new Date().toLocaleDateString('pt-BR');
+        reportInfo.innerHTML = `
+            <p class="text-md font-semibold mb-1">Relatório Gerado em: <span class="font-normal">${todayFormatted}</span></p>
+            <p class="text-md font-semibold mb-1">Análise para: <span class="font-normal">${selectedMemberName || 'Grupo de Membros'}</span></p>
+            <p class="text-md font-semibold mb-1">Período de Análise: <span class="font-normal">${dateRangeDisplay}</span></p>
+            <p class="text-md font-semibold mb-1">Líder: <span class="font-normal">${reportLeader}</span></p>
+            <p class="text-md font-semibold">GAPE: <span class="font-normal">${reportGape}</span></p>
+        `;
+    }
 
-    myBarChart = new Chart(ctx, {
-        type: 'bar',
-        data: {
-            labels: labels,
-            datasets: [{
-                label: 'Número de Presenças',
-                data: data,
-                backgroundColor: 'rgba(75, 192, 192, 0.6)',
-                borderColor: 'rgba(75, 192, 192, 1)',
-                borderWidth: 1
-            }]
-        },
-        options: {
-            indexAxis: 'y', // Torna o gráfico horizontal
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: {
-                    display: false // Oculta a legenda, pois só há um dataset
+    // Atualiza o texto do resumo detalhado
+    if (detailedSummaryText) {
+        detailedSummaryText.innerHTML = `
+            <h3 class="text-lg font-semibold text-gray-800 mb-2">${summaryTitle}</h3>
+            <ul class="list-disc list-inside text-gray-700 space-y-1">
+                <li>Total de Membros Analisados: <span class="font-bold">${totalMembersInAnalysis}</span></li>
+                <li>Membros com Presença: <span class="font-bold">${membersWithPresenceCount} (${presencePercentage.toFixed(1)}%)</span></li>
+                <li>Membros Sem Presença: <span class="font-bold">${membersWithZeroPresenceCount} (${absencePercentage.toFixed(1)}%)</span></li>
+            </ul>
+            <p class="text-sm text-gray-600 mt-4">As estatísticas e gráficos abaixo ilustram a proporção de membros com e sem presenças registradas no período selecionado. "Presença" significa ter ao menos um registro no período.</p>
+        `;
+    }
+
+    // Destrói a instância anterior do gráfico de pizza se existir
+    if (myChart) {
+        myChart.destroy();
+    }
+
+    // Renderiza o gráfico de pizza
+    if (summaryChartCanvas) {
+        const ctx = summaryChartCanvas.getContext('2d');
+        myChart = new Chart(ctx, {
+            type: 'pie',
+            data: {
+                labels: ['Membros com Presença', 'Membros Sem Presença'],
+                datasets: [{
+                    data: [presencePercentage.toFixed(1), absencePercentage.toFixed(1)],
+                    backgroundColor: [
+                        'rgba(75, 192, 192, 0.8)', // Verde para presença
+                        'rgba(255, 99, 132, 0.8)'  // Vermelho para ausência
+                    ],
+                    borderColor: [
+                        'rgba(75, 192, 192, 1)',
+                        'rgba(255, 99, 132, 1)'
+                    ],
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                animation: { // Adicionado animação para o gráfico de pizza
+                    duration: 1000, // 1 segundo
+                    easing: 'easeOutQuart' // Função de easing suave
                 },
-                title: {
-                    display: true,
-                    text: 'Top 5 Membros (Mais Presenças)',
-                    font: {
-                        size: 16
-                    },
-                    color: '#333'
-                },
-                tooltip: {
-                    callbacks: {
-                        label: function(context) {
-                            return `${context.label}: ${context.parsed.x} presenças`;
+                plugins: {
+                    legend: {
+                        position: 'top',
+                        labels: {
+                            color: '#333', // Cor do texto da legenda
+                            font: {
+                                size: 14
+                            }
                         }
-                    }
-                },
-                datalabels: {
-                    color: '#333',
-                    anchor: 'end',
-                    align: 'start',
-                    formatter: (value) => value,
-                    font: {
-                        weight: 'bold'
                     },
-                    display: function(context) {
-                        return context.dataset.data[context.dataIndex] > 0;
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                let label = context.label || '';
+                                if (label) {
+                                    label += ': ';
+                                }
+                                if (context.parsed !== null) {
+                                    label += context.parsed + '%';
+                                }
+                                return label;
+                            }
+                        }
+                    },
+                    title: {
+                        display: true,
+                        text: 'Proporção de Presenças vs. Ausências',
+                        color: '#333',
+                        font: {
+                            size: 16
+                        }
+                    },
+                    datalabels: { // Configuração do plugin datalabels
+                        color: '#fff', // Cor do texto dos labels
+                        formatter: (value, context) => {
+                            // Exibe o valor da porcentagem no slice
+                            return value + '%';
+                        },
+                        font: {
+                            weight: 'bold',
+                            size: 14
+                        }
                     }
                 }
             },
-            scales: {
-                x: {
-                    beginAtZero: true,
+            plugins: [ChartDataLabels] // Habilita o plugin para este gráfico
+        });
+    } else {
+        console.error("Elemento 'summaryChartCanvas' não encontrado no DOM.");
+    }
+
+    // Destrói a instância anterior do gráfico de barras se existir
+    if (myBarChart) {
+        myBarChart.destroy();
+    }
+
+    // Renderiza o novo gráfico de barras horizontais
+    if (summaryBarChartCanvas) {
+        const ctxBar = summaryBarChartCanvas.getContext('2d');
+        myBarChart = new Chart(ctxBar, {
+            type: 'bar',
+            data: {
+                labels: ['Membros com Presença', 'Membros Sem Presença'],
+                datasets: [{
+                    label: 'Número de Membros',
+                    data: [membersWithPresenceCount, membersWithZeroPresenceCount],
+                    backgroundColor: [
+                        'rgba(75, 192, 192, 0.8)', // Verde para presença
+                        'rgba(255, 99, 132, 0.8)'  // Vermelho para ausência
+                    ],
+                    borderColor: [
+                        'rgba(75, 192, 192, 1)',
+                        'rgba(255, 99, 132, 1)'
+                    ],
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                indexAxis: 'y', // Define o eixo Y como o eixo de categorias (barras horizontais)
+                responsive: true,
+                animation: { // Adicionado animação para o gráfico de barras
+                    duration: 1000, // 1 segundo
+                    easing: 'easeOutQuart' // Função de easing suave
+                },
+                plugins: {
+                    legend: {
+                        display: false // Não exibe a legenda para este gráfico
+                    },
                     title: {
                         display: true,
-                        text: 'Total de Presenças',
-                        color: '#333'
+                        text: 'Contagem de Membros (Valores Absolutos)',
+                        color: '#333',
+                        font: {
+                            size: 16
+                        }
                     },
-                    ticks: {
-                        color: '#333'
+                    datalabels: { // Configuração do plugin datalabels para o gráfico de barras
+                        color: '#333', // Cor do texto dos labels
+                        anchor: 'end', // Posição do label (no final da barra)
+                        align: 'end', // Alinhamento do label
+                        formatter: (value, context) => {
+                            // Exibe o valor absoluto e a porcentagem
+                            const total = membersWithPresenceCount + membersWithZeroPresenceCount;
+                            const percentage = (value / total * 100).toFixed(1);
+                            return `${value} (${percentage}%)`;
+                        },
+                        font: {
+                            weight: 'bold',
+                            size: 12
+                        }
                     }
                 },
-                y: {
-                    ticks: {
-                        color: '#333'
+                scales: {
+                    x: {
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: 'Número de Membros',
+                            color: '#333'
+                        },
+                        ticks: {
+                            color: '#333'
+                        },
+                        grid: {
+                            color: 'rgba(0, 0, 0, 0.1)'
+                        }
+                    },
+                    y: {
+                        ticks: {
+                            color: '#333'
+                        },
+                        grid: {
+                            color: 'rgba(0, 0, 0, 0.1)'
+                        }
                     }
                 }
-            }
-        },
-        plugins: [ChartDataLabels]
-    });
-}
-
-
-/**
- * Atualiza o texto descritivo do resumo detalhado.
- * @param {number} totalPresencesCount - O número total de presenças registradas.
- * @param {number} membersPresentInPeriod - O número de membros que tiveram ao menos uma presença.
- * @param {number} totalExpectedMembers - O número total de membros esperados (filtrados na tela principal).
- * @param {string} selectedMemberName - O nome do membro selecionado, se houver.
- * @param {object} presencesByMember - Objeto com contagem de presenças por membro.
- */
-function updateSummaryText(totalPresencesCount, membersPresentInPeriod, totalExpectedMembers, selectedMemberName, presencesByMember) {
-    if (!detailedSummaryText) return;
-
-    let text = `<h3 class="text-xl font-semibold text-gray-800 mb-3">Detalhes do Período:</h3>`;
-
-    if (selectedMemberName) {
-        const memberTotal = presencesByMember[selectedMemberName] || 0;
-        text += `<p class="text-gray-700 mb-2">O membro <b>${selectedMemberName}</b> registrou um total de <b>${memberTotal} presença(s)</b> no período selecionado.</p>`;
-        text += `<p class="text-gray-600 text-sm">O gráfico de pizza mostra a proporção de presenças registradas versus dias sem presença para este membro.</p>`;
+            },
+            plugins: [ChartDataLabels] // Habilita o plugin para este gráfico
+        });
     } else {
-        const absentMembersCount = totalExpectedMembers - membersPresentInPeriod;
-        text += `<p class="text-gray-700 mb-2">No grupo filtrado (total de <b>${totalExpectedMembers} membros</b>):</p>`;
-        text += `<ul class="list-disc list-inside text-gray-700 mb-2">
-                    <li><b>${membersPresentInPeriod} membros</b> registraram pelo menos uma presença.</li>
-                    <li><b>${absentMembersCount} membros</b> não registraram presença no período.</li>
-                    <li>Um total de <b>${totalPresencesCount} presenças</b> foram registradas.</li>
-                 </ul>`;
-        text += `<p class="text-gray-600 text-sm">O gráfico de pizza ilustra a proporção de membros presentes vs. ausentes. O gráfico de barras mostra o total de presenças individuais para os 5 membros com mais registros.</p>`;
+        console.error("Elemento 'summaryBarChartCanvas' não encontrado no DOM.");
     }
-    
-    detailedSummaryText.innerHTML = text;
 }
 
 /**
- * Atualiza o bloco de informações do relatório que será incluído no PDF.
- * @param {string} title - Título principal do relatório.
- * @param {string} entityName - Nome da entidade que está sendo reportada (membro ou grupo).
- * @param {string} leader - Líder associado ao relatório.
- * @param {string} gape - GAPE associado ao relatório.
- * @param {string} startDate - Data de início do filtro.
- * @param {string} endDate - Data de fim do filtro.
+ * Lida com o download do resumo detalhado como PDF.
  */
-function updateReportInfo(title, entityName, leader, gape, startDate, endDate) {
-    if (!reportInfo) return;
-
-    const today = new Date();
-    const generationDate = `${String(today.getDate()).padStart(2, '0')}/${String(today.getMonth() + 1).padStart(2, '0')}/${today.getFullYear()}`;
-    const generationTime = `${String(today.getHours()).padStart(2, '0')}:${String(today.getMinutes()).padStart(2, '0')}:${String(today.getSeconds()).padStart(2, '0')}`;
-
-    const loggedInLeader = sessionStorage.getItem('loggedInLeader') || 'N/A';
-
-    let dateRangeText = "Todo o Período Registrado";
-    if (startDate && endDate) {
-        const formattedStartDate = new Date(startDate).toLocaleDateString('pt-BR');
-        const formattedEndDate = new Date(endDate).toLocaleDateString('pt-BR');
-        dateRangeText = `De ${formattedStartDate} a ${formattedEndDate}`;
-    }
-
-    reportInfo.innerHTML = `
-        <h3 class="text-xl font-bold text-blue-900 mb-2 text-center">Relatório de Presenças</h3>
-        <p><b>Gerado por:</b> ${loggedInLeader}</p>
-        <p><b>Data de Geração:</b> ${generationDate} às ${generationTime}</p>
-        <p><b>Filtro de Período:</b> ${dateRangeText}</p>
-        <p><b>Filtro de Líder:</b> ${filterLiderInput ? filterLiderInput.value || 'Todos' : 'Todos'}</p>
-        <p><b>Filtro de GAPE:</b> ${filterGapeInput ? filterGapeInput.value || 'Todos' : 'Todos'}</p>
-        <p><b>Tipo de Análise:</b> ${entityName}</p>
-    `;
-}
-
-
-/**
- * Renderiza o calendário FullCalendar com as datas de presença.
- * @param {Array<Object>} detailedData - Dados detalhados de presença.
- * @param {Set<string>} datesWithPresences - Conjunto de datas com presenças para o calendário.
- */
-function renderCalendar(detailedData, datesWithPresences) {
-    if (!calendarContainer) {
-        console.error("Elemento 'calendar' não encontrado para renderizar o calendário.");
+async function handleDownloadPdf() {
+    if (!detailedSummaryContent || !downloadPdfBtn || !summaryFilterSection || !detailedSummaryModal) {
+        showMessage("Erro: Elementos necessários para PDF não encontrados.", "error");
+        console.error("Elementos necessários para PDF não encontrados.");
         return;
     }
 
-    if (calendar) {
-        calendar.destroy(); // Destrói a instância anterior do calendário
-    }
+    showGlobalLoading(true, "Gerando PDF...");
 
-    const events = Array.from(datesWithPresences).map(dateString => {
-        // Ajusta a string de data para o formato YYYY-MM-DD para compatibilidade com o FullCalendar
-        // Se a data já vem como DD/MM/YYYY, converte:
-        const parts = dateString.split('/');
-        const formattedDate = parts.length === 3 ? `${parts[2]}-${parts[1]}-${parts[0]}` : dateString; // YYYY-MM-DD
+    // Armazena os estilos originais dos elementos
+    const originalDetailedSummaryContentMaxHeight = detailedSummaryContent.style.maxHeight;
+    const originalDetailedSummaryContentOverflowY = detailedSummaryContent.style.overflowY;
+    const originalDetailedSummaryContentPadding = detailedSummaryContent.style.padding;
+    const originalDetailedSummaryContentWidth = detailedSummaryContent.style.width;
 
-        return {
-            title: 'Presença',
-            start: formattedDate,
-            allDay: true,
-            color: '#4CAF50' // Verde para as presenças
-        };
-    });
+    const originalDetailedSummaryModalMaxHeight = detailedSummaryModal.style.maxHeight;
 
-    calendar = new FullCalendar.Calendar(calendarContainer, {
-        plugins: ['dayGrid'], // Ou 'dayGridPlugin' se estiver usando módulos
-        initialView: 'dayGridMonth',
-        locale: 'pt-br', // Define o idioma para português
-        events: events,
-        headerToolbar: {
-            left: 'prev,next today',
-            center: 'title',
-            right: 'dayGridMonth,dayGridWeek,dayGridDay'
-        },
-        buttonText: {
-            today: 'Hoje',
-            month: 'Mês',
-            week: 'Semana',
-            day: 'Dia'
-        },
-        eventDidMount: function(info) {
-            // Adiciona um tooltip simples ou informação ao passar o mouse
-            info.el.title = info.event.title;
-        }
-    });
-    calendar.render();
-}
+    const originalDownloadPdfBtnDisplay = downloadPdfBtn.style.display;
+    const originalSummaryFilterSectionDisplay = summaryFilterSection.style.display;
 
-/**
- * Funções para configurar a visualização do líder logado.
- */
-function setupLeaderView() {
-    const loggedInLeader = sessionStorage.getItem('loggedInLeader');
 
-    if (loggedInLeaderNameElement) {
-        loggedInLeaderNameElement.textContent = `Logado como: ${loggedInLeader || 'N/A'}`;
-    }
+    // Aplica estilos para a captura do PDF: remove restrições de altura/overflow
+    detailedSummaryContent.style.maxHeight = 'none';
+    detailedSummaryContent.style.overflowY = 'visible';
+    detailedSummaryContent.style.padding = '8mm'; // Ajusta o padding para a impressão
+    detailedSummaryContent.style.width = '100%'; // Garante que ocupe 100% da largura para captura
 
-    if (loggedInLeader && loggedInLeader !== "Admin") {
-        // Se não for admin, preenche o filtro de líder e o desabilita
-        if (filterLiderInput) {
-            filterLiderInput.value = loggedInLeader;
-            filterLiderInput.disabled = true;
-            // Força a aplicação dos filtros para garantir que apenas os membros do líder sejam mostrados
-            applyFilters();
-        }
-    } else {
-        // Se for admin ou não houver líder logado, garante que o filtro de líder está habilitado
-        if (filterLiderInput) {
-            filterLiderInput.disabled = false;
-        }
-    }
-}
+    detailedSummaryModal.style.maxHeight = 'none'; // Garante que o modal também não restrinja a altura
 
-/**
- * Lida com o download do PDF.
- */
-async function downloadPdf() {
-    showGlobalLoading(true, "Preparando PDF...");
 
-    if (!detailedSummaryContent) {
-        console.error("Elemento detailedSummaryContent não encontrado para gerar PDF.");
-        showMessage("Erro: Conteúdo do relatório não encontrado para PDF.", "error");
-        showGlobalLoading(false);
-        return;
-    }
-
-    // Temporariamente esconde botões e filtros que não devem aparecer no PDF
-    if (downloadPdfBtn) downloadPdfBtn.style.display = 'none';
-    if (closeModalBtn) closeModalBtn.style.display = 'none';
-    if (summaryFilterSection) summaryFilterSection.style.display = 'none';
-    
-    // Rola para o topo do conteúdo do modal para garantir que a captura comece do início
-    detailedSummaryContent.scrollTop = 0;
+    // Oculta o botão de download de PDF e a seção de filtros antes de capturar
+    downloadPdfBtn.style.display = 'none';
+    summaryFilterSection.style.display = 'none';
 
     try {
         const canvas = await html2canvas(detailedSummaryContent, {
-            scale: 2, // Aumenta a escala para melhor qualidade
-            useCORS: true, // Importante se houver imagens de outra origem
-            windowWidth: detailedSummaryContent.scrollWidth,
-            windowHeight: detailedSummaryContent.scrollHeight + 100 // Adiciona um pouco de altura extra
+            scale: 2, // Aumenta a escala para melhor qualidade no PDF
+            useCORS: true, // Importante se houver imagens de outras origens
+            logging: true, // Ativa o log para depuração
         });
 
         const imgData = canvas.toDataURL('image/png');
-        const { jsPDF } = window.jspdf;
-        const pdf = new jsPDF('landscape', 'mm', 'a4'); // Define o PDF como paisagem (landscape) e A4
-
-        const imgWidth = 280; // Largura para A4 paisagem em mm (297mm - 2*8mm de margem)
-        const pageHeight = 200; // Altura para A4 paisagem em mm (210mm - 2*5mm de margem)
-        const imgHeight = (canvas.height * imgWidth) / canvas.width;
+        const pdf = new window.jspdf.jsPDF('p', 'mm', 'a4'); // 'p' (portrait), 'mm' (unidade), 'a4' (tamanho)
+        const imgWidth = 210; // Largura A4 em mm
+        const pageHeight = 297; // Altura A4 em mm
+        const imgHeight = canvas.height * imgWidth / canvas.width;
         let heightLeft = imgHeight;
+        let position = 0;
 
-        let position = 5; // Margem superior inicial
-
-        pdf.addImage(imgData, 'PNG', 5, position, imgWidth, imgHeight); // Adiciona a imagem com margem lateral
+        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
         heightLeft -= pageHeight;
 
         while (heightLeft >= 0) {
-            position = heightLeft - imgHeight + 5; // Ajusta a posição para a próxima página
+            position = heightLeft - imgHeight;
             pdf.addPage();
-            pdf.addImage(imgData, 'PNG', 5, position, imgWidth, imgHeight);
+            pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
             heightLeft -= pageHeight;
         }
 
-        const filename = `relatorio_presencas_${new Date().toLocaleDateString('pt-BR').replace(/\//g, '-')}.pdf`;
-        pdf.save(filename);
+        pdf.save('resumo_presencas.pdf');
         showMessage("PDF gerado com sucesso!", "success");
 
     } catch (error) {
         console.error("Erro ao gerar PDF:", error);
         showMessage(`Erro ao gerar PDF: ${error.message}`, "error");
     } finally {
-        // Reexibe os elementos
-        if (downloadPdfBtn) downloadPdfBtn.style.display = 'block';
-        if (closeModalBtn) closeModalBtn.style.display = 'block';
-        if (summaryFilterSection) summaryFilterSection.style.display = 'block';
+        // Restaura os estilos originais
+        detailedSummaryContent.style.maxHeight = originalDetailedSummaryContentMaxHeight;
+        detailedSummaryContent.style.overflowY = originalDetailedSummaryContentOverflowY;
+        detailedSummaryContent.style.padding = originalDetailedSummaryContentPadding;
+        detailedSummaryContent.style.width = originalDetailedSummaryContentWidth;
+
+        detailedSummaryModal.style.maxHeight = originalDetailedSummaryModalMaxHeight;
+
+        // Reexibe o botão de download de PDF e a seção de filtros
+        if (downloadPdfBtn) {
+            downloadPdfBtn.style.display = originalDownloadPdfBtnDisplay;
+        }
+        if (summaryFilterSection) {
+            summaryFilterSection.style.display = originalSummaryFilterSectionDisplay;
+        }
         showGlobalLoading(false);
     }
 }
 
 
 // --- Event Listeners ---
-document.addEventListener("DOMContentLoaded", () => {
-    // Inicializa a exibição do nome do líder e aplica a visibilidade do filtro de líder
-    setupLeaderView();
-    fetchMembers();
+// Adiciona verificação de existência antes de adicionar event listeners
+if (applyFiltersBtn) applyFiltersBtn.addEventListener("click", applyFiltersWithMessage);
+if (clearFiltersBtn) clearFiltersBtn.addEventListener("click", clearFilters);
 
-    if (applyFiltersBtn) {
-        applyFiltersBtn.addEventListener("click", applyFiltersWithMessage);
-    } else {
-        console.warn("Elemento 'applyFiltersBtn' não encontrado no DOM.");
-    }
-    if (clearFiltersBtn) {
-        clearFiltersBtn.addEventListener("click", clearFilters);
-    } else {
-        console.warn("Elemento 'clearFiltersBtn' não encontrado no DOM.");
-    }
-
-    // Listener para os inputs de filtro para aplicar filtros ao digitar/selecionar
-    if (filterNameInput) filterNameInput.addEventListener("input", applyFilters);
-    if (filterPeriodoSelect) filterPeriodoSelect.addEventListener("change", applyFilters);
-    if (filterLiderInput) filterLiderInput.addEventListener("change", applyFilters);
-    if (filterGapeInput) filterGapeInput.addEventListener("change", applyFilters);
-
-    if (toggleDashboardBtn) {
-        toggleDashboardBtn.addEventListener('click', toggleDashboardVisibility);
-    } else {
-        console.warn("Elemento 'toggleDashboardBtn' não encontrado no DOM.");
-    }
-
-    if (showDetailedSummaryBtn) {
-        showDetailedSummaryBtn.addEventListener('click', showDetailedSummary);
-    } else {
-        console.warn("Elemento 'showDetailedSummaryBtn' não encontrado no DOM.");
-    }
-
-    if (closeModalBtn) {
-        closeModalBtn.addEventListener('click', () => {
-            if (detailedSummaryModal) detailedSummaryModal.classList.add("hidden");
-            // Destruir os gráficos e o calendário quando o modal é fechado para liberar memória
-            if (myChart) { myChart.destroy(); myChart = null; }
-            if (myBarChart) { myBarChart.destroy(); myBarChart = null; }
-            if (calendar) { calendar.destroy(); calendar = null; }
-        });
-    } else {
-        console.warn("Elemento 'closeModalBtn' não encontrado no DOM.");
-    }
-
-    // Listeners para os novos filtros dentro do modal
-    if (summaryStartDateInput) summaryStartDateInput.addEventListener('change', updateDetailedSummaryChart);
-    if (summaryEndDateInput) summaryEndDateInput.addEventListener('change', updateDetailedSummaryChart);
-    if (summaryMemberSelect) summaryMemberSelect.addEventListener('change', updateDetailedSummaryChart);
-    // if (applySummaryFiltersBtn) applySummaryFiltersBtn.addEventListener('click', updateDetailedSummaryChart); // Removido pois o botão não existe no HTML
-
-    if (downloadPdfBtn) {
-        downloadPdfBtn.addEventListener('click', downloadPdf);
-    } else {
-        console.warn("Elemento 'downloadPdfBtn' não encontrado no DOM.");
-    }
-
-    // NOVO: Event listener para o botão "Trocar Usuário"
-    if (changeUserBtn) {
-        changeUserBtn.addEventListener('click', () => {
-            sessionStorage.removeItem('loggedInLeader'); // Limpa a sessão do líder
-            window.location.href = 'index.html'; // Redireciona para a página de login
-        });
-    } else {
-        console.warn("Elemento 'changeUserBtn' não encontrado no DOM.");
-    }
+// Adicionado event listeners para inputs de filtro para que o dashboard se atualize dinamicamente
+// É importante chamar fetchAndDisplaySummary APENAS se o dashboard estiver aberto
+if (filterNameInput) filterNameInput.addEventListener("input", applyFilters); // Apenas aplica o filtro nos cards
+if (filterPeriodoSelect) filterPeriodoSelect.addEventListener("change", () => {
+    applyFilters(); // Aplica o filtro nos cards
+    if (isDashboardOpen) fetchAndDisplaySummary(); // Se dashboard aberto, atualiza o resumo
 });
+if (filterLiderInput) filterLiderInput.addEventListener("change", () => {
+    applyFilters(); // Aplica o filtro nos cards
+    if (isDashboardOpen) fetchAndDisplaySummary(); // Se dashboard aberto, atualiza o resumo
+});
+if (filterGapeInput) filterGapeInput.addEventListener("change", () => {
+    applyFilters(); // Aplica o filtro nos cards
+    if (isDashboardOpen) fetchAndDisplaySummary(); // Se dashboard aberto, atualiza o resumo
+});
+
+if (toggleDashboardBtn) {
+    toggleDashboardBtn.addEventListener("click", toggleDashboardVisibility);
+}
+
+// Event listener para abrir o modal de resumo detalhado
+if (showDetailedSummaryBtn) {
+    showDetailedSummaryBtn.addEventListener("click", showDetailedSummary);
+}
+
+// Event listener para fechar o modal
+if (closeModalBtn) {
+    closeModalBtn.addEventListener("click", () => {
+        if (detailedSummaryModal) {
+            detailedSummaryModal.classList.add("hidden");
+            detailedSummaryModal.classList.remove("flex");
+        }
+    });
+}
+
+// Event listeners para os novos filtros dentro do modal
+if (applySummaryFiltersBtn) {
+    applySummaryFiltersBtn.addEventListener("click", updateDetailedSummaryChart);
+}
+if (summaryStartDateInput) {
+    summaryStartDateInput.addEventListener("change", updateDetailedSummaryChart);
+}
+if (summaryEndDateInput) {
+    summaryEndDateInput.addEventListener("change", updateDetailedSummaryChart);
+}
+if (summaryMemberSelect) {
+    summaryMemberSelect.addEventListener("change", updateDetailedSummaryChart);
+}
+
+// Event listener para o botão de Download PDF
+if (downloadPdfBtn) {
+    downloadPdfBtn.addEventListener("click", handleDownloadPdf);
+}
+
+
+// Carrega os membros ao carregar a página
+window.addEventListener("load", fetchMembers);
+
+/**
+ * Exibe o nome do líder logado no elemento designado.
+ */
+function displayLoggedInLeaderName() {
+    const leaderName = localStorage.getItem('loggedInLeaderName');
+    if (loggedInLeaderNameElement) {
+        if (leaderName) {
+            loggedInLeaderNameElement.innerHTML = `Logado como: <span class="text-blue-600 font-bold">${leaderName}</span>`; // Adicionado span para destaque
+        } else {
+            loggedInLeaderNameElement.textContent = `Logado como: Não identificado`;
+            // Redirecionar para a tela de login se não houver líder logado
+            // window.location.href = "/index.html"; // Descomente se quiser forçar o login
+        }
+    }
+}
+
+/**
+ * Configura a visualização para líderes, pré-selecionando e desativando filtros.
+ */
+function setupLeaderView() {
+    const leaderName = localStorage.getItem('loggedInLeaderName');
+    if (leaderName && leaderName !== 'admin') { // Aplica restrições apenas se for um líder e não o admin
+        // Encontra o objeto do membro logado para obter o valor exato da coluna 'Lider' e 'GAPE'
+        const loggedInMember = allMembersData.find(member => 
+            String(member.Nome || '').toLowerCase().trim() === leaderName.toLowerCase().trim()
+        );
+
+        if (loggedInMember) { // Verifica se o membro logado foi encontrado
+            if (loggedInMember.Lider) {
+                // Pré-seleciona o filtro de líder com o valor exato da coluna 'Lider' do membro logado
+                if (filterLiderInput) filterLiderInput.value = loggedInMember.Lider;
+                console.log(`Filtro de Líder pré-selecionado para: ${loggedInMember.Lider}`);
+            } else {
+                console.warn(`O campo 'Lider' do membro logado '${leaderName}' está vazio.`);
+            }
+
+            if (loggedInMember.GAPE) {
+                // Pré-seleciona o filtro de GAPE com o valor exato da coluna 'GAPE' do membro logado
+                if (filterGapeInput) filterGapeInput.value = loggedInMember.GAPE;
+                console.log(`Filtro de GAPE pré-selecionado para: ${loggedInMember.GAPE}`);
+            } else {
+                console.warn(`O campo 'GAPE' do membro logado '${leaderName}' está vazio.`);
+            }
+        } else {
+            console.warn(`Não foi possível encontrar o membro logado '${leaderName}' para pré-selecionar os filtros.`);
+        }
+
+        // Desativa os campos de filtro de líder e GAPE
+        if (filterLiderInput) filterLiderInput.disabled = true;
+        if (filterGapeInput) filterGapeInput.disabled = true;
+        
+        // Aplica os filtros imediatamente para mostrar apenas os membros do líder
+        applyFilters(); 
+        
+        // Se o dashboard estiver aberto, atualiza o resumo com os filtros aplicados
+        if (isDashboardOpen) {
+            fetchAndDisplaySummary();
+        }
+        
+        // Opcional: Você pode querer desativar o botão de limpar filtros também,
+        // ou ajustar sua funcionalidade para apenas limpar o filtro de nome.
+        // if (clearFiltersBtn) clearFiltersBtn.disabled = true; 
+    }
+}
+
+
+// Chama a função para exibir o nome do líder quando o DOM estiver completamente carregado
+document.addEventListener("DOMContentLoaded", displayLoggedInLeaderName);
+
+// Chama a função para configurar a visualização do líder após o carregamento dos membros
+// Isso garante que as opções de filtro já estejam populadas
+// A chamada foi movida para o bloco 'finally' de fetchMembers
