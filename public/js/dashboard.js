@@ -614,11 +614,12 @@ function populateSummaryMemberSelect() {
  */
 function updateDetailedSummaryChart() {
     let membersToAnalyze = filteredMembers;
-
-    // Apply specific member filter if selected
     const selectedMemberName = summaryMemberSelect ? summaryMemberSelect.value.trim() : '';
+    let summaryTitle = "Estatísticas do Grupo Filtrado";
+
     if (selectedMemberName !== "") {
         membersToAnalyze = filteredMembers.filter(member => String(member.Nome || '').trim() === selectedMemberName);
+        summaryTitle = `Estatísticas para o Membro: ${selectedMemberName}`;
         if (membersToAnalyze.length === 0) {
             if (detailedSummaryText) detailedSummaryText.innerHTML = `<p class="text-lg font-semibold text-gray-800 mb-2">Nenhum dado para o membro selecionado com os filtros atuais.</p>`;
             if (myChart) myChart.destroy();
@@ -651,8 +652,14 @@ function updateDetailedSummaryChart() {
         return;
     }
 
+    // Track members who have a presence in the period and those who don't
+    const membersPresentInPeriod = [];
+    const membersAbsentInPeriod = [];
+
     for (const member of membersToAnalyze) {
         const presence = lastPresencesData[member.Nome];
+        let hasPresenceInPeriod = false;
+
         if (presence && presence.data) {
             // Parse the date string "dd/MM/yyyy" into a Date object
             const [day, month, year] = presence.data.split('/').map(Number);
@@ -665,7 +672,14 @@ function updateDetailedSummaryChart() {
 
             if (dateMatches) {
                 membersWithPresenceCount++;
+                hasPresenceInPeriod = true;
             }
+        }
+
+        if (hasPresenceInPeriod) {
+            membersPresentInPeriod.push(member.Nome);
+        } else {
+            membersAbsentInPeriod.push(member.Nome);
         }
     }
 
@@ -679,16 +693,38 @@ function updateDetailedSummaryChart() {
         absencePercentage = (membersWithZeroPresenceCount / totalMembersInAnalysis) * 100;
     }
 
+    // Format date range for display
+    let dateRangeDisplay = "Todo o período disponível";
+    if (startDateStr && endDateStr) {
+        const formattedStartDate = new Date(startDateStr).toLocaleDateString('pt-BR');
+        const formattedEndDate = new Date(endDateStr).toLocaleDateString('pt-BR');
+        dateRangeDisplay = `Período: ${formattedStartDate} a ${formattedEndDate}`;
+    } else if (startDateStr) {
+        const formattedStartDate = new Date(startDateStr).toLocaleDateString('pt-BR');
+        dateRangeDisplay = `A partir de: ${formattedStartDate}`;
+    } else if (endDateStr) {
+        const formattedEndDate = new Date(endDateStr).toLocaleDateString('pt-BR');
+        dateRangeDisplay = `Até: ${formattedEndDate}`;
+    }
+
+    // Build lists of members present/absent for display
+    let presentMembersList = membersPresentInPeriod.length > 0 ? membersPresentInPeriod.join(', ') : 'Nenhum';
+    let absentMembersList = membersAbsentInPeriod.length > 0 ? membersAbsentInPeriod.join(', ') : 'Nenhum';
+
+
     // Update the detailed summary text
     if (detailedSummaryText) {
         detailedSummaryText.innerHTML = `
-            <p class="text-lg font-semibold text-gray-800 mb-2">Estatísticas do Grupo/Membro Filtrado:</p>
-            <ul class="list-disc list-inside text-gray-700">
-                <li>Total de Membros Analisados: <span class="font-bold">${totalMembersInAnalysis}</span></li>
-                <li>Membros com Presença (no período): <span class="font-bold">${membersWithPresenceCount} (${presencePercentage.toFixed(1)}%)</span></li>
-                <li>Membros Sem Presença (no período): <span class="font-bold">${membersWithZeroPresenceCount} (${absencePercentage.toFixed(1)}%)</span></li>
+            <p class="text-lg font-semibold text-gray-800 mb-2">${summaryTitle}</p>
+            <p class="text-md text-gray-700 mb-4">${dateRangeDisplay}</p>
+            <ul class="list-disc list-inside text-gray-700 space-y-1">
+                <li>Total de Membros Analisados (com os filtros principais): <span class="font-bold">${totalMembersInAnalysis}</span></li>
+                <li>Membros com Pelo Menos Uma Presença (no período): <span class="font-bold">${membersWithPresenceCount} (${presencePercentage.toFixed(1)}%)</span></li>
+                <li>Membros Sem Nenhuma Presença (no período): <span class="font-bold">${membersWithZeroPresenceCount} (${absencePercentage.toFixed(1)}%)</span></li>
             </ul>
-            <p class="text-sm text-gray-600 mt-4">O gráfico abaixo mostra a proporção de membros com e sem presenças registradas no período selecionado, dentro do grupo/membro filtrado.</p>
+            ${selectedMemberName === "" && membersPresentInPeriod.length > 0 ? `<p class="text-sm text-gray-600 mt-3">Membros com presença: <span class="font-medium">${presentMembersList}</span></p>` : ''}
+            ${selectedMemberName === "" && membersAbsentInPeriod.length > 0 ? `<p class="text-sm text-gray-600 mt-1">Membros sem presença: <span class="font-medium">${absentMembersList}</span></p>` : ''}
+            <p class="text-sm text-gray-600 mt-4">O gráfico abaixo mostra a proporção de membros com e sem presenças registradas no período selecionado, dentro do grupo/membro filtrado. A contagem de "presença" refere-se a ter pelo menos um registro de última presença no período.</p>
         `;
     }
 
