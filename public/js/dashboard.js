@@ -97,7 +97,7 @@ async function fetchMembers() {
         <div class="col-span-full flex flex-col justify-center items-center py-8 gap-3">
             <svg class="animate-spin h-8 w-8 text-blue-700 mb-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                 <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 0 00-4 4H4z"></path>
             </svg>
             <span class="text-blue-700 text-lg font-semibold animate-pulse">Carregando membros...</span>
         </div>
@@ -121,7 +121,7 @@ async function fetchMembers() {
         allMembersData = membersData.membros || membersData.data || [];
 
         const lastPresencesRawData = await presencesResponse.json();
-        lastPresencesData = lastPresencesRawData.data || {};
+        lastPresencesData = lastPresencesRawData.data || lastPresencesRawData || {}; // Ajustado para pegar dados diretamente
 
         if (allMembersData.length === 0) {
             showMessage("Nenhum membro encontrado ou dados vazios.", "info");
@@ -404,7 +404,8 @@ async function fetchAndDisplaySummary() {
             throw new Error(`Erro ao buscar presenças totais: ${responseTotal.statusText}`);
         }
         const rawDataTotal = await responseTotal.json();
-        const dataTotal = rawDataTotal.data || {};
+        // CORRIGIDO: O backend já está enviando os dados de contagem diretamente, sem a propriedade 'data'
+        const dataTotal = rawDataTotal || {}; 
 
         console.log("Dados brutos de presenças totais (rawDataTotal):", rawDataTotal);
         console.log("Dados de presenças totais (dataTotal):", dataTotal);
