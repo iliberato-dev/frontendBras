@@ -118,6 +118,15 @@ function showMessage(message, type = "info") {
  */
 async function fetchMembers() {
     showGlobalLoading(true, "Carregando dados dos membros...");
+    
+    // Adiciona verificação para garantir que membersCardsContainer não é nulo
+    if (!membersCardsContainer) {
+        console.error("Erro: Elemento 'membersCardsContainer' não encontrado no DOM. Verifique seu HTML.");
+        showMessage("Erro: Contêiner de membros não encontrado. Verifique a estrutura da página.", "error");
+        showGlobalLoading(false);
+        return; // Sai da função para evitar o TypeError
+    }
+
     membersCardsContainer.innerHTML = `
         <div class="col-span-full flex flex-col justify-center items-center py-8 gap-3">
             <svg class="animate-spin h-8 w-8 text-blue-700 mb-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -160,7 +169,10 @@ async function fetchMembers() {
     } catch (error) {
         console.error("Erro ao carregar membros ou presenças:", error);
         showMessage(`Erro ao carregar dados: ${error.message}`, "error");
-        membersCardsContainer.innerHTML = `<div class="col-span-full text-center py-4 text-red-600">Falha ao carregar dados. Verifique o console.</div>`;
+        // Verifica novamente antes de tentar definir innerHTML em caso de erro
+        if (membersCardsContainer) {
+            membersCardsContainer.innerHTML = `<div class="col-span-full text-center py-4 text-red-600">Falha ao carregar dados. Verifique o console.</div>`;
+        }
     } finally {
         showGlobalLoading(false);
         setupLeaderView(); // NOVO: Chama a função para configurar a visualização do líder
@@ -201,6 +213,13 @@ function applyFilters() {
  */
 function displayMembers(members) {
     const container = document.getElementById("membersCardsContainer");
+    
+    // Adiciona verificação para garantir que o contêiner existe
+    if (!container) {
+        console.error("Erro: Elemento 'membersCardsContainer' não encontrado no DOM para exibição de cards.");
+        return; // Sai da função
+    }
+
     container.classList.remove("hidden");
     container.innerHTML = "";
 
@@ -364,8 +383,18 @@ function fillSelectOptions() {
     const lideres = [...new Set(allMembersData.map((m) => m.Lider).filter(Boolean)),].sort();
     const gapes = [...new Set(allMembersData.map((m) => m.GAPE).filter(Boolean)),].sort();
 
-    filterLiderInput.innerHTML = '<option value="">Todos</option>' + lideres.map((l) => `<option value="${l}">${l}</option>`).join("");
-    filterGapeInput.innerHTML = '<option value="">Todos</option>' + gapes.map((g) => `<option value="${g}">${g}</option>`).join("");
+    // Adiciona verificação para garantir que filterLiderInput e filterGapeInput não são nulos
+    if (filterLiderInput) {
+        filterLiderInput.innerHTML = '<option value="">Todos</option>' + lideres.map((l) => `<option value="${l}">${l}</option>`).join("");
+    } else {
+        console.warn("Elemento 'filterLiderInput' não encontrado no DOM.");
+    }
+    
+    if (filterGapeInput) {
+        filterGapeInput.innerHTML = '<option value="">Todos</option>' + gapes.map((g) => `<option value="${g}">${g}</option>`).join("");
+    } else {
+        console.warn("Elemento 'filterGapeInput' não encontrado no DOM.");
+    }
 }
 
 /**
@@ -373,10 +402,10 @@ function fillSelectOptions() {
  */
 function clearFilters() {
     showMessage("Limpando filtros...", "info");
-    filterNameInput.value = "";
-    filterPeriodoSelect.value = "";
-    filterLiderInput.value = "";
-    filterGapeInput.value = "";
+    if (filterNameInput) filterNameInput.value = "";
+    if (filterPeriodoSelect) filterPeriodoSelect.value = "";
+    if (filterLiderInput) filterLiderInput.value = "";
+    if (filterGapeInput) filterGapeInput.value = "";
     applyFilters();
     // Atualiza o resumo do dashboard após limpar os filtros
     if (isDashboardOpen) {
@@ -402,27 +431,31 @@ function applyFiltersWithMessage() {
 function toggleDashboardVisibility() {
     isDashboardOpen = !isDashboardOpen;
 
-    if (isDashboardOpen) {
-        dashboardContainer.classList.remove('max-h-0', 'opacity-0', 'overflow-hidden');
-        dashboardContainer.classList.add('max-h-screen');
+    if (dashboardContainer) {
+        if (isDashboardOpen) {
+            dashboardContainer.classList.remove('max-h-0', 'opacity-0', 'overflow-hidden');
+            dashboardContainer.classList.add('max-h-screen');
 
-        dashboardOpenIcon.classList.add('hidden');
-        dashboardCloseIcon.classList.remove('hidden');
-        dashboardOpenText.classList.add('hidden');
-        dashboardCloseText.classList.remove('hidden');
+            if (dashboardOpenIcon) dashboardOpenIcon.classList.add('hidden');
+            if (dashboardCloseIcon) dashboardCloseIcon.classList.remove('hidden');
+            if (dashboardOpenText) dashboardOpenText.classList.add('hidden');
+            if (dashboardCloseText) dashboardCloseText.classList.remove('hidden');
 
-        console.log("Dashboard: Abrindo. Buscando resumo...");
-        fetchAndDisplaySummary();
+            console.log("Dashboard: Abrindo. Buscando resumo...");
+            fetchAndDisplaySummary();
+        } else {
+            dashboardContainer.classList.remove('max-h-screen');
+            dashboardContainer.classList.add('max-h-0', 'opacity-0', 'overflow-hidden');
+
+            if (dashboardOpenIcon) dashboardOpenIcon.classList.remove('hidden');
+            if (dashboardCloseIcon) dashboardCloseIcon.classList.add('hidden');
+            if (dashboardOpenText) dashboardOpenText.classList.remove('hidden');
+            if (dashboardCloseText) dashboardCloseText.classList.add('hidden');
+
+            console.log("Dashboard: Fechando.");
+        }
     } else {
-        dashboardContainer.classList.remove('max-h-screen');
-        dashboardContainer.classList.add('max-h-0', 'opacity-0', 'overflow-hidden');
-
-        dashboardOpenIcon.classList.remove('hidden');
-        dashboardCloseIcon.classList.add('hidden');
-        dashboardOpenText.classList.remove('hidden');
-        dashboardCloseText.classList.add('hidden');
-
-        console.log("Dashboard: Fechando.");
+        console.error("Elemento 'dashboardContainer' não encontrado no DOM.");
     }
 }
 
@@ -432,9 +465,9 @@ function toggleDashboardVisibility() {
 async function fetchAndDisplaySummary() {
     showGlobalLoading(true, "Carregando resumo do dashboard...");
     try {
-        const periodoFilter = filterPeriodoSelect.value.trim();
-        const liderFilter = filterLiderInput.value.trim();
-        const gapeFilter = filterGapeInput.value.trim();
+        const periodoFilter = filterPeriodoSelect ? filterPeriodoSelect.value.trim() : '';
+        const liderFilter = filterLiderInput ? filterLiderInput.value.trim() : '';
+        const gapeFilter = filterGapeInput ? filterGapeInput.value.trim() : '';
 
         // Constrói a URL com os parâmetros de consulta (query parameters)
         // Apenas inclui o parâmetro se o valor do filtro não for vazio
@@ -463,6 +496,8 @@ async function fetchAndDisplaySummary() {
 
         if (dashboardPresencasMes) {
             dashboardPresencasMes.textContent = totalFilteredPresences;
+        } else {
+            console.warn("Elemento 'dashboardPresencasMes' não encontrado.");
         }
 
         if (totalCountsList) {
@@ -482,26 +517,28 @@ async function fetchAndDisplaySummary() {
                 listItem.textContent = 'Nenhuma presença total registrada para os filtros aplicados.';
                 totalCountsList.appendChild(listItem);
             }
+        } else {
+            console.warn("Elemento 'totalCountsList' não encontrado.");
         }
 
         // Os campos do dashboard (Periodo, Lider, GAPE) devem refletir os filtros ATUAIS
         // do formulário, e não serem derivados dos membros filtrados da lista.
         // Isso porque a lista de membros já está filtrada por TODOS os campos,
         // mas o resumo de presenças totais só será filtrado por Periodo, Lider, GAPE (se o backend aceitar).
-        dashboardPeriodo.textContent = periodoFilter || "Todos";
-        dashboardLider.textContent = liderFilter || "Todos";
-        dashboardGape.textContent = gapeFilter || "Todos";
+        if (dashboardPeriodo) dashboardPeriodo.textContent = periodoFilter || "Todos";
+        if (dashboardLider) dashboardLider.textContent = liderFilter || "Todos";
+        if (dashboardGape) dashboardGape.textContent = gapeFilter || "Todos";
 
 
     } catch (error) {
         console.error("Erro ao carregar o resumo:", error);
         showMessage(`Erro ao carregar o resumo: ${error.message}`, "error");
         // Limpar os campos do dashboard em caso de erro
-        dashboardPresencasMes.textContent = "Erro";
-        dashboardPeriodo.textContent = "Erro";
-        dashboardLider.textContent = "Erro";
-        dashboardGape.textContent = "Erro";
-        totalCountsList.innerHTML = `<li class="text-sm text-red-300 text-center">Falha ao carregar o resumo.</li>`;
+        if (dashboardPresencasMes) dashboardPresencasMes.textContent = "Erro";
+        if (dashboardPeriodo) dashboardPeriodo.textContent = "Erro";
+        if (dashboardLider) dashboardLider.textContent = "Erro";
+        if (dashboardGape) dashboardGape.textContent = "Erro";
+        if (totalCountsList) totalCountsList.innerHTML = `<li class="text-sm text-red-300 text-center">Falha ao carregar o resumo.</li>`;
     } finally {
         showGlobalLoading(false);
     }
@@ -526,8 +563,8 @@ function showDetailedSummary() {
     const lastDayOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
 
     // Format dates to YYYY-MM-DD for input type="date"
-    summaryStartDateInput.value = firstDayOfMonth.toISOString().split('T')[0];
-    summaryEndDateInput.value = lastDayOfMonth.toISOString().split('T')[0];
+    if (summaryStartDateInput) summaryStartDateInput.value = firstDayOfMonth.toISOString().split('T')[0];
+    if (summaryEndDateInput) summaryEndDateInput.value = lastDayOfMonth.toISOString().split('T')[0];
 
     // Re-run the calculation and chart rendering when the modal is opened or filters applied
     updateDetailedSummaryChart();
@@ -541,6 +578,12 @@ function showDetailedSummary() {
  * Popula o select de membros dentro do modal de resumo detalhado.
  */
 function populateSummaryMemberSelect() {
+    // Adiciona verificação para garantir que summaryMemberSelect não é nulo
+    if (!summaryMemberSelect) {
+        console.error("Erro: Elemento 'summaryMemberSelect' não encontrado no DOM.");
+        return; // Sai da função
+    }
+
     summaryMemberSelect.innerHTML = '<option value="">Todos os Membros Filtrados</option>';
     // Use filteredMembers as the base for the summary member select
     const membersForSummarySelect = [...new Set(filteredMembers.map(m => m.Nome).filter(Boolean))].sort();
@@ -559,19 +602,19 @@ function updateDetailedSummaryChart() {
     let membersToAnalyze = filteredMembers;
 
     // Apply specific member filter if selected
-    const selectedMemberName = summaryMemberSelect.value.trim();
+    const selectedMemberName = summaryMemberSelect ? summaryMemberSelect.value.trim() : '';
     if (selectedMemberName !== "") {
         membersToAnalyze = filteredMembers.filter(member => String(member.Nome || '').trim() === selectedMemberName);
         if (membersToAnalyze.length === 0) {
-            detailedSummaryText.innerHTML = `<p class="text-lg font-semibold text-gray-800 mb-2">Nenhum dado para o membro selecionado com os filtros atuais.</p>`;
+            if (detailedSummaryText) detailedSummaryText.innerHTML = `<p class="text-lg font-semibold text-gray-800 mb-2">Nenhum dado para o membro selecionado com os filtros atuais.</p>`;
             if (myChart) myChart.destroy();
             return;
         }
     }
 
     // Get date range filters
-    const startDateStr = summaryStartDateInput.value;
-    const endDateStr = summaryEndDateInput.value;
+    const startDateStr = summaryStartDateInput ? summaryStartDateInput.value : '';
+    const endDateStr = summaryEndDateInput ? summaryEndDateInput.value : '';
 
     let startDate = null;
     let endDate = null;
@@ -589,7 +632,7 @@ function updateDetailedSummaryChart() {
     let totalMembersInAnalysis = membersToAnalyze.length; // This will be the denominator for percentages
 
     if (totalMembersInAnalysis === 0) {
-        detailedSummaryText.innerHTML = `<p class="text-lg font-semibold text-gray-800 mb-2">Nenhum membro para analisar com os filtros aplicados.</p>`;
+        if (detailedSummaryText) detailedSummaryText.innerHTML = `<p class="text-lg font-semibold text-gray-800 mb-2">Nenhum membro para analisar com os filtros aplicados.</p>`;
         if (myChart) myChart.destroy();
         return;
     }
@@ -623,15 +666,18 @@ function updateDetailedSummaryChart() {
     }
 
     // Update the detailed summary text
-    detailedSummaryText.innerHTML = `
-        <p class="text-lg font-semibold text-gray-800 mb-2">Estatísticas do Grupo/Membro Filtrado:</p>
-        <ul class="list-disc list-inside text-gray-700">
-            <li>Total de Membros Analisados: <span class="font-bold">${totalMembersInAnalysis}</span></li>
-            <li>Membros com Presença (no período): <span class="font-bold">${membersWithPresenceCount} (${presencePercentage.toFixed(1)}%)</span></li>
-            <li>Membros Sem Presença (no período): <span class="font-bold">${membersWithZeroPresenceCount} (${absencePercentage.toFixed(1)}%)</span></li>
-        </ul>
-        <p class="text-sm text-gray-600 mt-4">O gráfico abaixo mostra a proporção de membros com e sem presenças registradas no período selecionado, dentro do grupo/membro filtrado.</p>
-    `;
+    if (detailedSummaryText) {
+        detailedSummaryText.innerHTML = `
+            <p class="text-lg font-semibold text-gray-800 mb-2">Estatísticas do Grupo/Membro Filtrado:</p>
+            <ul class="list-disc list-inside text-gray-700">
+                <li>Total de Membros Analisados: <span class="font-bold">${totalMembersInAnalysis}</span></li>
+                <li>Membros com Presença (no período): <span class="font-bold">${membersWithPresenceCount} (${presencePercentage.toFixed(1)}%)</span></li>
+                <li>Membros Sem Presença (no período): <span class="font-bold">${membersWithZeroPresenceCount} (${absencePercentage.toFixed(1)}%)</span></li>
+            </ul>
+            <p class="text-sm text-gray-600 mt-4">O gráfico abaixo mostra a proporção de membros com e sem presenças registradas no período selecionado, dentro do grupo/membro filtrado.</p>
+        `;
+    }
+
 
     // Destroy previous chart instance if it exists
     if (myChart) {
@@ -639,80 +685,85 @@ function updateDetailedSummaryChart() {
     }
 
     // Render the pie chart
-    const ctx = summaryChartCanvas.getContext('2d');
-    myChart = new Chart(ctx, {
-        type: 'pie',
-        data: {
-            labels: ['Membros com Presença', 'Membros Sem Presença'],
-            datasets: [{
-                data: [presencePercentage.toFixed(1), absencePercentage.toFixed(1)],
-                backgroundColor: [
-                    'rgba(75, 192, 192, 0.8)', // Green for presence
-                    'rgba(255, 99, 132, 0.8)'  // Red for absence
-                ],
-                borderColor: [
-                    'rgba(75, 192, 192, 1)',
-                    'rgba(255, 99, 132, 1)'
-                ],
-                borderWidth: 1
-            }]
-        },
-        options: {
-            responsive: true,
-            plugins: {
-                legend: {
-                    position: 'top',
-                    labels: {
-                        color: '#333', // Legend text color
+    if (summaryChartCanvas) {
+        const ctx = summaryChartCanvas.getContext('2d');
+        myChart = new Chart(ctx, {
+            type: 'pie',
+            data: {
+                labels: ['Membros com Presença', 'Membros Sem Presença'],
+                datasets: [{
+                    data: [presencePercentage.toFixed(1), absencePercentage.toFixed(1)],
+                    backgroundColor: [
+                        'rgba(75, 192, 192, 0.8)', // Green for presence
+                        'rgba(255, 99, 132, 0.8)'  // Red for absence
+                    ],
+                    borderColor: [
+                        'rgba(75, 192, 192, 1)',
+                        'rgba(255, 99, 132, 1)'
+                    ],
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        position: 'top',
+                        labels: {
+                            color: '#333', // Legend text color
+                            font: {
+                                size: 14
+                            }
+                        }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                let label = context.label || '';
+                                if (label) {
+                                    label += ': ';
+                                }
+                                if (context.parsed !== null) {
+                                    label += context.parsed + '%';
+                                }
+                                return label;
+                            }
+                        }
+                    },
+                    title: {
+                        display: true,
+                        text: 'Proporção de Presenças vs. Ausências (Período Selecionado)',
+                        color: '#333',
                         font: {
-                            size: 14
+                            size: 16
                         }
-                    }
-                },
-                tooltip: {
-                    callbacks: {
-                        label: function(context) {
-                            let label = context.label || '';
-                            if (label) {
-                                label += ': ';
-                            }
-                            if (context.parsed !== null) {
-                                label += context.parsed + '%';
-                            }
-                            return label;
-                        }
-                    }
-                },
-                title: {
-                    display: true,
-                    text: 'Proporção de Presenças vs. Ausências (Período Selecionado)',
-                    color: '#333',
-                    font: {
-                        size: 16
                     }
                 }
             }
-        }
-    });
+        });
+    } else {
+        console.error("Elemento 'summaryChartCanvas' não encontrado no DOM.");
+    }
 }
 
 
 // --- Event Listeners ---
-applyFiltersBtn.addEventListener("click", applyFiltersWithMessage);
-clearFiltersBtn.addEventListener("click", clearFilters);
+// Adiciona verificação de existência antes de adicionar event listeners
+if (applyFiltersBtn) applyFiltersBtn.addEventListener("click", applyFiltersWithMessage);
+if (clearFiltersBtn) clearFiltersBtn.addEventListener("click", clearFilters);
 
 // Adicionado event listeners para inputs de filtro para que o dashboard se atualize dinamicamente
 // É importante chamar fetchAndDisplaySummary APENAS se o dashboard estiver aberto
-filterNameInput.addEventListener("input", applyFilters); // Apenas aplica o filtro nos cards
-filterPeriodoSelect.addEventListener("change", () => {
+if (filterNameInput) filterNameInput.addEventListener("input", applyFilters); // Apenas aplica o filtro nos cards
+if (filterPeriodoSelect) filterPeriodoSelect.addEventListener("change", () => {
     applyFilters(); // Aplica o filtro nos cards
     if (isDashboardOpen) fetchAndDisplaySummary(); // Se dashboard aberto, atualiza o resumo
 });
-filterLiderInput.addEventListener("change", () => {
+if (filterLiderInput) filterLiderInput.addEventListener("change", () => {
     applyFilters(); // Aplica o filtro nos cards
     if (isDashboardOpen) fetchAndDisplaySummary(); // Se dashboard aberto, atualiza o resumo
 });
-filterGapeInput.addEventListener("change", () => {
+if (filterGapeInput) filterGapeInput.addEventListener("change", () => {
     applyFilters(); // Aplica o filtro nos cards
     if (isDashboardOpen) fetchAndDisplaySummary(); // Se dashboard aberto, atualiza o resumo
 });
@@ -729,8 +780,10 @@ if (showDetailedSummaryBtn) {
 // Event listener para fechar o modal
 if (closeModalBtn) {
     closeModalBtn.addEventListener("click", () => {
-        detailedSummaryModal.classList.add("hidden");
-        detailedSummaryModal.classList.remove("flex");
+        if (detailedSummaryModal) {
+            detailedSummaryModal.classList.add("hidden");
+            detailedSummaryModal.classList.remove("flex");
+        }
     });
 }
 
@@ -782,7 +835,7 @@ function setupLeaderView() {
         if (loggedInMember) { // Verifica se o membro logado foi encontrado
             if (loggedInMember.Lider) {
                 // Pré-seleciona o filtro de líder com o valor exato da coluna 'Lider' do membro logado
-                filterLiderInput.value = loggedInMember.Lider;
+                if (filterLiderInput) filterLiderInput.value = loggedInMember.Lider;
                 console.log(`Filtro de Líder pré-selecionado para: ${loggedInMember.Lider}`);
             } else {
                 console.warn(`O campo 'Lider' do membro logado '${leaderName}' está vazio.`);
@@ -790,7 +843,7 @@ function setupLeaderView() {
 
             if (loggedInMember.GAPE) {
                 // Pré-seleciona o filtro de GAPE com o valor exato da coluna 'GAPE' do membro logado
-                filterGapeInput.value = loggedInMember.GAPE;
+                if (filterGapeInput) filterGapeInput.value = loggedInMember.GAPE;
                 console.log(`Filtro de GAPE pré-selecionado para: ${loggedInMember.GAPE}`);
             } else {
                 console.warn(`O campo 'GAPE' do membro logado '${leaderName}' está vazio.`);
@@ -800,8 +853,8 @@ function setupLeaderView() {
         }
 
         // Desativa os campos de filtro de líder e GAPE
-        filterLiderInput.disabled = true;
-        filterGapeInput.disabled = true;
+        if (filterLiderInput) filterLiderInput.disabled = true;
+        if (filterGapeInput) filterGapeInput.disabled = true;
         
         // Aplica os filtros imediatamente para mostrar apenas os membros do líder
         applyFilters(); 
@@ -813,7 +866,7 @@ function setupLeaderView() {
         
         // Opcional: Você pode querer desativar o botão de limpar filtros também,
         // ou ajustar sua funcionalidade para apenas limpar o filtro de nome.
-        // clearFiltersBtn.disabled = true; 
+        // if (clearFiltersBtn) clearFiltersBtn.disabled = true; 
     }
 }
 
