@@ -14,49 +14,38 @@
             #downloadPdfBtn {
                 display: none !important; /* Oculta o botão de download ao imprimir */
             }
-            .print-only-percentages {
-                display: block !important; /* Mostra as porcentagens apenas ao imprimir */
-                margin-top: 1rem; /* Espaçamento acima das porcentagens */
-            }
             /* Ajusta o layout para impressão */
             #detailedSummaryContent {
                 display: flex;
                 flex-direction: column; /* Padrão para coluna */
                 align-items: center;
             }
-            #detailedSummaryText, .chart-and-percentages-container {
-                width: 100%; /* Ocupa a largura total por padrão */
+            .chart-container-wrapper {
+                display: flex;
+                flex-direction: column; /* Gráficos em coluna por padrão na impressão */
+                width: 100%;
+                gap: 1rem;
+            }
+            .chart-container {
+                width: 100% !important; /* Ocupa a largura total na impressão */
+                height: auto; /* Altura automática */
             }
 
-            /* Para layouts de impressão maiores (ex: A4 paisagem), tenta colocar gráfico e porcentagens lado a lado */
+            /* Para layouts de impressão maiores (ex: A4 paisagem), tenta colocar gráficos lado a lado */
             @page {
-                size: A4 landscape; /* Tenta layout paisagem para melhor ajuste do gráfico */
+                size: A4 landscape; /* Tenta layout paisagem para melhor ajuste dos gráficos */
             }
             @media print and (min-width: 768px) { /* Aplica para impressões mais largas, como A4 paisagem */
-                #detailedSummaryContent {
+                .chart-container-wrapper {
                     flex-direction: row; /* Organiza em linha */
+                    justify-content: space-around; /* Espaça os gráficos */
                     align-items: flex-start;
-                    justify-content: space-between;
                 }
-                #detailedSummaryText {
-                    width: 48%; /* Ocupa metade da largura */
-                    margin-right: 2%; /* Pequeno espaçamento */
-                }
-                .chart-and-percentages-container {
-                    width: 48%; /* Ocupa metade da largura */
-                    display: flex;
-                    flex-direction: column;
-                    align-items: center;
-                }
-                #summaryChart {
-                    max-width: 100%; /* Garante que o gráfico se ajuste */
+                .chart-container {
+                    width: 48% !important; /* Ocupa metade da largura */
                     height: auto;
                 }
             }
-        }
-        /* Por padrão, oculta as porcentagens na visualização de tela */
-        .print-only-percentages {
-            display: none;
         }
     </style>
 </head>
@@ -193,18 +182,19 @@
                         <!-- Opções de membros serão populadas via JS -->
                     </select>
                 </div>
-                <!-- O botão "Aplicar Filtros do Resumo" é opcional, pois os eventos 'change' já atualizam dinamicamente -->
-                <!-- <button id="applySummaryFiltersBtn" class="mt-4 px-4 py-2 bg-blue-600 text-white font-semibold rounded-md shadow-sm hover:bg-blue-700 transition duration-300">Aplicar Filtros do Resumo</button> -->
             </div>
 
             <div id="detailedSummaryText" class="mb-6">
                 <!-- Conteúdo do resumo e estatísticas serão injetados aqui -->
             </div>
             
-            <div class="chart-and-percentages-container relative h-64 md:h-80 lg:h-96">
-                <canvas id="summaryChart"></canvas>
-                <div id="printSummaryPercentages" class="print-only-percentages mt-4 text-gray-800 text-center">
-                    <!-- As porcentagens serão injetadas aqui pelo JS para impressão -->
+            <!-- Contêiner para os dois gráficos -->
+            <div class="chart-container-wrapper flex flex-col md:flex-row justify-around items-center gap-4">
+                <div class="chart-container relative h-64 w-full md:w-1/2">
+                    <canvas id="summaryChart"></canvas> <!-- Gráfico de Pizza -->
+                </div>
+                <div class="chart-container relative h-64 w-full md:w-1/2">
+                    <canvas id="summaryBarChart"></canvas> <!-- NOVO: Gráfico de Barras Horizontais -->
                 </div>
             </div>
 
@@ -216,6 +206,8 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Inclua o plugin chartjs-plugin-datalabels -->
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
     <!-- Inclua as bibliotecas html2canvas e jsPDF ANTES do seu dashboard.js -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
