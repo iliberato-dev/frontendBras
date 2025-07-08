@@ -730,7 +730,7 @@ function updateDetailedSummaryChart() {
                 // Adiciona evento ao calendário para a última presença
                 calendarEvents.push({
                     title: `${member.Nome} (Presente)`,
-                    start: lastPresenceDate.toISOString().split('T')[0], // Formato YYYY-MM-DD
+                    start: lastPresenceDate.toISOString().split('T')[0], // Formato ज्यामुळे-MM-DD
                     color: presenceColor, // Usa a cor definida para presença
                     extendedProps: {
                         member: member.Nome,
@@ -1200,6 +1200,7 @@ window.addEventListener("load", fetchMembers);
 
 /**
  * Exibe o nome do líder logado no elemento designado.
+ * E redireciona para a página de login se não houver líder logado.
  */
 function displayLoggedInLeaderName() {
     const leaderName = localStorage.getItem('loggedInLeaderName');
@@ -1208,8 +1209,14 @@ function displayLoggedInLeaderName() {
             loggedInLeaderNameElement.innerHTML = `Logado como: <span class="text-blue-600 font-bold">${leaderName}</span>`; // Adicionado span para destaque
         } else {
             loggedInLeaderNameElement.textContent = `Logado como: Não identificado`;
-            // Redirecionar para a tela de login se não houver líder logado
-            // window.location.href = "/index.html"; // Descomente se quiser forçar o login
+            // Redireciona para a tela de login se não houver líder logado
+            window.location.href = "/index.html"; 
+        }
+    } else {
+        // Se o elemento não for encontrado, ainda assim redireciona para o login
+        const leaderNameCheck = localStorage.getItem('loggedInLeaderName');
+        if (!leaderNameCheck) {
+            window.location.href = "/index.html"; 
         }
     }
 }
