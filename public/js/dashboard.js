@@ -1,10 +1,11 @@
 // ------------------------------------------------------
-// Frontend (js/dashboard.js) - Versão Atualizada para Filtros no Dashboard e Download PDF
+// Frontend (js/dashboard.js) - Versão Final com Gráficos Aprimorados
 // ------------------------------------------------------
 let allMembersData = [];
 let filteredMembers = [];
 let lastPresencesData = {}; // Variável para armazenar todas as últimas presenças
-let myChart = null; // Variável para armazenar a instância do Chart.js
+let myChart = null; // Variável para armazenar a instância do Chart.js (Pizza)
+let myBarChart = null; // NOVO: Variável para armazenar a instância do Chart.js (Barras)
 
 const filterNameInput = document.getElementById("filterName");
 const filterPeriodoSelect = document.getElementById("filterPeriodo");
@@ -36,10 +37,11 @@ const loggedInLeaderNameElement = document.getElementById("loggedInLeaderName");
 // Elementos do novo modal de resumo detalhado
 const detailedSummaryModal = document.getElementById("detailedSummaryModal");
 const closeModalBtn = document.getElementById("closeModalBtn");
-const summaryChartCanvas = document.getElementById("summaryChart");
+const summaryChartCanvas = document.getElementById("summaryChart"); // Canvas para o gráfico de Pizza
+const summaryBarChartCanvas = document.getElementById("summaryBarChart"); // NOVO: Canvas para o gráfico de Barras
 const detailedSummaryText = document.getElementById("detailedSummaryText");
 const showDetailedSummaryBtn = document.getElementById("showDetailedSummaryBtn");
-const detailedSummaryContent = document.getElementById("detailedSummaryContent"); // Novo: Referência ao conteúdo do modal para PDF
+const detailedSummaryContent = document.getElementById("detailedSummaryContent"); // Referência ao conteúdo do modal para PDF
 
 // Novos elementos de filtro dentro do modal
 const summaryStartDateInput = document.getElementById("summaryStartDate");
@@ -47,11 +49,8 @@ const summaryEndDateInput = document.getElementById("summaryEndDate");
 const summaryMemberSelect = document.getElementById("summaryMemberSelect");
 const applySummaryFiltersBtn = document.getElementById("applySummaryFiltersBtn");
 
-// Novo: Botão de Download PDF
+// Botão de Download PDF
 const downloadPdfBtn = document.getElementById("downloadPdfBtn");
-
-// Novo: Elemento para exibir porcentagens na impressão
-const printSummaryPercentages = document.getElementById("printSummaryPercentages");
 
 
 // !!! IMPORTANTE: Substitua pela URL PÚBLICA do seu backend no Render !!!
@@ -613,7 +612,7 @@ function populateSummaryMemberSelect() {
 }
 
 /**
- * Atualiza o gráfico de pizza e o texto do resumo detalhado com base nos filtros do modal.
+ * Atualiza os gráficos e o texto do resumo detalhado com base nos filtros do modal.
  */
 function updateDetailedSummaryChart() {
     let membersToAnalyze = filteredMembers;
@@ -626,6 +625,7 @@ function updateDetailedSummaryChart() {
         if (membersToAnalyze.length === 0) {
             if (detailedSummaryText) detailedSummaryText.innerHTML = `<p class="text-lg font-semibold text-gray-800 mb-2">Nenhum dado para o membro selecionado com os filtros atuais.</p>`;
             if (myChart) myChart.destroy();
+            if (myBarChart) myBarChart.destroy(); // Destrói o gráfico de barras também
             return;
         }
     }
@@ -652,6 +652,7 @@ function updateDetailedSummaryChart() {
     if (totalMembersInAnalysis === 0) {
         if (detailedSummaryText) detailedSummaryText.innerHTML = `<p class="text-lg font-semibold text-gray-800 mb-2">Nenhum membro para analisar com os filtros aplicados.</p>`;
         if (myChart) myChart.destroy();
+        if (myBarChart) myBarChart.destroy();
         return;
     }
 
@@ -711,11 +712,11 @@ function updateDetailedSummaryChart() {
                 <li>Membros com Presença: <span class="font-bold">${membersWithPresenceCount} (${presencePercentage.toFixed(1)}%)</span></li>
                 <li>Membros Sem Presença: <span class="font-bold">${membersWithZeroPresenceCount} (${absencePercentage.toFixed(1)}%)</span></li>
             </ul>
-            <p class="text-sm text-gray-600 mt-4">As estatísticas e o gráfico representam a proporção de membros com e sem presenças registradas no período selecionado para ${entityName}. "Presença" indica pelo menos um registro no período.</p>
+            <p class="text-sm text-gray-600 mt-4">As estatísticas e gráficos abaixo ilustram a proporção de membros com e sem presenças registradas no período selecionado para ${entityName}. "Presença" significa ter ao menos um registro no período.</p>
         `;
     }
 
-    // Destrói a instância anterior do gráfico se existir
+    // Destrói a instância anterior do gráfico de pizza se existir
     if (myChart) {
         myChart.destroy();
     }
@@ -768,25 +769,117 @@ function updateDetailedSummaryChart() {
                     },
                     title: {
                         display: true,
-                        text: 'Proporção de Presenças vs. Ausências (Período Selecionado)',
+                        text: 'Proporção de Presenças vs. Ausências',
                         color: '#333',
                         font: {
                             size: 16
                         }
+                    },
+                    datalabels: { // Configuração do plugin datalabels
+                        color: '#fff', // Cor do texto dos labels
+                        formatter: (value, context) => {
+                            // Exibe o valor da porcentagem no slice
+                            return value + '%';
+                        },
+                        font: {
+                            weight: 'bold',
+                            size: 14
+                        }
                     }
                 }
-            }
+            },
+            plugins: [ChartDataLabels] // Habilita o plugin para este gráfico
         });
     } else {
         console.error("Elemento 'summaryChartCanvas' não encontrado no DOM.");
     }
 
-    // Popula o novo elemento de porcentagens para impressão
-    if (printSummaryPercentages) {
-        printSummaryPercentages.innerHTML = `
-            <p class="text-lg font-bold text-gray-800">Presentes: ${membersWithPresenceCount} (${presencePercentage.toFixed(1)}%)</p>
-            <p class="text-lg font-bold text-gray-800">Ausentes: ${membersWithZeroPresenceCount} (${absencePercentage.toFixed(1)}%)</p>
-        `;
+    // Destrói a instância anterior do gráfico de barras se existir
+    if (myBarChart) {
+        myBarChart.destroy();
+    }
+
+    // Renderiza o novo gráfico de barras horizontais
+    if (summaryBarChartCanvas) {
+        const ctxBar = summaryBarChartCanvas.getContext('2d');
+        myBarChart = new Chart(ctxBar, {
+            type: 'bar',
+            data: {
+                labels: ['Membros com Presença', 'Membros Sem Presença'],
+                datasets: [{
+                    label: 'Número de Membros',
+                    data: [membersWithPresenceCount, membersWithZeroPresenceCount],
+                    backgroundColor: [
+                        'rgba(75, 192, 192, 0.8)', // Verde para presença
+                        'rgba(255, 99, 132, 0.8)'  // Vermelho para ausência
+                    ],
+                    borderColor: [
+                        'rgba(75, 192, 192, 1)',
+                        'rgba(255, 99, 132, 1)'
+                    ],
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                indexAxis: 'y', // Define o eixo Y como o eixo de categorias (barras horizontais)
+                responsive: true,
+                plugins: {
+                    legend: {
+                        display: false // Não exibe a legenda para este gráfico
+                    },
+                    title: {
+                        display: true,
+                        text: 'Contagem de Membros (Valores Absolutos)',
+                        color: '#333',
+                        font: {
+                            size: 16
+                        }
+                    },
+                    datalabels: { // Configuração do plugin datalabels para o gráfico de barras
+                        color: '#333', // Cor do texto dos labels
+                        anchor: 'end', // Posição do label (no final da barra)
+                        align: 'end', // Alinhamento do label
+                        formatter: (value, context) => {
+                            // Exibe o valor absoluto e a porcentagem
+                            const total = membersWithPresenceCount + membersWithZeroPresenceCount;
+                            const percentage = (value / total * 100).toFixed(1);
+                            return `${value} (${percentage}%)`;
+                        },
+                        font: {
+                            weight: 'bold',
+                            size: 12
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: 'Número de Membros',
+                            color: '#333'
+                        },
+                        ticks: {
+                            color: '#333'
+                        },
+                        grid: {
+                            color: 'rgba(0, 0, 0, 0.1)'
+                        }
+                    },
+                    y: {
+                        ticks: {
+                            color: '#333'
+                        },
+                        grid: {
+                            color: 'rgba(0, 0, 0, 0.1)'
+                        }
+                    }
+                }
+            },
+            plugins: [ChartDataLabels] // Habilita o plugin para este gráfico
+        });
+    } else {
+        console.error("Elemento 'summaryBarChartCanvas' não encontrado no DOM.");
     }
 }
 
