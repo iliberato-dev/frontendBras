@@ -11,20 +11,34 @@
     <style>
         /* Estilos específicos para impressão */
         @media print {
-            #downloadPdfBtn {
-                display: none !important; /* Oculta o botão de download ao imprimir */
+            #downloadPdfBtn, #summaryFilterSection {
+                display: none !important; /* Oculta o botão de download e a seção de filtros ao imprimir */
             }
             /* Ajusta o layout para impressão */
             #detailedSummaryContent {
                 display: flex;
                 flex-direction: column; /* Padrão para coluna */
                 align-items: center;
+                padding: 20mm; /* Aumenta o padding para dar mais margem na impressão */
+                max-height: none !important; /* Remove limite de altura para capturar todo o conteúdo */
+                overflow: visible !important; /* Permite que o conteúdo seja visível, não rolado */
+                width: 100%; /* Garante que o conteúdo ocupe a largura total disponível na impressão */
+            }
+            #reportInfo {
+                margin-bottom: 25mm; /* Aumenta a área acima dos gráficos */
+                padding-top: 15mm; /* Mais padding no topo para o reportInfo */
+                padding-bottom: 15mm; /* Mais padding na base para o reportInfo */
+                width: 100%;
+            }
+            #detailedSummaryText {
+                margin-bottom: 20mm; /* Aumenta a margem abaixo do texto de resumo */
+                width: 100%;
             }
             .chart-container-wrapper {
                 display: flex;
                 flex-direction: column; /* Gráficos em coluna por padrão na impressão */
                 width: 100%;
-                gap: 1rem;
+                gap: 1.5rem; /* Aumenta o espaçamento entre os gráficos */
             }
             .chart-container {
                 width: 100% !important; /* Ocupa a largura total na impressão */
