@@ -692,6 +692,10 @@ function updateDetailedSummaryChart() {
     let totalMembersInAnalysis = membersToAnalyze.length; // Este será o denominador para as porcentagens
     let calendarEvents = []; // Array para armazenar os eventos do calendário
 
+    // Cores dos gráficos (definidas no Chart.js options, mas replicadas aqui para consistência)
+    const presenceColor = 'rgba(75, 192, 192, 0.8)'; // Cor para "Membros com Presença" (verde/ciano)
+    const absenceColor = 'rgba(255, 99, 132, 0.8)';  // Cor para "Membros Sem Presença" (vermelho)
+
     if (totalMembersInAnalysis === 0) {
         if (detailedSummaryText) detailedSummaryText.innerHTML = `<p class="text-lg font-semibold text-gray-800 mb-2">Nenhum membro para analisar com os filtros aplicados.</p>`;
         if (myChart) myChart.destroy();
@@ -727,7 +731,7 @@ function updateDetailedSummaryChart() {
                 calendarEvents.push({
                     title: `${member.Nome} (Presente)`,
                     start: lastPresenceDate.toISOString().split('T')[0], // Formato YYYY-MM-DD
-                    color: 'green',
+                    color: presenceColor, // Usa a cor definida para presença
                     extendedProps: {
                         member: member.Nome,
                         time: presence.hora
@@ -735,6 +739,9 @@ function updateDetailedSummaryChart() {
                 });
             }
         }
+        // NOTA: Para exibir "faltas" diárias no calendário, o backend precisaria fornecer
+        // um histórico completo de presenças/faltas, não apenas a última presença.
+        // Com os dados atuais, só podemos marcar as últimas presenças conhecidas.
     }
 
     const membersWithZeroPresenceCount = totalMembersInAnalysis - membersWithPresenceCount;
@@ -799,10 +806,10 @@ function updateDetailedSummaryChart() {
             data: {
                 labels: ['Membros com Presença', 'Membros Sem Presença'],
                 datasets: [{
-                    data: [presencePercentage.toFixed(1), absencePercentage.toFixed(1)],
+                    data: [membersWithPresenceCount, membersWithZeroPresenceCount], // Usar valores absolutos aqui
                     backgroundColor: [
-                        'rgba(75, 192, 192, 0.8)', // Verde para presença
-                        'rgba(255, 99, 132, 0.8)'  // Vermelho para ausência
+                        presenceColor, // Usa a cor definida para presença
+                        absenceColor  // Usa a cor definida para ausência
                     ],
                     borderColor: [
                         'rgba(75, 192, 192, 1)',
@@ -835,7 +842,10 @@ function updateDetailedSummaryChart() {
                                     label += ': ';
                                 }
                                 if (context.parsed !== null) {
-                                    label += context.parsed + '%';
+                                    // Exibe o número absoluto e a porcentagem
+                                    const total = context.dataset.data.reduce((sum, val) => sum + val, 0);
+                                    const percentage = (context.parsed / total * 100).toFixed(1);
+                                    label += `${context.parsed} (${percentage}%)`;
                                 }
                                 return label;
                             }
@@ -853,7 +863,9 @@ function updateDetailedSummaryChart() {
                         color: '#fff', // Cor do texto dos labels
                         formatter: (value, context) => {
                             // Exibe o valor da porcentagem no slice
-                            return value + '%';
+                            const total = context.dataset.data.reduce((sum, val) => sum + val, 0);
+                            const percentage = (value / total * 100).toFixed(1);
+                            return percentage + '%';
                         },
                         font: {
                             weight: 'bold',
@@ -884,8 +896,8 @@ function updateDetailedSummaryChart() {
                     label: 'Número de Membros',
                     data: [membersWithPresenceCount, membersWithZeroPresenceCount],
                     backgroundColor: [
-                        'rgba(75, 192, 192, 0.8)', // Verde para presença
-                        'rgba(255, 99, 132, 0.8)'  // Vermelho para ausência
+                        presenceColor, // Usa a cor definida para presença
+                        absenceColor  // Usa a cor definida para ausência
                     ],
                     borderColor: [
                         'rgba(75, 192, 192, 1)',
@@ -1009,6 +1021,10 @@ function renderCalendar(events, startDate, endDate) {
         height: 'auto', // Altura automática para se ajustar ao conteúdo
         contentHeight: 'auto', // Altura do conteúdo do calendário
         aspectRatio: 1.8, // Proporção para controle de altura em telas maiores
+        // Adiciona classes CSS para controle de fonte via media queries
+        // As classes serão aplicadas ao elemento raiz do calendário
+        // FullCalendar já tem classes para seus elementos internos, que serão sobrescritas pelo CSS
+        plugins: [ FullCalendar.dayGrid, FullCalendar.timeGrid ], // Garante que os plugins necessários estejam carregados
     });
 
     calendar.render();
