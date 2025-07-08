@@ -258,7 +258,7 @@ function displayMembers(members) {
                     body: JSON.stringify({
                         nome: member.Nome,
                         data: `${dia}/${mes}/${ano}`,
-                        hora: `${hora}:${min}:${seg}`,
+                        hora: `${min}:${seg}`, // Corrigido para min:seg
                         sheet: "PRESENCAS",
                     }),
                 });
@@ -503,17 +503,29 @@ function displayLoggedInLeaderName() {
 function setupLeaderView() {
     const leaderName = localStorage.getItem('loggedInLeaderName');
     if (leaderName && leaderName !== 'admin') { // Aplica restrições apenas se for um líder e não o admin
-        // Encontra o objeto do membro logado para obter o valor exato da coluna 'Lider'
+        // Encontra o objeto do membro logado para obter o valor exato da coluna 'Lider' e 'GAPE'
         const loggedInMember = allMembersData.find(member => 
             String(member.Nome || '').toLowerCase().trim() === leaderName.toLowerCase().trim()
         );
 
-        if (loggedInMember && loggedInMember.Lider) {
-            // Pré-seleciona o filtro de líder com o valor exato da coluna 'Lider' do membro logado
-            filterLiderInput.value = loggedInMember.Lider;
-            console.log(`Filtro de Líder pré-selecionado para: ${loggedInMember.Lider}`);
+        if (loggedInMember) { // Verifica se o membro logado foi encontrado
+            if (loggedInMember.Lider) {
+                // Pré-seleciona o filtro de líder com o valor exato da coluna 'Lider' do membro logado
+                filterLiderInput.value = loggedInMember.Lider;
+                console.log(`Filtro de Líder pré-selecionado para: ${loggedInMember.Lider}`);
+            } else {
+                console.warn(`O campo 'Lider' do membro logado '${leaderName}' está vazio.`);
+            }
+
+            if (loggedInMember.GAPE) {
+                // Pré-seleciona o filtro de GAPE com o valor exato da coluna 'GAPE' do membro logado
+                filterGapeInput.value = loggedInMember.GAPE;
+                console.log(`Filtro de GAPE pré-selecionado para: ${loggedInMember.GAPE}`);
+            } else {
+                console.warn(`O campo 'GAPE' do membro logado '${leaderName}' está vazio.`);
+            }
         } else {
-            console.warn(`Não foi possível encontrar o membro logado '${leaderName}' ou seu campo 'Lider' está vazio para pré-selecionar o filtro.`);
+            console.warn(`Não foi possível encontrar o membro logado '${leaderName}' para pré-selecionar os filtros.`);
         }
 
         // Desativa os campos de filtro de líder e GAPE
