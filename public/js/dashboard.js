@@ -6,6 +6,7 @@ let filteredMembers = [];
 let lastPresencesData = {}; // Variável para armazenar todas as últimas presenças
 let myChart = null; // Variável para armazenar a instância do Chart.js (Pizza)
 let myBarChart = null; // Variável para armazenar a instância do Chart.js (Barras)
+let calendar = null; // Variável para armazenar a instância do FullCalendar
 
 const filterNameInput = document.getElementById("filterName");
 const filterPeriodoSelect = document.getElementById("filterPeriodo");
@@ -57,6 +58,9 @@ const reportInfo = document.getElementById("reportInfo");
 
 // Elemento da seção de filtros dentro do modal de resumo
 const summaryFilterSection = document.getElementById("summaryFilterSection");
+
+// Contêiner do calendário
+const calendarContainer = document.getElementById("calendar");
 
 
 // !!! IMPORTANTE: Substitua pela URL PÚBLICA do seu backend no Render !!!
@@ -588,7 +592,7 @@ function showDetailedSummary() {
     if (summaryStartDateInput) summaryStartDateInput.value = firstDayOfMonth.toISOString().split('T')[0];
     if (summaryEndDateInput) summaryEndDateInput.value = lastDayOfMonth.toISOString().split('T')[0];
 
-    // Recalcula e renderiza o gráfico quando o modal é aberto ou filtros aplicados
+    // Recalcula e renderiza o gráfico e o calendário quando o modal é aberto ou filtros aplicados
     updateDetailedSummaryChart();
 
     // Exibe o modal
@@ -641,6 +645,11 @@ function updateDetailedSummaryChart() {
             if (myChart) myChart.destroy();
             if (myBarChart) myBarChart.destroy(); // Destrói o gráfico de barras também
             if (reportInfo) reportInfo.innerHTML = `<p class="text-red-600">Nenhum dado de membro encontrado para o relatório.</p>`;
+            // Destrói o calendário se não houver dados
+            if (calendar) {
+                calendar.destroy();
+                calendar = null;
+            }
             return;
         }
     } else {
@@ -681,12 +690,18 @@ function updateDetailedSummaryChart() {
 
     let membersWithPresenceCount = 0;
     let totalMembersInAnalysis = membersToAnalyze.length; // Este será o denominador para as porcentagens
+    let calendarEvents = []; // Array para armazenar os eventos do calendário
 
     if (totalMembersInAnalysis === 0) {
         if (detailedSummaryText) detailedSummaryText.innerHTML = `<p class="text-lg font-semibold text-gray-800 mb-2">Nenhum membro para analisar com os filtros aplicados.</p>`;
         if (myChart) myChart.destroy();
         if (myBarChart) myBarChart.destroy();
         if (reportInfo) reportInfo.innerHTML = `<p class="text-red-600">Nenhum dado de membro encontrado para o relatório.</p>`;
+        // Destrói o calendário se não houver dados
+        if (calendar) {
+            calendar.destroy();
+            calendar = null;
+        }
         return;
     }
 
@@ -707,6 +722,17 @@ function updateDetailedSummaryChart() {
             if (dateMatches) {
                 membersWithPresenceCount++;
                 hasPresenceInPeriod = true;
+
+                // Adiciona evento ao calendário para a última presença
+                calendarEvents.push({
+                    title: `${member.Nome} (Presente)`,
+                    start: lastPresenceDate.toISOString().split('T')[0], // Formato YYYY-MM-DD
+                    color: 'green',
+                    extendedProps: {
+                        member: member.Nome,
+                        time: presence.hora
+                    }
+                });
             }
         }
     }
@@ -933,6 +959,59 @@ function updateDetailedSummaryChart() {
     } else {
         console.error("Elemento 'summaryBarChartCanvas' não encontrado no DOM.");
     }
+
+    // Inicializa ou atualiza o calendário
+    renderCalendar(calendarEvents, startDate, endDate);
+}
+
+/**
+ * Inicializa e renderiza o FullCalendar com os eventos de presença.
+ * @param {Array<Object>} events - Array de objetos de evento para o calendário.
+ * @param {Date} startDate - Data de início do período selecionado.
+ * @param {Date} endDate - Data de fim do período selecionado.
+ */
+function renderCalendar(events, startDate, endDate) {
+    if (!calendarContainer) {
+        console.error("Elemento 'calendar-container' não encontrado no DOM.");
+        return;
+    }
+
+    // Destrói a instância anterior do calendário se existir
+    if (calendar) {
+        calendar.destroy();
+    }
+
+    // Define a data inicial do calendário para o início do período de filtro
+    let initialDate = startDate || new Date();
+
+    calendar = new FullCalendar.Calendar(calendarContainer, {
+        initialView: 'dayGridMonth', // Visualização inicial como mês
+        locale: 'pt-br', // Define o idioma para português do Brasil
+        headerToolbar: {
+            left: 'prev,next today',
+            center: 'title',
+            right: 'dayGridMonth,timeGridWeek,timeGridDay'
+        },
+        buttonText: { // Tradução dos botões
+            today: 'Hoje',
+            month: 'Mês',
+            week: 'Semana',
+            day: 'Dia',
+            list: 'Lista'
+        },
+        initialDate: initialDate, // Define a data inicial do calendário
+        events: events, // Adiciona os eventos gerados
+        eventDidMount: function(info) {
+            // Adiciona um tooltip simples para eventos
+            info.el.title = `${info.event.title} - ${info.event.extendedProps.time || ''}`;
+        },
+        // Ajustes para responsividade
+        height: 'auto', // Altura automática para se ajustar ao conteúdo
+        contentHeight: 'auto', // Altura do conteúdo do calendário
+        aspectRatio: 1.8, // Proporção para controle de altura em telas maiores
+    });
+
+    calendar.render();
 }
 
 /**
@@ -957,6 +1036,8 @@ async function handleDownloadPdf() {
 
     const originalDownloadPdfBtnDisplay = downloadPdfBtn.style.display;
     const originalSummaryFilterSectionDisplay = summaryFilterSection.style.display;
+    // NOVO: Armazena o display original do contêiner do calendário
+    const originalCalendarContainerDisplay = calendarContainer ? calendarContainer.style.display : '';
 
 
     // Aplica estilos para a captura do PDF: remove restrições de altura/overflow
@@ -971,6 +1052,11 @@ async function handleDownloadPdf() {
     // Oculta o botão de download de PDF e a seção de filtros antes de capturar
     downloadPdfBtn.style.display = 'none';
     summaryFilterSection.style.display = 'none';
+    // NOVO: Oculta o contêiner do calendário durante a captura para evitar problemas de layout ou renderização dupla
+    if (calendarContainer) {
+        calendarContainer.style.display = 'block'; // Garante que o calendário esteja visível para captura, mas o CSS de impressão irá ocultar a toolbar
+    }
+
 
     try {
         const canvas = await html2canvas(detailedSummaryContent, {
@@ -1019,6 +1105,10 @@ async function handleDownloadPdf() {
         if (summaryFilterSection) {
             summaryFilterSection.style.display = originalSummaryFilterSectionDisplay;
         }
+        // NOVO: Restaura o display original do contêiner do calendário
+        if (calendarContainer) {
+            calendarContainer.style.display = originalCalendarContainerDisplay;
+        }
         showGlobalLoading(false);
     }
 }
@@ -1060,6 +1150,11 @@ if (closeModalBtn) {
         if (detailedSummaryModal) {
             detailedSummaryModal.classList.add("hidden");
             detailedSummaryModal.classList.remove("flex");
+        }
+        // Destrói o calendário ao fechar o modal para liberar recursos
+        if (calendar) {
+            calendar.destroy();
+            calendar = null;
         }
     });
 }
