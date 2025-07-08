@@ -962,7 +962,7 @@ async function handleDownloadPdf() {
     // Aplica estilos para a captura do PDF: remove restrições de altura/overflow
     detailedSummaryContent.style.maxHeight = 'none';
     detailedSummaryContent.style.overflowY = 'visible';
-    detailedSummaryContent.style.padding = '20mm'; // Ajusta o padding para a impressão
+    detailedSummaryContent.style.padding = '8mm'; // Ajusta o padding para a impressão
     detailedSummaryContent.style.width = '100%'; // Garante que ocupe 100% da largura para captura
 
     detailedSummaryModal.style.maxHeight = 'none'; // Garante que o modal também não restrinja a altura
