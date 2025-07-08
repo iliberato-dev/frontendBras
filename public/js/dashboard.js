@@ -404,14 +404,15 @@ async function fetchAndDisplaySummary() {
             throw new Error(`Erro ao buscar presenças totais: ${responseTotal.statusText}`);
         }
         const rawDataTotal = await responseTotal.json();
-        // CORRIGIDO: O backend já está enviando os dados de contagem diretamente, sem a propriedade 'data'
-        const dataTotal = rawDataTotal || {}; 
-
-        console.log("Dados brutos de presenças totais (rawDataTotal):", rawDataTotal);
-        console.log("Dados de presenças totais (dataTotal):", dataTotal);
+        
+        // DEBUG: Logs para rastrear o valor de rawDataTotal e dataTotal
+        console.log("DEBUG: rawDataTotal APÓS .json():", rawDataTotal);
+        const dataTotal = rawDataTotal; // Mantido como rawDataTotal diretamente, sem || {}
+        console.log("DEBUG: dataTotal APÓS atribuição:", dataTotal);
 
         const filteredTotalCounts = dataTotal; // O backend já enviará os dados filtrados
         let totalFilteredPresences = Object.values(dataTotal).reduce((sum, count) => sum + count, 0);
+        console.log("DEBUG: totalFilteredPresences calculado:", totalFilteredPresences); // Novo log
 
         if (dashboardPresencasMes) {
             dashboardPresencasMes.textContent = totalFilteredPresences;
