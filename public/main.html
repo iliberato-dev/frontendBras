@@ -8,6 +8,57 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="css/style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        /* Estilos específicos para impressão */
+        @media print {
+            #downloadPdfBtn {
+                display: none !important; /* Oculta o botão de download ao imprimir */
+            }
+            .print-only-percentages {
+                display: block !important; /* Mostra as porcentagens apenas ao imprimir */
+                margin-top: 1rem; /* Espaçamento acima das porcentagens */
+            }
+            /* Ajusta o layout para impressão */
+            #detailedSummaryContent {
+                display: flex;
+                flex-direction: column; /* Padrão para coluna */
+                align-items: center;
+            }
+            #detailedSummaryText, .chart-and-percentages-container {
+                width: 100%; /* Ocupa a largura total por padrão */
+            }
+
+            /* Para layouts de impressão maiores (ex: A4 paisagem), tenta colocar gráfico e porcentagens lado a lado */
+            @page {
+                size: A4 landscape; /* Tenta layout paisagem para melhor ajuste do gráfico */
+            }
+            @media print and (min-width: 768px) { /* Aplica para impressões mais largas, como A4 paisagem */
+                #detailedSummaryContent {
+                    flex-direction: row; /* Organiza em linha */
+                    align-items: flex-start;
+                    justify-content: space-between;
+                }
+                #detailedSummaryText {
+                    width: 48%; /* Ocupa metade da largura */
+                    margin-right: 2%; /* Pequeno espaçamento */
+                }
+                .chart-and-percentages-container {
+                    width: 48%; /* Ocupa metade da largura */
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                }
+                #summaryChart {
+                    max-width: 100%; /* Garante que o gráfico se ajuste */
+                    height: auto;
+                }
+            }
+        }
+        /* Por padrão, oculta as porcentagens na visualização de tela */
+        .print-only-percentages {
+            display: none;
+        }
+    </style>
 </head>
 <body class="bg-gray-100 flex flex-col min-h-screen">
 
@@ -149,11 +200,15 @@
             <div id="detailedSummaryText" class="mb-6">
                 <!-- Conteúdo do resumo e estatísticas serão injetados aqui -->
             </div>
-            <div class="relative h-64 md:h-80 lg:h-96">
+            
+            <div class="chart-and-percentages-container relative h-64 md:h-80 lg:h-96">
                 <canvas id="summaryChart"></canvas>
+                <div id="printSummaryPercentages" class="print-only-percentages mt-4 text-gray-800 text-center">
+                    <!-- As porcentagens serão injetadas aqui pelo JS para impressão -->
+                </div>
             </div>
 
-            <!-- NOVO: Botão de Download PDF -->
+            <!-- Botão de Download PDF -->
             <button id="downloadPdfBtn" class="mt-6 w-full px-6 py-3 bg-red-600 text-white font-semibold rounded-lg shadow-md hover:bg-red-700 transition duration-300">
                 <i class="fas fa-file-pdf mr-2"></i> Download PDF
             </button>
