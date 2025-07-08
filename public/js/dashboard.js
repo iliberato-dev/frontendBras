@@ -4,6 +4,7 @@
 let allMembersData = [];
 let filteredMembers = [];
 let lastPresencesData = {}; // Variável para armazenar todas as últimas presenças
+let myChart = null; // Variável para armazenar a instância do Chart.js
 
 const filterNameInput = document.getElementById("filterName");
 const filterPeriodoSelect = document.getElementById("filterPeriodo");
@@ -32,6 +33,14 @@ const totalCountsList = document.getElementById("totalCountsList");
 // Referência ao elemento onde o nome do líder será exibido
 const loggedInLeaderNameElement = document.getElementById("loggedInLeaderName");
 
+// Elementos do novo modal de resumo detalhado
+const detailedSummaryModal = document.getElementById("detailedSummaryModal");
+const closeModalBtn = document.getElementById("closeModalBtn");
+const summaryChartCanvas = document.getElementById("summaryChart");
+const detailedSummaryText = document.getElementById("detailedSummaryText");
+const showDetailedSummaryBtn = document.getElementById("showDetailedSummaryBtn");
+
+
 // !!! IMPORTANTE: Substitua pela URL PÚBLICA do seu backend no Render !!!
 // Deve ser a mesma URL definida na variável de ambiente FRONTEND_URL no seu backend Render
 const BACKEND_URL = 'https://backendbras.onrender.com';
@@ -39,6 +48,11 @@ const BACKEND_URL = 'https://backendbras.onrender.com';
 // --- NOVA VARIÁVEL DE CONTROLE DE ESTADO DO DASHBOARD ---
 let isDashboardOpen = false;
 
+/**
+ * Exibe ou oculta o indicador de carregamento global.
+ * @param {boolean} show - Se true, mostra o indicador; se false, oculta.
+ * @param {string} message - Mensagem a ser exibida no indicador.
+ */
 function showGlobalLoading(show, message = "Carregando...") {
     if (globalLoadingIndicator && loadingMessageSpan) {
         loadingMessageSpan.textContent = message;
@@ -56,6 +70,11 @@ function showGlobalLoading(show, message = "Carregando...") {
     }
 }
 
+/**
+ * Exibe uma mensagem temporária na área de mensagens.
+ * @param {string} message - A mensagem a ser exibida.
+ * @param {string} type - O tipo da mensagem ('info', 'success', 'warning', 'error').
+ */
 function showMessage(message, type = "info") {
     // Evita mostrar mensagens de "Carregando..." na área de mensagem principal
     if (message.includes("Carregando dados dos membros...") ||
@@ -142,6 +161,9 @@ async function fetchMembers() {
     }
 }
 
+/**
+ * Aplica os filtros selecionados aos membros e atualiza a exibição dos cards.
+ */
 function applyFilters() {
     const nameFilter = filterNameInput.value.toLowerCase().trim();
     const periodoFilter = filterPeriodoSelect.value.toLowerCase().trim();
@@ -167,6 +189,10 @@ function applyFilters() {
     // ou pela função applyFiltersWithMessage/clearFilters. Evita chamadas duplicadas.
 }
 
+/**
+ * Exibe os cards dos membros no contêiner.
+ * @param {Array<Object>} members - A lista de membros a serem exibidos.
+ */
 function displayMembers(members) {
     const container = document.getElementById("membersCardsContainer");
     container.classList.remove("hidden");
@@ -325,6 +351,9 @@ function displayMembers(members) {
     });
 }
 
+/**
+ * Preenche as opções dos selects de filtro de Líder e GAPE.
+ */
 function fillSelectOptions() {
     const lideres = [...new Set(allMembersData.map((m) => m.Lider).filter(Boolean)),].sort();
     const gapes = [...new Set(allMembersData.map((m) => m.GAPE).filter(Boolean)),].sort();
@@ -333,6 +362,9 @@ function fillSelectOptions() {
     filterGapeInput.innerHTML = '<option value="">Todos</option>' + gapes.map((g) => `<option value="${g}">${g}</option>`).join("");
 }
 
+/**
+ * Limpa todos os filtros e aplica a exibição padrão.
+ */
 function clearFilters() {
     showMessage("Limpando filtros...", "info");
     filterNameInput.value = "";
@@ -346,6 +378,9 @@ function clearFilters() {
     }
 }
 
+/**
+ * Aplica os filtros e exibe uma mensagem de feedback.
+ */
 function applyFiltersWithMessage() {
     showMessage("Aplicando filtros...", "info");
     applyFilters();
@@ -355,6 +390,9 @@ function applyFiltersWithMessage() {
     }
 }
 
+/**
+ * Alterna a visibilidade do dashboard.
+ */
 function toggleDashboardVisibility() {
     isDashboardOpen = !isDashboardOpen;
 
@@ -382,6 +420,9 @@ function toggleDashboardVisibility() {
     }
 }
 
+/**
+ * Busca e exibe o resumo das presenças totais no dashboard.
+ */
 async function fetchAndDisplaySummary() {
     showGlobalLoading(true, "Carregando resumo do dashboard...");
     try {
@@ -460,6 +501,125 @@ async function fetchAndDisplaySummary() {
     }
 }
 
+/**
+ * Exibe o resumo detalhado em um modal, incluindo um gráfico de pizza.
+ */
+function showDetailedSummary() {
+    if (!detailedSummaryModal) {
+        console.error("Elemento detailedSummaryModal não encontrado.");
+        showMessage("Erro: Elemento de modal de resumo detalhado não encontrado.", "error");
+        return;
+    }
+
+    // Calcular estatísticas para o gráfico de pizza
+    const totalFilteredMembersCount = filteredMembers.length;
+    let membersWithPresenceCount = 0;
+
+    // Contar quantos membros filtrados têm pelo menos uma presença registrada no mês atual
+    // (baseado nos dados que o backend já forneceu para presencasTotal)
+    for (const member of filteredMembers) {
+        if (lastPresencesData[member.Nome]) {
+            // Verifica se a última presença é do mês atual
+            const today = new Date();
+            const lastPresenceDateStr = lastPresencesData[member.Nome].data; // Ex: "08/07/2025"
+            const [day, month, year] = lastPresenceDateStr.split('/').map(Number);
+            const lastPresenceDate = new Date(year, month - 1, day); // month - 1 porque o mês é 0-indexado
+
+            if (lastPresenceDate.getMonth() === today.getMonth() && lastPresenceDate.getFullYear() === today.getFullYear()) {
+                membersWithPresenceCount++;
+            }
+        }
+    }
+
+    const membersWithZeroPresenceCount = totalFilteredMembersCount - membersWithPresenceCount;
+
+    let presencePercentage = 0;
+    let absencePercentage = 0;
+
+    if (totalFilteredMembersCount > 0) {
+        presencePercentage = (membersWithPresenceCount / totalFilteredMembersCount) * 100;
+        absencePercentage = (membersWithZeroPresenceCount / totalFilteredMembersCount) * 100;
+    }
+
+    // Atualiza o texto do resumo detalhado
+    detailedSummaryText.innerHTML = `
+        <p class="text-lg font-semibold text-gray-800 mb-2">Estatísticas do Grupo Filtrado (Mês Atual):</p>
+        <ul class="list-disc list-inside text-gray-700">
+            <li>Total de Membros Filtrados: <span class="font-bold">${totalFilteredMembersCount}</span></li>
+            <li>Membros com Presença (neste mês): <span class="font-bold">${membersWithPresenceCount} (${presencePercentage.toFixed(1)}%)</span></li>
+            <li>Membros Sem Presença (neste mês): <span class="font-bold">${membersWithZeroPresenceCount} (${absencePercentage.toFixed(1)}%)</span></li>
+        </ul>
+        <p class="text-sm text-gray-600 mt-4">O gráfico abaixo mostra a proporção de membros com e sem presenças registradas no mês atual, dentro do grupo filtrado.</p>
+    `;
+
+    // Destruir gráfico anterior se existir
+    if (myChart) {
+        myChart.destroy();
+    }
+
+    // Renderizar gráfico de pizza
+    const ctx = summaryChartCanvas.getContext('2d');
+    myChart = new Chart(ctx, {
+        type: 'pie',
+        data: {
+            labels: ['Membros com Presença', 'Membros Sem Presença'],
+            datasets: [{
+                data: [presencePercentage.toFixed(1), absencePercentage.toFixed(1)],
+                backgroundColor: [
+                    'rgba(75, 192, 192, 0.8)', // Verde para presença
+                    'rgba(255, 99, 132, 0.8)'  // Vermelho para ausência
+                ],
+                borderColor: [
+                    'rgba(75, 192, 192, 1)',
+                    'rgba(255, 99, 132, 1)'
+                ],
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: {
+                    position: 'top',
+                    labels: {
+                        color: '#333', // Cor do texto da legenda
+                        font: {
+                            size: 14
+                        }
+                    }
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            let label = context.label || '';
+                            if (label) {
+                                label += ': ';
+                            }
+                            if (context.parsed !== null) {
+                                label += context.parsed + '%';
+                            }
+                            return label;
+                        }
+                    }
+                },
+                title: {
+                    display: true,
+                    text: 'Proporção de Presenças vs. Ausências (Mês Atual)',
+                    color: '#333',
+                    font: {
+                        size: 16
+                    }
+                }
+            }
+        }
+    });
+
+    // Exibir o modal
+    detailedSummaryModal.classList.remove("hidden");
+    detailedSummaryModal.classList.add("flex"); // Use flex para centralizar
+}
+
+
 // --- Event Listeners ---
 applyFiltersBtn.addEventListener("click", applyFiltersWithMessage);
 clearFiltersBtn.addEventListener("click", clearFilters);
@@ -484,10 +644,26 @@ if (toggleDashboardBtn) {
     toggleDashboardBtn.addEventListener("click", toggleDashboardVisibility);
 }
 
+// Event listener para abrir o modal de resumo detalhado
+if (showDetailedSummaryBtn) {
+    showDetailedSummaryBtn.addEventListener("click", showDetailedSummary);
+}
+
+// Event listener para fechar o modal
+if (closeModalBtn) {
+    closeModalBtn.addEventListener("click", () => {
+        detailedSummaryModal.classList.add("hidden");
+        detailedSummaryModal.classList.remove("flex");
+    });
+}
+
+
 // Carrega os membros ao carregar a página
 window.addEventListener("load", fetchMembers);
 
-// Função para exibir o nome do líder logado
+/**
+ * Exibe o nome do líder logado no elemento designado.
+ */
 function displayLoggedInLeaderName() {
     const leaderName = localStorage.getItem('loggedInLeaderName');
     if (loggedInLeaderNameElement) {
@@ -501,7 +677,9 @@ function displayLoggedInLeaderName() {
     }
 }
 
-// NOVO: Função para configurar a visualização para líderes
+/**
+ * Configura a visualização para líderes, pré-selecionando e desativando filtros.
+ */
 function setupLeaderView() {
     const leaderName = localStorage.getItem('loggedInLeaderName');
     if (leaderName && leaderName !== 'admin') { // Aplica restrições apenas se for um líder e não o admin
