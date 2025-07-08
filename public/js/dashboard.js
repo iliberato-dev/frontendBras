@@ -1,11 +1,11 @@
 // ------------------------------------------------------
-// Frontend (js/dashboard.js) - Versão Final com Gráficos Aprimorados
+// Frontend (js/dashboard.js) - Versão Final com Informações de Relatório no PDF
 // ------------------------------------------------------
 let allMembersData = [];
 let filteredMembers = [];
 let lastPresencesData = {}; // Variável para armazenar todas as últimas presenças
 let myChart = null; // Variável para armazenar a instância do Chart.js (Pizza)
-let myBarChart = null; // NOVO: Variável para armazenar a instância do Chart.js (Barras)
+let myBarChart = null; // Variável para armazenar a instância do Chart.js (Barras)
 
 const filterNameInput = document.getElementById("filterName");
 const filterPeriodoSelect = document.getElementById("filterPeriodo");
@@ -38,7 +38,7 @@ const loggedInLeaderNameElement = document.getElementById("loggedInLeaderName");
 const detailedSummaryModal = document.getElementById("detailedSummaryModal");
 const closeModalBtn = document.getElementById("closeModalBtn");
 const summaryChartCanvas = document.getElementById("summaryChart"); // Canvas para o gráfico de Pizza
-const summaryBarChartCanvas = document.getElementById("summaryBarChart"); // NOVO: Canvas para o gráfico de Barras
+const summaryBarChartCanvas = document.getElementById("summaryBarChart"); // Canvas para o gráfico de Barras
 const detailedSummaryText = document.getElementById("detailedSummaryText");
 const showDetailedSummaryBtn = document.getElementById("showDetailedSummaryBtn");
 const detailedSummaryContent = document.getElementById("detailedSummaryContent"); // Referência ao conteúdo do modal para PDF
@@ -51,6 +51,9 @@ const applySummaryFiltersBtn = document.getElementById("applySummaryFiltersBtn")
 
 // Botão de Download PDF
 const downloadPdfBtn = document.getElementById("downloadPdfBtn");
+
+// Elemento para exibir informações do relatório no PDF
+const reportInfo = document.getElementById("reportInfo");
 
 
 // !!! IMPORTANTE: Substitua pela URL PÚBLICA do seu backend no Render !!!
@@ -618,17 +621,44 @@ function updateDetailedSummaryChart() {
     let membersToAnalyze = filteredMembers;
     const selectedMemberName = summaryMemberSelect ? summaryMemberSelect.value.trim() : '';
     let summaryTitle = "Estatísticas do Grupo Filtrado";
+    let reportEntityName = "o grupo filtrado";
+    let reportLeader = "N/A";
+    let reportGape = "N/A";
 
     if (selectedMemberName !== "") {
         membersToAnalyze = filteredMembers.filter(member => String(member.Nome || '').trim() === selectedMemberName);
         summaryTitle = `Estatísticas para o Membro: ${selectedMemberName}`;
+        reportEntityName = selectedMemberName;
+        if (membersToAnalyze.length > 0) {
+            reportLeader = membersToAnalyze[0].Lider || "N/A";
+            reportGape = membersToAnalyze[0].GAPE || "N/A";
+        }
         if (membersToAnalyze.length === 0) {
             if (detailedSummaryText) detailedSummaryText.innerHTML = `<p class="text-lg font-semibold text-gray-800 mb-2">Nenhum dado para o membro selecionado com os filtros atuais.</p>`;
             if (myChart) myChart.destroy();
             if (myBarChart) myBarChart.destroy(); // Destrói o gráfico de barras também
+            if (reportInfo) reportInfo.innerHTML = `<p class="text-red-600">Nenhum dado de membro encontrado para o relatório.</p>`;
             return;
         }
+    } else {
+        // Para o caso de "Todos os Membros Filtrados"
+        const currentLiderFilter = filterLiderInput ? filterLiderInput.value.trim() : 'Todos';
+        const currentGapeFilter = filterGapeInput ? filterGapeInput.value.trim() : 'Todos';
+        
+        reportLeader = currentLiderFilter !== "" ? currentLiderFilter : "Todos";
+        reportGape = currentGapeFilter !== "" ? currentGapeFilter : "Todos";
+
+        if (reportLeader !== "Todos" && reportGape !== "Todos") {
+            reportEntityName = `o grupo do líder ${reportLeader} e GAPE ${reportGape}`;
+        } else if (reportLeader !== "Todos") {
+            reportEntityName = `o grupo do líder ${reportLeader}`;
+        } else if (reportGape !== "Todos") {
+            reportEntityName = `o grupo GAPE ${reportGape}`;
+        } else {
+            reportEntityName = `o grupo filtrado`;
+        }
     }
+
 
     // Obtém os filtros de intervalo de datas
     const startDateStr = summaryStartDateInput ? summaryStartDateInput.value : '';
@@ -653,6 +683,7 @@ function updateDetailedSummaryChart() {
         if (detailedSummaryText) detailedSummaryText.innerHTML = `<p class="text-lg font-semibold text-gray-800 mb-2">Nenhum membro para analisar com os filtros aplicados.</p>`;
         if (myChart) myChart.destroy();
         if (myBarChart) myBarChart.destroy();
+        if (reportInfo) reportInfo.innerHTML = `<p class="text-red-600">Nenhum dado de membro encontrado para o relatório.</p>`;
         return;
     }
 
@@ -701,18 +732,28 @@ function updateDetailedSummaryChart() {
         dateRangeDisplay = `Até: ${formattedEndDate}`;
     }
 
+    // Atualiza o contêiner de informações do relatório
+    if (reportInfo) {
+        const todayFormatted = new Date().toLocaleDateString('pt-BR');
+        reportInfo.innerHTML = `
+            <p class="text-md font-semibold mb-1">Relatório Gerado em: <span class="font-normal">${todayFormatted}</span></p>
+            <p class="text-md font-semibold mb-1">Análise para: <span class="font-normal">${selectedMemberName || 'Grupo de Membros'}</span></p>
+            <p class="text-md font-semibold mb-1">Período de Análise: <span class="font-normal">${dateRangeDisplay}</span></p>
+            <p class="text-md font-semibold mb-1">Líder: <span class="font-normal">${reportLeader}</span></p>
+            <p class="text-md font-semibold">GAPE: <span class="font-normal">${reportGape}</span></p>
+        `;
+    }
+
     // Atualiza o texto do resumo detalhado
     if (detailedSummaryText) {
-        const entityName = selectedMemberName ? selectedMemberName : 'o grupo filtrado';
         detailedSummaryText.innerHTML = `
             <h3 class="text-lg font-semibold text-gray-800 mb-2">${summaryTitle}</h3>
-            <p class="text-md text-gray-700 mb-4">${dateRangeDisplay}</p>
             <ul class="list-disc list-inside text-gray-700 space-y-1">
                 <li>Total de Membros Analisados: <span class="font-bold">${totalMembersInAnalysis}</span></li>
                 <li>Membros com Presença: <span class="font-bold">${membersWithPresenceCount} (${presencePercentage.toFixed(1)}%)</span></li>
                 <li>Membros Sem Presença: <span class="font-bold">${membersWithZeroPresenceCount} (${absencePercentage.toFixed(1)}%)</span></li>
             </ul>
-            <p class="text-sm text-gray-600 mt-4">As estatísticas e gráficos abaixo ilustram a proporção de membros com e sem presenças registradas no período selecionado para ${entityName}. "Presença" significa ter ao menos um registro no período.</p>
+            <p class="text-sm text-gray-600 mt-4">As estatísticas e gráficos abaixo ilustram a proporção de membros com e sem presenças registradas no período selecionado. "Presença" significa ter ao menos um registro no período.</p>
         `;
     }
 
@@ -743,6 +784,10 @@ function updateDetailedSummaryChart() {
             },
             options: {
                 responsive: true,
+                animation: { // Adicionado animação para o gráfico de pizza
+                    duration: 1000, // 1 segundo
+                    easing: 'easeOutQuart' // Função de easing suave
+                },
                 plugins: {
                     legend: {
                         position: 'top',
@@ -823,6 +868,10 @@ function updateDetailedSummaryChart() {
             options: {
                 indexAxis: 'y', // Define o eixo Y como o eixo de categorias (barras horizontais)
                 responsive: true,
+                animation: { // Adicionado animação para o gráfico de barras
+                    duration: 1000, // 1 segundo
+                    easing: 'easeOutQuart' // Função de easing suave
+                },
                 plugins: {
                     legend: {
                         display: false // Não exibe a legenda para este gráfico
@@ -887,13 +936,16 @@ function updateDetailedSummaryChart() {
  * Lida com o download do resumo detalhado como PDF.
  */
 async function handleDownloadPdf() {
-    if (!detailedSummaryContent) {
-        showMessage("Erro: Conteúdo do resumo detalhado não encontrado para PDF.", "error");
-        console.error("Elemento 'detailedSummaryContent' não encontrado no DOM.");
+    if (!detailedSummaryContent || !downloadPdfBtn) {
+        showMessage("Erro: Conteúdo do resumo detalhado ou botão de PDF não encontrado para PDF.", "error");
+        console.error("Elementos necessários para PDF não encontrados.");
         return;
     }
 
     showGlobalLoading(true, "Gerando PDF...");
+
+    // Oculta o botão de download de PDF antes de capturar
+    downloadPdfBtn.style.display = 'none';
 
     try {
         // html2canvas para capturar o conteúdo do modal
@@ -928,6 +980,10 @@ async function handleDownloadPdf() {
         console.error("Erro ao gerar PDF:", error);
         showMessage(`Erro ao gerar PDF: ${error.message}`, "error");
     } finally {
+        // Reexibe o botão de download de PDF após a tentativa de geração
+        if (downloadPdfBtn) {
+            downloadPdfBtn.style.display = 'block';
+        }
         showGlobalLoading(false);
     }
 }
@@ -987,7 +1043,7 @@ if (summaryMemberSelect) {
     summaryMemberSelect.addEventListener("change", updateDetailedSummaryChart);
 }
 
-// NOVO: Event listener para o botão de Download PDF
+// Event listener para o botão de Download PDF
 if (downloadPdfBtn) {
     downloadPdfBtn.addEventListener("click", handleDownloadPdf);
 }
