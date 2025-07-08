@@ -66,6 +66,16 @@ document.addEventListener("DOMContentLoaded", () => {
             if (response.ok && data.success) {
                 // --- SUCESSO NO LOGIN ---
                 showMessage("Login bem-sucedido! Redirecionando...", "success");
+                
+                // NOVO: Armazena o nome do líder no localStorage
+                if (data.leaderName) {
+                    localStorage.setItem('loggedInLeaderName', data.leaderName);
+                    console.log(`Nome do líder armazenado: ${data.leaderName}`);
+                } else {
+                    localStorage.removeItem('loggedInLeaderName'); // Limpa se não houver nome
+                    console.log("Nome do líder não recebido no login.");
+                }
+
                 setTimeout(() => {
                     // Redireciona para a página principal do frontend
                     window.location.href = "/main.html"; // Ajuste o caminho se necessário
@@ -74,11 +84,13 @@ document.addEventListener("DOMContentLoaded", () => {
                 // --- FALHA NO LOGIN (RESPOSTA DO BACKEND) ---
                 // A mensagem de erro vem do backend (data.message)
                 showMessage(data.message || "Erro desconhecido no login.", "error");
+                localStorage.removeItem('loggedInLeaderName'); // Garante que o nome do líder seja removido em caso de falha
             }
         } catch (error) {
             // --- ERRO DE CONEXÃO OU OUTRO ERRO INESPERADO ---
             console.error("Erro na requisição de login:", error);
             showMessage("Não foi possível conectar ao servidor. Verifique sua conexão e a URL do backend.", "error");
+            localStorage.removeItem('loggedInLeaderName'); // Garante que o nome do líder seja removido em caso de erro
         } finally {
             // --- FINALIZA O CARREGAMENTO ---
             // Reabilita o botão de login, independentemente do resultado
