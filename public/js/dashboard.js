@@ -29,7 +29,7 @@ const dashboardLider = document.getElementById("dashboardLider");
 const dashboardGape = document.getElementById("dashboardGape");
 const totalCountsList = document.getElementById("totalCountsList");
 
-// NOVO: Referência ao elemento onde o nome do líder será exibido
+// Referência ao elemento onde o nome do líder será exibido
 const loggedInLeaderNameElement = document.getElementById("loggedInLeaderName");
 
 // !!! IMPORTANTE: Substitua pela URL PÚBLICA do seu backend no Render !!!
@@ -138,6 +138,7 @@ async function fetchMembers() {
         membersCardsContainer.innerHTML = `<div class="col-span-full text-center py-4 text-red-600">Falha ao carregar dados. Verifique o console.</div>`;
     } finally {
         showGlobalLoading(false);
+        setupLeaderView(); // NOVO: Chama a função para configurar a visualização do líder
     }
 }
 
@@ -484,7 +485,7 @@ if (toggleDashboardBtn) {
 // Carrega os membros ao carregar a página
 window.addEventListener("load", fetchMembers);
 
-// NOVO: Função para exibir o nome do líder logado
+// Função para exibir o nome do líder logado
 function displayLoggedInLeaderName() {
     const leaderName = localStorage.getItem('loggedInLeaderName');
     if (loggedInLeaderNameElement) {
@@ -498,5 +499,34 @@ function displayLoggedInLeaderName() {
     }
 }
 
-// NOVO: Chama a função para exibir o nome do líder quando o DOM estiver completamente carregado
+// NOVO: Função para configurar a visualização para líderes
+function setupLeaderView() {
+    const leaderName = localStorage.getItem('loggedInLeaderName');
+    if (leaderName && leaderName !== 'admin') { // Aplica restrições apenas se for um líder e não o admin
+        // Pré-seleciona o filtro de líder
+        filterLiderInput.value = leaderName;
+        // Desativa os campos de filtro de líder e GAPE
+        filterLiderInput.disabled = true;
+        filterGapeInput.disabled = true;
+        
+        // Aplica os filtros imediatamente para mostrar apenas os membros do líder
+        applyFilters(); 
+        
+        // Se o dashboard estiver aberto, atualiza o resumo com os filtros aplicados
+        if (isDashboardOpen) {
+            fetchAndDisplaySummary();
+        }
+        
+        // Opcional: Você pode querer desativar o botão de limpar filtros também,
+        // ou ajustar sua funcionalidade para apenas limpar o filtro de nome.
+        // clearFiltersBtn.disabled = true; 
+    }
+}
+
+
+// Chama a função para exibir o nome do líder quando o DOM estiver completamente carregado
 document.addEventListener("DOMContentLoaded", displayLoggedInLeaderName);
+
+// Chama a função para configurar a visualização do líder após o carregamento dos membros
+// Isso garante que as opções de filtro já estejam populadas
+// A chamada foi movida para o bloco 'finally' de fetchMembers
