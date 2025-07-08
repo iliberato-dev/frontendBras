@@ -259,11 +259,7 @@ function displayMembers(members) {
         card.style.animationDelay = `${idx * 0.04}s`;
         card.innerHTML = `
             <div class="font-bold text-lg text-gray-800">${member.Nome || "N/A"}</div>
-            <div class="text-sm text-gray-600"><b>Período:</b> ${member.Periodo || "N/A"}
-                ${member.Periodo && member.Periodo.toLowerCase() === 'manhã' ? '<i class="fas fa-sun ml-1 text-yellow-500"></i>' : ''}
-                ${member.Periodo && member.Periodo.toLowerCase() === 'tarde' ? '<i class="fas fa-cloud-sun ml-1 text-orange-500"></i>' : ''}
-                ${member.Periodo && member.Periodo.toLowerCase() === 'noite' ? '<i class="fas fa-moon ml-1 text-gray-700"></i>' : ''}
-            </div>
+            <div class="text-sm text-gray-600"><b>Período:</b> ${member.Periodo || "N/A"}</div>
             <div class="text-sm text-gray-600"><b>Líder:</b> ${member.Lider || "N/A"}</div>
             <div class="text-sm text-gray-600"><b>GAPE:</b> ${member.GAPE || "N/A"}</div>
             <label class="flex items-center gap-2 mt-2">
@@ -284,7 +280,8 @@ function displayMembers(members) {
             infoDiv.classList.remove("text-green-700", "text-red-600", "text-yellow-700", "text-blue-700", "text-gray-500");
             infoDiv.classList.add("block");
 
-            const presence = lastPresencesData?.[member.Nome]; // Use optional chaining
+            const presence = lastPresencesData[member.Nome];
+
             if (presence && presence.data && presence.hora) {
                 infoDiv.textContent = `Últ. presença: ${presence.data} às ${presence.hora}`;
                 infoDiv.classList.add("text-green-700");
@@ -357,7 +354,7 @@ function displayMembers(members) {
                     card.classList.add('animate-pulse-green');
                     setTimeout(() => card.classList.remove('animate-pulse-green'), 1000);
 
-                    lastPresencesData?.[member.Nome] = responseData.lastPresence || { data: `${dia}/${mes}/${ano}`, hora: `${hora}:${min}:${seg}` }; // Use optional chaining
+                    lastPresencesData[member.Nome] = responseData.lastPresence || { data: `${dia}/${mes}/${ano}`, hora: `${hora}:${min}:${seg}` };
                     updatePresenceStatus();
                     if (isDashboardOpen) { // Atualiza o dashboard após registrar uma presença
                         fetchAndDisplaySummary();
@@ -373,7 +370,7 @@ function displayMembers(members) {
                     setTimeout(() => card.classList.remove('animate-shake-red'), 1000);
 
                     if (responseData.lastPresence) {
-                        lastPresencesData?.[member.Nome] = responseData.lastPresence; // Use optional chaining
+                        lastPresencesData[member.Nome] = responseData.lastPresence;
                     }
                     updatePresenceStatus();
                 } else {
@@ -776,7 +773,7 @@ async function updateDetailedSummaryChart() {
         renderBarChart(presencesByMember);
 
         // Atualiza o texto do resumo
-        updateSummaryText(totalPresencesCount, membersPresentInPeriod.size, totalExpectedMembers, selectedMemberName, presencesByMember);
+        updateSummaryText(totalPresencesCount, membersPresentInPeriod.size, totalExpectedPresences, selectedMemberName, presencesByMember);
 
         // Atualiza as informações do relatório (para PDF)
         updateReportInfo(summaryTitle, reportEntityName, reportLeader, reportGape, startDate, endDate);
@@ -1072,7 +1069,7 @@ function renderCalendar(detailedData, datesWithPresences) {
     });
 
     calendar = new FullCalendar.Calendar(calendarContainer, {
-        plugins: [FullCalendar.dayGridPlugin], // Usar o plugin corretamente
+        plugins: ['dayGrid'], // Ou 'dayGridPlugin' se estiver usando módulos
         initialView: 'dayGridMonth',
         locale: 'pt-br', // Define o idioma para português
         events: events,
