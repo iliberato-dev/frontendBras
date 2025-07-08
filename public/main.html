@@ -19,30 +19,46 @@
                 display: flex;
                 flex-direction: column; /* Padrão para coluna */
                 align-items: center;
-                padding: 20mm; /* Aumenta o padding para dar mais margem na impressão */
+                padding: 15mm; /* Reduz o padding geral para economizar espaço */
                 max-height: none !important; /* Remove limite de altura para capturar todo o conteúdo */
                 overflow: visible !important; /* Permite que o conteúdo seja visível, não rolado */
                 width: 100%; /* Garante que o conteúdo ocupe a largura total disponível na impressão */
             }
             #reportInfo {
-                margin-bottom: 25mm; /* Aumenta a área acima dos gráficos */
-                padding-top: 15mm; /* Mais padding no topo para o reportInfo */
-                padding-bottom: 15mm; /* Mais padding na base para o reportInfo */
+                margin-bottom: 15mm; /* Reduz a margem abaixo do reportInfo */
+                padding-top: 10mm; /* Reduz o padding no topo para o reportInfo */
+                padding-bottom: 10mm; /* Reduz o padding na base para o reportInfo */
                 width: 100%;
+                font-size: 0.9em; /* Diminui um pouco a fonte do reportInfo */
+            }
+            #reportInfo p {
+                margin-bottom: 0.5mm; /* Ajusta a margem entre os parágrafos do reportInfo */
             }
             #detailedSummaryText {
-                margin-bottom: 20mm; /* Aumenta a margem abaixo do texto de resumo */
+                margin-bottom: 15mm; /* Reduz a margem abaixo do texto de resumo */
                 width: 100%;
+                font-size: 0.9em; /* Diminui um pouco a fonte do texto de resumo */
             }
+            #detailedSummaryText h3 {
+                font-size: 1.1em; /* Ajusta o tamanho da fonte do título do resumo */
+            }
+            #detailedSummaryText ul {
+                font-size: 0.9em; /* Ajusta o tamanho da fonte da lista no resumo */
+            }
+            #detailedSummaryText p {
+                font-size: 0.8em; /* Ajusta o tamanho da fonte do parágrafo explicativo */
+            }
+
             .chart-container-wrapper {
                 display: flex;
                 flex-direction: column; /* Gráficos em coluna por padrão na impressão */
                 width: 100%;
-                gap: 1.5rem; /* Aumenta o espaçamento entre os gráficos */
+                gap: 1rem; /* Reduz o espaçamento entre os gráficos */
             }
             .chart-container {
                 width: 100% !important; /* Ocupa a largura total na impressão */
                 height: auto; /* Altura automática */
+                max-height: 120mm; /* Limita a altura máxima dos gráficos para evitar que ocupem muito espaço */
             }
 
             /* Para layouts de impressão maiores (ex: A4 paisagem), tenta colocar gráficos lado a lado */
@@ -58,6 +74,7 @@
                 .chart-container {
                     width: 48% !important; /* Ocupa metade da largura */
                     height: auto;
+                    max-height: 100mm; /* Reduz ainda mais a altura máxima para desktop paisagem */
                 }
             }
         }
