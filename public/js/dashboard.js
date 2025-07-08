@@ -13,7 +13,7 @@ const filterGapeInput = document.getElementById("filterGape");
 const applyFiltersBtn = document.getElementById("applyFiltersBtn");
 const clearFiltersBtn = document.getElementById("clearFiltersBtn");
 const membersCardsContainer = document.getElementById("membersCardsContainer");
-const messageArea = document.getElementById("messageArea");
+const messageArea = document.getElementById("messageArea"); // messageArea is defined here
 const globalLoadingIndicator = document.getElementById("globalLoadingIndicator");
 const loadingMessageSpan = document.getElementById("loadingMessage");
 
@@ -82,6 +82,12 @@ function showGlobalLoading(show, message = "Carregando...") {
  * @param {string} type - O tipo da mensagem ('info', 'success', 'warning', 'error').
  */
 function showMessage(message, type = "info") {
+    // Adiciona verificação para garantir que messageArea não é nulo
+    if (!messageArea) {
+        console.error("Erro: Elemento 'messageArea' não encontrado no DOM. Não foi possível exibir a mensagem:", message);
+        return; // Sai da função para evitar o TypeError
+    }
+
     // Evita mostrar mensagens de "Carregando..." na área de mensagem principal
     if (message.includes("Carregando dados dos membros...") ||
         message.includes("Carregando resumo do dashboard...") ||
@@ -183,10 +189,10 @@ async function fetchMembers() {
  * Aplica os filtros selecionados aos membros e atualiza a exibição dos cards.
  */
 function applyFilters() {
-    const nameFilter = filterNameInput.value.toLowerCase().trim();
-    const periodoFilter = filterPeriodoSelect.value.toLowerCase().trim();
-    const liderFilter = filterLiderInput.value.toLowerCase().trim();
-    const gapeFilter = filterGapeInput.value.toLowerCase().trim();
+    const nameFilter = filterNameInput ? filterNameInput.value.toLowerCase().trim() : '';
+    const periodoFilter = filterPeriodoSelect ? filterPeriodoSelect.value.toLowerCase().trim() : '';
+    const liderFilter = filterLiderInput ? filterLiderInput.value.toLowerCase().trim() : '';
+    const gapeFilter = filterGapeInput ? filterGapeInput.value.toLowerCase().trim() : '';
 
     filteredMembers = allMembersData.filter((member) => {
         const memberName = String(member.Nome || "").toLowerCase();
@@ -251,6 +257,7 @@ function displayMembers(members) {
         const confirmBtn = card.querySelector(".btn-confirm-presence");
 
         const updatePresenceStatus = () => {
+            if (!infoDiv) return; // Add null check for infoDiv
             infoDiv.classList.remove("text-green-700", "text-red-600", "text-yellow-700", "text-blue-700", "text-gray-500");
             infoDiv.classList.add("block");
 
@@ -269,6 +276,7 @@ function displayMembers(members) {
         updatePresenceStatus();
 
         checkbox.addEventListener("change", function () {
+            if (!confirmBtn || !infoDiv) return; // Add null checks
             if (this.checked) {
                 confirmBtn.classList.remove("hidden");
                 infoDiv.textContent = "Clique em confirmar para registrar.";
@@ -280,11 +288,13 @@ function displayMembers(members) {
 
                 confirmBtn.disabled = false;
                 checkbox.disabled = false;
-                card.classList.remove('animate-pulse-green', 'animate-shake-red');
+                if (card) card.classList.remove('animate-pulse-green', 'animate-shake-red');
             }
         });
 
         confirmBtn.addEventListener("click", async function () {
+            if (!infoDiv || !confirmBtn || !checkbox || !card) return; // Add null checks
+
             const now = new Date();
             const dia = String(now.getDate()).padStart(2, "0");
             const mes = String(now.getMonth() + 1).padStart(2, "0");
@@ -562,7 +572,7 @@ function showDetailedSummary() {
     const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
     const lastDayOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
 
-    // Format dates to YYYY-MM-DD for input type="date"
+    // Format dates to ISO-MM-DD for input type="date"
     if (summaryStartDateInput) summaryStartDateInput.value = firstDayOfMonth.toISOString().split('T')[0];
     if (summaryEndDateInput) summaryEndDateInput.value = lastDayOfMonth.toISOString().split('T')[0];
 
