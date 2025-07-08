@@ -11,71 +11,74 @@
     <style>
         /* Estilos específicos para impressão */
         @media print {
+            /* Reset de margens e paddings do corpo para impressão */
+            body {
+                margin: 0;
+                padding: 0;
+                box-sizing: border-box; /* Garante que padding e border sejam incluídos no cálculo do tamanho */
+            }
+
             #downloadPdfBtn, #summaryFilterSection {
                 display: none !important; /* Oculta o botão de download e a seção de filtros ao imprimir */
             }
             /* Ajusta o layout para impressão */
             #detailedSummaryContent {
                 display: flex;
-                flex-direction: column; /* Padrão para coluna */
+                flex-direction: column; /* Conteúdo principal em coluna */
                 align-items: center;
-                padding: 15mm; /* Reduz o padding geral para economizar espaço */
+                padding: 8mm; /* Reduz o padding geral para economizar mais espaço */
                 max-height: none !important; /* Remove limite de altura para capturar todo o conteúdo */
                 overflow: visible !important; /* Permite que o conteúdo seja visível, não rolado */
                 width: 100%; /* Garante que o conteúdo ocupe a largura total disponível na impressão */
+                box-sizing: border-box; /* Garante que padding e border sejam incluídos no cálculo do tamanho */
             }
             #reportInfo {
-                margin-bottom: 15mm; /* Reduz a margem abaixo do reportInfo */
-                padding-top: 10mm; /* Reduz o padding no topo para o reportInfo */
-                padding-bottom: 10mm; /* Reduz o padding na base para o reportInfo */
+                margin-bottom: 8mm; /* Reduz a margem abaixo do reportInfo */
+                padding-top: 6mm; /* Ajusta o padding no topo para o reportInfo */
+                padding-bottom: 6mm; /* Ajusta o padding na base para o reportInfo */
                 width: 100%;
-                font-size: 0.9em; /* Diminui um pouco a fonte do reportInfo */
+                font-size: 0.8em; /* Diminui um pouco mais a fonte do reportInfo */
+                box-sizing: border-box;
             }
             #reportInfo p {
-                margin-bottom: 0.5mm; /* Ajusta a margem entre os parágrafos do reportInfo */
+                margin-bottom: 0.2mm; /* Ajusta a margem entre os parágrafos do reportInfo */
             }
             #detailedSummaryText {
-                margin-bottom: 15mm; /* Reduz a margem abaixo do texto de resumo */
+                margin-bottom: 8mm; /* Reduz a margem abaixo do texto de resumo */
                 width: 100%;
-                font-size: 0.9em; /* Diminui um pouco a fonte do texto de resumo */
+                font-size: 0.8em; /* Diminui um pouco mais a fonte do texto de resumo */
+                box-sizing: border-box;
             }
             #detailedSummaryText h3 {
-                font-size: 1.1em; /* Ajusta o tamanho da fonte do título do resumo */
+                font-size: 0.95em; /* Ajusta o tamanho da fonte do título do resumo */
             }
             #detailedSummaryText ul {
-                font-size: 0.9em; /* Ajusta o tamanho da fonte da lista no resumo */
+                font-size: 0.8em; /* Ajusta o tamanho da fonte da lista no resumo */
             }
             #detailedSummaryText p {
-                font-size: 0.8em; /* Ajusta o tamanho da fonte do parágrafo explicativo */
+                font-size: 0.7em; /* Ajusta o tamanho da fonte do parágrafo explicativo */
             }
 
             .chart-container-wrapper {
                 display: flex;
-                flex-direction: column; /* Gráficos em coluna por padrão na impressão */
+                flex-direction: row; /* Força gráficos lado a lado para todas as impressões */
+                justify-content: space-around; /* Espaça os gráficos */
+                align-items: flex-start;
                 width: 100%;
-                gap: 1rem; /* Reduz o espaçamento entre os gráficos */
+                gap: 0.3rem; /* Reduz ainda mais o espaçamento entre os gráficos */
+                box-sizing: border-box;
             }
             .chart-container {
-                width: 100% !important; /* Ocupa a largura total na impressão */
+                width: 49% !important; /* Ocupa quase metade da largura para caber lado a lado */
                 height: auto; /* Altura automática */
-                max-height: 120mm; /* Limita a altura máxima dos gráficos para evitar que ocupem muito espaço */
+                max-height: 80mm; /* Limita a altura máxima dos gráficos para caber na página */
+                box-sizing: border-box;
             }
 
-            /* Para layouts de impressão maiores (ex: A4 paisagem), tenta colocar gráficos lado a lado */
+            /* Garante que a página seja paisagem para melhor ajuste dos gráficos lado a lado */
             @page {
-                size: A4 landscape; /* Tenta layout paisagem para melhor ajuste dos gráficos */
-            }
-            @media print and (min-width: 768px) { /* Aplica para impressões mais largas, como A4 paisagem */
-                .chart-container-wrapper {
-                    flex-direction: row; /* Organiza em linha */
-                    justify-content: space-around; /* Espaça os gráficos */
-                    align-items: flex-start;
-                }
-                .chart-container {
-                    width: 48% !important; /* Ocupa metade da largura */
-                    height: auto;
-                    max-height: 100mm; /* Reduz ainda mais a altura máxima para desktop paisagem */
-                }
+                size: A4 landscape;
+                margin: 5mm; /* Reduz a margem da página para maximizar o espaço do conteúdo */
             }
         }
     </style>
@@ -166,7 +169,6 @@
                         <p id="dashboardPeriodo" class="text-xl font-bold text-blue-400">N/A</p>
                     </div>
                     <div class="bg-gray-700 p-4 rounded-md shadow-inner">
-                        <p class="text-sm text-gray-300">Líder Selecionado</p>
                         <p id="dashboardLider" class="text-xl font-bold text-purple-400">N/A</p>
                     </div>
                     <div class="bg-gray-700 p-4 rounded-md shadow-inner">
