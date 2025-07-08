@@ -55,7 +55,7 @@ const downloadPdfBtn = document.getElementById("downloadPdfBtn");
 // Elemento para exibir informações do relatório no PDF
 const reportInfo = document.getElementById("reportInfo");
 
-// NOVO: Elemento da seção de filtros dentro do modal de resumo
+// Elemento da seção de filtros dentro do modal de resumo
 const summaryFilterSection = document.getElementById("summaryFilterSection");
 
 
@@ -939,24 +939,44 @@ function updateDetailedSummaryChart() {
  * Lida com o download do resumo detalhado como PDF.
  */
 async function handleDownloadPdf() {
-    if (!detailedSummaryContent || !downloadPdfBtn || !summaryFilterSection) {
-        showMessage("Erro: Conteúdo do resumo detalhado, botão de PDF ou seção de filtros não encontrados para PDF.", "error");
+    if (!detailedSummaryContent || !downloadPdfBtn || !summaryFilterSection || !detailedSummaryModal) {
+        showMessage("Erro: Elementos necessários para PDF não encontrados.", "error");
         console.error("Elementos necessários para PDF não encontrados.");
         return;
     }
 
     showGlobalLoading(true, "Gerando PDF...");
 
+    // Armazena os estilos originais dos elementos
+    const originalDetailedSummaryContentMaxHeight = detailedSummaryContent.style.maxHeight;
+    const originalDetailedSummaryContentOverflowY = detailedSummaryContent.style.overflowY;
+    const originalDetailedSummaryContentPadding = detailedSummaryContent.style.padding;
+    const originalDetailedSummaryContentWidth = detailedSummaryContent.style.width;
+
+    const originalDetailedSummaryModalMaxHeight = detailedSummaryModal.style.maxHeight;
+
+    const originalDownloadPdfBtnDisplay = downloadPdfBtn.style.display;
+    const originalSummaryFilterSectionDisplay = summaryFilterSection.style.display;
+
+
+    // Aplica estilos para a captura do PDF: remove restrições de altura/overflow
+    detailedSummaryContent.style.maxHeight = 'none';
+    detailedSummaryContent.style.overflowY = 'visible';
+    detailedSummaryContent.style.padding = '20mm'; // Ajusta o padding para a impressão
+    detailedSummaryContent.style.width = '100%'; // Garante que ocupe 100% da largura para captura
+
+    detailedSummaryModal.style.maxHeight = 'none'; // Garante que o modal também não restrinja a altura
+
+
     // Oculta o botão de download de PDF e a seção de filtros antes de capturar
     downloadPdfBtn.style.display = 'none';
     summaryFilterSection.style.display = 'none';
 
     try {
-        // html2canvas para capturar o conteúdo do modal
         const canvas = await html2canvas(detailedSummaryContent, {
             scale: 2, // Aumenta a escala para melhor qualidade no PDF
             useCORS: true, // Importante se houver imagens de outras origens
-            logging: true // Ativa o log para depuração
+            logging: true, // Ativa o log para depuração
         });
 
         const imgData = canvas.toDataURL('image/png');
@@ -984,12 +1004,20 @@ async function handleDownloadPdf() {
         console.error("Erro ao gerar PDF:", error);
         showMessage(`Erro ao gerar PDF: ${error.message}`, "error");
     } finally {
-        // Reexibe o botão de download de PDF e a seção de filtros após a tentativa de geração
+        // Restaura os estilos originais
+        detailedSummaryContent.style.maxHeight = originalDetailedSummaryContentMaxHeight;
+        detailedSummaryContent.style.overflowY = originalDetailedSummaryContentOverflowY;
+        detailedSummaryContent.style.padding = originalDetailedSummaryContentPadding;
+        detailedSummaryContent.style.width = originalDetailedSummaryContentWidth;
+
+        detailedSummaryModal.style.maxHeight = originalDetailedSummaryModalMaxHeight;
+
+        // Reexibe o botão de download de PDF e a seção de filtros
         if (downloadPdfBtn) {
-            downloadPdfBtn.style.display = 'block';
+            downloadPdfBtn.style.display = originalDownloadPdfBtnDisplay;
         }
         if (summaryFilterSection) {
-            summaryFilterSection.style.display = 'block'; // Ou 'flex' se for um container flex
+            summaryFilterSection.style.display = originalSummaryFilterSectionDisplay;
         }
         showGlobalLoading(false);
     }
