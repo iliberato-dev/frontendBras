@@ -29,6 +29,9 @@ const dashboardLider = document.getElementById("dashboardLider");
 const dashboardGape = document.getElementById("dashboardGape");
 const totalCountsList = document.getElementById("totalCountsList");
 
+// NOVO: Referência ao elemento onde o nome do líder será exibido
+const loggedInLeaderNameElement = document.getElementById("loggedInLeaderName");
+
 // !!! IMPORTANTE: Substitua pela URL PÚBLICA do seu backend no Render !!!
 // Deve ser a mesma URL definida na variável de ambiente FRONTEND_URL no seu backend Render
 const BACKEND_URL = 'https://backendbras.onrender.com';
