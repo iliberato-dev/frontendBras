@@ -503,8 +503,19 @@ function displayLoggedInLeaderName() {
 function setupLeaderView() {
     const leaderName = localStorage.getItem('loggedInLeaderName');
     if (leaderName && leaderName !== 'admin') { // Aplica restrições apenas se for um líder e não o admin
-        // Pré-seleciona o filtro de líder
-        filterLiderInput.value = leaderName;
+        // Encontra o objeto do membro logado para obter o valor exato da coluna 'Lider'
+        const loggedInMember = allMembersData.find(member => 
+            String(member.Nome || '').toLowerCase().trim() === leaderName.toLowerCase().trim()
+        );
+
+        if (loggedInMember && loggedInMember.Lider) {
+            // Pré-seleciona o filtro de líder com o valor exato da coluna 'Lider' do membro logado
+            filterLiderInput.value = loggedInMember.Lider;
+            console.log(`Filtro de Líder pré-selecionado para: ${loggedInMember.Lider}`);
+        } else {
+            console.warn(`Não foi possível encontrar o membro logado '${leaderName}' ou seu campo 'Lider' está vazio para pré-selecionar o filtro.`);
+        }
+
         // Desativa os campos de filtro de líder e GAPE
         filterLiderInput.disabled = true;
         filterGapeInput.disabled = true;
