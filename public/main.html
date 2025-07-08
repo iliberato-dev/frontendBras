@@ -74,7 +74,12 @@
                     <i id="dashboardCloseIcon" class="fas fa-times mr-2 hidden"></i>
                     <span id="dashboardCloseText" class="hidden">Fechar Resumo</span>
                 </button>
+                     <!-- Botão para abrir o Resumo Detalhado (adicione no seu dashboard.html ou index.html) -->
+<button id="showDetailedSummaryBtn" class="mt-4 px-6 py-3 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700 transition duration-300">
+    Resumo Detalhado
+</button>
             </div>
+
 
             <div id="dashboardContainer" class="bg-gray-800 text-white p-6 rounded-lg shadow-lg mt-6 max-h-0 opacity-0 overflow-hidden transition-all duration-700 ease-in-out">
                 <h2 class="text-2xl font-bold mb-4 text-center">Dashboard de Presenças</h2>
@@ -102,10 +107,7 @@
                 </ul>
             </div>
 
-            <!-- Botão para abrir o Resumo Detalhado (adicione no seu dashboard.html ou index.html) -->
-<button id="showDetailedSummaryBtn" class="mt-4 px-6 py-3 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700 transition duration-300">
-    Resumo Detalhado
-</button>
+   
 
 <!-- Modal de Resumo Detalhado (adicione no seu dashboard.html ou index.html) -->
 <div id="detailedSummaryModal" class="fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center z-50 hidden">
