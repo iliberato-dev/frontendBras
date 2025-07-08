@@ -50,6 +50,9 @@ const applySummaryFiltersBtn = document.getElementById("applySummaryFiltersBtn")
 // Novo: Botão de Download PDF
 const downloadPdfBtn = document.getElementById("downloadPdfBtn");
 
+// Novo: Elemento para exibir porcentagens na impressão
+const printSummaryPercentages = document.getElementById("printSummaryPercentages");
+
 
 // !!! IMPORTANTE: Substitua pela URL PÚBLICA do seu backend no Render !!!
 // Deve ser a mesma URL definida na variável de ambiente FRONTEND_URL no seu backend Render
@@ -323,7 +326,7 @@ function displayMembers(members) {
                     body: JSON.stringify({
                         nome: member.Nome,
                         data: `${dia}/${mes}/${ano}`,
-                        hora: `${min}:${seg}`, // Corrigido para min:seg
+                        hora: `${hora}:${min}:${seg}`, // Corrigido para min:seg
                         sheet: "PRESENCAS",
                     }),
                 });
@@ -652,10 +655,6 @@ function updateDetailedSummaryChart() {
         return;
     }
 
-    // Rastreia membros que têm uma presença no período e aqueles que não têm (para estatísticas internas, não exibição)
-    // const membersPresentInPeriod = []; // Não mais usado para exibição direta
-    // const membersAbsentInPeriod = []; // Não mais usado para exibição direta
-
     for (const member of membersToAnalyze) {
         const presence = lastPresencesData[member.Nome];
         let hasPresenceInPeriod = false;
@@ -675,12 +674,6 @@ function updateDetailedSummaryChart() {
                 hasPresenceInPeriod = true;
             }
         }
-
-        // if (hasPresenceInPeriod) { // Não mais usado para exibição direta
-        //     membersPresentInPeriod.push(member.Nome);
-        // } else {
-        //     membersAbsentInPeriod.push(member.Nome);
-        // }
     }
 
     const membersWithZeroPresenceCount = totalMembersInAnalysis - membersWithPresenceCount;
@@ -709,15 +702,16 @@ function updateDetailedSummaryChart() {
 
     // Atualiza o texto do resumo detalhado
     if (detailedSummaryText) {
+        const entityName = selectedMemberName ? selectedMemberName : 'o grupo filtrado';
         detailedSummaryText.innerHTML = `
-            <p class="text-lg font-semibold text-gray-800 mb-2">${summaryTitle}</p>
+            <h3 class="text-lg font-semibold text-gray-800 mb-2">${summaryTitle}</h3>
             <p class="text-md text-gray-700 mb-4">${dateRangeDisplay}</p>
             <ul class="list-disc list-inside text-gray-700 space-y-1">
-                <li>Total de Membros Analisados (com os filtros principais): <span class="font-bold">${totalMembersInAnalysis}</span></li>
-                <li>Membros com Pelo Menos Uma Presença (no período): <span class="font-bold">${membersWithPresenceCount} (${presencePercentage.toFixed(1)}%)</span></li>
-                <li>Membros Sem Nenhuma Presença (no período): <span class="font-bold">${membersWithZeroPresenceCount} (${absencePercentage.toFixed(1)}%)</span></li>
+                <li>Total de Membros Analisados: <span class="font-bold">${totalMembersInAnalysis}</span></li>
+                <li>Membros com Presença: <span class="font-bold">${membersWithPresenceCount} (${presencePercentage.toFixed(1)}%)</span></li>
+                <li>Membros Sem Presença: <span class="font-bold">${membersWithZeroPresenceCount} (${absencePercentage.toFixed(1)}%)</span></li>
             </ul>
-            <p class="text-sm text-gray-600 mt-4">O gráfico abaixo mostra a proporção de membros com e sem presenças registradas no período selecionado, dentro do grupo/membro filtrado. A contagem de "presença" refere-se a ter pelo menos um registro de última presença no período.</p>
+            <p class="text-sm text-gray-600 mt-4">As estatísticas e o gráfico representam a proporção de membros com e sem presenças registradas no período selecionado para ${entityName}. "Presença" indica pelo menos um registro no período.</p>
         `;
     }
 
@@ -785,6 +779,14 @@ function updateDetailedSummaryChart() {
         });
     } else {
         console.error("Elemento 'summaryChartCanvas' não encontrado no DOM.");
+    }
+
+    // Popula o novo elemento de porcentagens para impressão
+    if (printSummaryPercentages) {
+        printSummaryPercentages.innerHTML = `
+            <p class="text-lg font-bold text-gray-800">Presentes: ${membersWithPresenceCount} (${presencePercentage.toFixed(1)}%)</p>
+            <p class="text-lg font-bold text-gray-800">Ausentes: ${membersWithZeroPresenceCount} (${absencePercentage.toFixed(1)}%)</p>
+        `;
     }
 }
 
