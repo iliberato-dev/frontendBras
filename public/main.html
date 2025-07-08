@@ -74,10 +74,10 @@
                     <i id="dashboardCloseIcon" class="fas fa-times mr-2 hidden"></i>
                     <span id="dashboardCloseText" class="hidden">Fechar Resumo</span>
                 </button>
-                     <!-- Botão para abrir o Resumo Detalhado (adicione no seu dashboard.html ou index.html) -->
-<button id="showDetailedSummaryBtn" class="mt-4 px-6 py-3 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700 transition duration-300">
-    Resumo Detalhado
-</button>
+                    <!-- Botão para abrir o Resumo Detalhado (adicione no seu dashboard.html ou index.html) -->
+                <button id="showDetailedSummaryBtn" class="mt-4 px-6 py-3 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700 transition duration-300">
+                    Resumo Detalhado
+                </button>
             </div>
 
 
@@ -114,6 +114,31 @@
     <div class="bg-white rounded-lg shadow-xl p-6 w-11/12 md:w-2/3 lg:w-1/2 max-h-[90vh] overflow-y-auto relative">
         <button id="closeModalBtn" class="absolute top-3 right-3 text-gray-500 hover:text-gray-700 text-2xl font-bold">&times;</button>
         <h2 class="text-2xl font-bold text-gray-800 mb-4">Resumo Detalhado de Presenças</h2>
+
+        <!-- Novos Filtros dentro do Modal -->
+        <div class="mb-4 p-4 bg-gray-100 rounded-lg">
+            <h3 class="text-lg font-semibold text-gray-700 mb-2">Filtrar Resumo:</h3>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <div>
+                    <label for="summaryStartDate" class="block text-sm font-medium text-gray-700">Data Início:</label>
+                    <input type="date" id="summaryStartDate" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2">
+                </div>
+                <div>
+                    <label for="summaryEndDate" class="block text-sm font-medium text-gray-700">Data Fim:</label>
+                    <input type="date" id="summaryEndDate" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2">
+                </div>
+            </div>
+            <div>
+                <label for="summaryMemberSelect" class="block text-sm font-medium text-gray-700">Membro Específico:</label>
+                <select id="summaryMemberSelect" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2">
+                    <option value="">Todos os Membros Filtrados</option>
+                    <!-- Opções de membros serão populadas via JS -->
+                </select>
+            </div>
+            <!-- O botão "Aplicar Filtros do Resumo" é opcional, pois os eventos 'change' já atualizam dinamicamente -->
+            <!-- <button id="applySummaryFiltersBtn" class="mt-4 px-4 py-2 bg-blue-600 text-white font-semibold rounded-md shadow-sm hover:bg-blue-700 transition duration-300">Aplicar Filtros do Resumo</button> -->
+        </div>
+
         <div id="detailedSummaryText" class="mb-6">
             <!-- Conteúdo do resumo e estatísticas serão injetados aqui -->
         </div>
@@ -122,13 +147,6 @@
         </div>
     </div>
 </div>
-
-            <div id="membersCardsContainer" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-8 hidden">
-                </div>
-
-            <div id="messageArea" class="message-box hidden"></div>
-        </div>
-    </div>
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="js/dashboard.js"></script>
