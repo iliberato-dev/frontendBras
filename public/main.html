@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="shortcut icon" href="img/logo.jpg" type="image/x-icon">
-    <title>Gerenciamento de Membros AD Brás - Vila Solange</title>
+    <title>Gerenciamento de Membros AD</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="css/style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
@@ -172,6 +172,13 @@
     </style>
 </head>
 <body class="bg-gray-100 flex flex-col min-h-screen">
+    <script>
+        // Verifica se o usuário está logado. Se não, redireciona para a página de login.
+        // Esta verificação deve ser a primeira coisa a ser executada no body.
+        if (!localStorage.getItem('loggedInLeaderName')) {
+            window.location.href = "/index.html";
+        }
+    </script>
 
     <div id="globalLoadingIndicator" class="fixed inset-0 bg-white bg-opacity-80 flex items-center justify-center z-[9999] opacity-0 pointer-events-none transition-opacity duration-300">
         <div class="flex flex-col items-center">
@@ -180,16 +187,16 @@
         </div>
     </div>
 
+    <!-- Botão de Login como Outro Usuário (Posição fixa e z-index alto) -->
+    <div id="logoutBtnContainer" class="fixed top-4 right-4 z-[1000]">
+        <button id="logoutBtn" class="px-4 py-2 bg-red-500 text-white font-semibold rounded-lg shadow-md hover:bg-red-600 transition duration-300 text-sm">
+            <i class="fas fa-sign-out-alt mr-2"></i> Fazer login como outro usuário
+        </button>
+    </div>
+
     <div class="flex-grow p-4 md:p-8 flex items-center justify-center">
         <div class="main-card w-full max-w-4xl p-6 md:p-8 space-y-6">
-            <!-- Botão de Login como Outro Usuário (Movido para dentro do main-card) -->
-            <div class="flex justify-end mb-4" id="logoutBtnContainer">
-                <button id="logoutBtn" class="px-4 py-2 bg-red-500 text-white font-semibold rounded-lg shadow-md hover:bg-red-600 transition duration-300 text-sm">
-                    <i class="fas fa-sign-out-alt mr-2"></i> Fazer login como outro usuário
-                </button>
-            </div>
-
-            <div class="flex flex-col items-center justify-center text-center mb-6 fade-in">
+            <div class="flex flex-col items-center justify-center text-center mb-6 fade-in flex-grow">
                 <img src="img/logo.jpg" alt="Logo AD" class="logo-ad mb-2 animate-bounce">
                 <h1 class="text-3xl md:text-4xl font-extrabold text-gray-900 leading-tight">
                     <span class="bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-purple-600">
@@ -358,9 +365,11 @@
     <script>
         document.addEventListener("DOMContentLoaded", () => {
             const logoutBtn = document.getElementById("logoutBtn");
+            console.log("Logout button element:", logoutBtn); // Adicionado log para depuração
             if (logoutBtn) {
                 logoutBtn.addEventListener("click", () => {
                     localStorage.removeItem('loggedInLeaderName'); // Remove o nome do líder do localStorage
+                    console.log("loggedInLeaderName removido do localStorage. Redirecionando para /index.html");
                     window.location.href = "/index.html"; // Redireciona para a página de login
                 });
             }
