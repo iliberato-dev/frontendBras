@@ -568,24 +568,24 @@ function showDetailedSummary() {
         return;
     }
 
-    // Populate the member select inside the modal
+    // Popula o select de membros dentro do modal
     populateSummaryMemberSelect();
 
-    // Set default date range to current month
+    // Define o intervalo de datas padrão para o mês atual
     const today = new Date();
     const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
     const lastDayOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
 
-    // Format dates to ISO-MM-DD for input type="date"
+    // Formata as datas para AAAA-MM-DD para input type="date"
     if (summaryStartDateInput) summaryStartDateInput.value = firstDayOfMonth.toISOString().split('T')[0];
     if (summaryEndDateInput) summaryEndDateInput.value = lastDayOfMonth.toISOString().split('T')[0];
 
-    // Re-run the calculation and chart rendering when the modal is opened or filters applied
+    // Recalcula e renderiza o gráfico quando o modal é aberto ou filtros aplicados
     updateDetailedSummaryChart();
 
-    // Exibir o modal
+    // Exibe o modal
     detailedSummaryModal.classList.remove("hidden");
-    detailedSummaryModal.classList.add("flex"); // Use flex para centralizar
+    detailedSummaryModal.classList.add("flex"); // Usa flex para centralizar
 }
 
 /**
@@ -599,7 +599,7 @@ function populateSummaryMemberSelect() {
     }
 
     summaryMemberSelect.innerHTML = '<option value="">Todos os Membros Filtrados</option>';
-    // Use filteredMembers as the base for the summary member select
+    // Usa filteredMembers como base para o select de membros do resumo
     const membersForSummarySelect = [...new Set(filteredMembers.map(m => m.Nome).filter(Boolean))].sort();
     membersForSummarySelect.forEach(memberName => {
         const option = document.createElement('option');
@@ -627,7 +627,7 @@ function updateDetailedSummaryChart() {
         }
     }
 
-    // Get date range filters
+    // Obtém os filtros de intervalo de datas
     const startDateStr = summaryStartDateInput ? summaryStartDateInput.value : '';
     const endDateStr = summaryEndDateInput ? summaryEndDateInput.value : '';
 
@@ -636,15 +636,15 @@ function updateDetailedSummaryChart() {
 
     if (startDateStr) {
         startDate = new Date(startDateStr);
-        startDate.setHours(0, 0, 0, 0); // Start of the day
+        startDate.setHours(0, 0, 0, 0); // Início do dia
     }
     if (endDateStr) {
         endDate = new Date(endDateStr);
-        endDate.setHours(23, 59, 59, 999); // End of the day
+        endDate.setHours(23, 59, 59, 999); // Fim do dia
     }
 
     let membersWithPresenceCount = 0;
-    let totalMembersInAnalysis = membersToAnalyze.length; // This will be the denominator for percentages
+    let totalMembersInAnalysis = membersToAnalyze.length; // Este será o denominador para as porcentagens
 
     if (totalMembersInAnalysis === 0) {
         if (detailedSummaryText) detailedSummaryText.innerHTML = `<p class="text-lg font-semibold text-gray-800 mb-2">Nenhum membro para analisar com os filtros aplicados.</p>`;
@@ -652,19 +652,19 @@ function updateDetailedSummaryChart() {
         return;
     }
 
-    // Track members who have a presence in the period and those who don't
-    const membersPresentInPeriod = [];
-    const membersAbsentInPeriod = [];
+    // Rastreia membros que têm uma presença no período e aqueles que não têm (para estatísticas internas, não exibição)
+    // const membersPresentInPeriod = []; // Não mais usado para exibição direta
+    // const membersAbsentInPeriod = []; // Não mais usado para exibição direta
 
     for (const member of membersToAnalyze) {
         const presence = lastPresencesData[member.Nome];
         let hasPresenceInPeriod = false;
 
         if (presence && presence.data) {
-            // Parse the date string "dd/MM/yyyy" into a Date object
+            // Analisa a string de data "dd/MM/yyyy" em um objeto Date
             const [day, month, year] = presence.data.split('/').map(Number);
-            const lastPresenceDate = new Date(year, month - 1, day); // month - 1 because it's 0-indexed
-            lastPresenceDate.setHours(0, 0, 0, 0); // Normalize to start of day for comparison
+            const lastPresenceDate = new Date(year, month - 1, day); // month - 1 porque é baseado em 0
+            lastPresenceDate.setHours(0, 0, 0, 0); // Normaliza para o início do dia para comparação
 
             let dateMatches = true;
             if (startDate && lastPresenceDate < startDate) dateMatches = false;
@@ -676,11 +676,11 @@ function updateDetailedSummaryChart() {
             }
         }
 
-        if (hasPresenceInPeriod) {
-            membersPresentInPeriod.push(member.Nome);
-        } else {
-            membersAbsentInPeriod.push(member.Nome);
-        }
+        // if (hasPresenceInPeriod) { // Não mais usado para exibição direta
+        //     membersPresentInPeriod.push(member.Nome);
+        // } else {
+        //     membersAbsentInPeriod.push(member.Nome);
+        // }
     }
 
     const membersWithZeroPresenceCount = totalMembersInAnalysis - membersWithPresenceCount;
@@ -693,7 +693,7 @@ function updateDetailedSummaryChart() {
         absencePercentage = (membersWithZeroPresenceCount / totalMembersInAnalysis) * 100;
     }
 
-    // Format date range for display
+    // Formata o intervalo de datas para exibição
     let dateRangeDisplay = "Todo o período disponível";
     if (startDateStr && endDateStr) {
         const formattedStartDate = new Date(startDateStr).toLocaleDateString('pt-BR');
@@ -707,12 +707,7 @@ function updateDetailedSummaryChart() {
         dateRangeDisplay = `Até: ${formattedEndDate}`;
     }
 
-    // Build lists of members present/absent for display
-    let presentMembersList = membersPresentInPeriod.length > 0 ? membersPresentInPeriod.join(', ') : 'Nenhum';
-    let absentMembersList = membersAbsentInPeriod.length > 0 ? membersAbsentInPeriod.join(', ') : 'Nenhum';
-
-
-    // Update the detailed summary text
+    // Atualiza o texto do resumo detalhado
     if (detailedSummaryText) {
         detailedSummaryText.innerHTML = `
             <p class="text-lg font-semibold text-gray-800 mb-2">${summaryTitle}</p>
@@ -722,19 +717,16 @@ function updateDetailedSummaryChart() {
                 <li>Membros com Pelo Menos Uma Presença (no período): <span class="font-bold">${membersWithPresenceCount} (${presencePercentage.toFixed(1)}%)</span></li>
                 <li>Membros Sem Nenhuma Presença (no período): <span class="font-bold">${membersWithZeroPresenceCount} (${absencePercentage.toFixed(1)}%)</span></li>
             </ul>
-            ${selectedMemberName === "" && membersPresentInPeriod.length > 0 ? `<p class="text-sm text-gray-600 mt-3">Membros com presença: <span class="font-medium">${presentMembersList}</span></p>` : ''}
-            ${selectedMemberName === "" && membersAbsentInPeriod.length > 0 ? `<p class="text-sm text-gray-600 mt-1">Membros sem presença: <span class="font-medium">${absentMembersList}</span></p>` : ''}
             <p class="text-sm text-gray-600 mt-4">O gráfico abaixo mostra a proporção de membros com e sem presenças registradas no período selecionado, dentro do grupo/membro filtrado. A contagem de "presença" refere-se a ter pelo menos um registro de última presença no período.</p>
         `;
     }
 
-
-    // Destroy previous chart instance if it exists
+    // Destrói a instância anterior do gráfico se existir
     if (myChart) {
         myChart.destroy();
     }
 
-    // Render the pie chart
+    // Renderiza o gráfico de pizza
     if (summaryChartCanvas) {
         const ctx = summaryChartCanvas.getContext('2d');
         myChart = new Chart(ctx, {
@@ -744,8 +736,8 @@ function updateDetailedSummaryChart() {
                 datasets: [{
                     data: [presencePercentage.toFixed(1), absencePercentage.toFixed(1)],
                     backgroundColor: [
-                        'rgba(75, 192, 192, 0.8)', // Green for presence
-                        'rgba(255, 99, 132, 0.8)'  // Red for absence
+                        'rgba(75, 192, 192, 0.8)', // Verde para presença
+                        'rgba(255, 99, 132, 0.8)'  // Vermelho para ausência
                     ],
                     borderColor: [
                         'rgba(75, 192, 192, 1)',
@@ -760,7 +752,7 @@ function updateDetailedSummaryChart() {
                     legend: {
                         position: 'top',
                         labels: {
-                            color: '#333', // Legend text color
+                            color: '#333', // Cor do texto da legenda
                             font: {
                                 size: 14
                             }
@@ -818,8 +810,8 @@ async function handleDownloadPdf() {
 
         const imgData = canvas.toDataURL('image/png');
         const pdf = new window.jspdf.jsPDF('p', 'mm', 'a4'); // 'p' (portrait), 'mm' (unidade), 'a4' (tamanho)
-        const imgWidth = 210; // A4 width in mm
-        const pageHeight = 297; // A4 height in mm
+        const imgWidth = 210; // Largura A4 em mm
+        const pageHeight = 297; // Altura A4 em mm
         const imgHeight = canvas.height * imgWidth / canvas.width;
         let heightLeft = imgHeight;
         let position = 0;
