@@ -40,6 +40,12 @@ const summaryChartCanvas = document.getElementById("summaryChart");
 const detailedSummaryText = document.getElementById("detailedSummaryText");
 const showDetailedSummaryBtn = document.getElementById("showDetailedSummaryBtn");
 
+// Novos elementos de filtro dentro do modal
+const summaryStartDateInput = document.getElementById("summaryStartDate");
+const summaryEndDateInput = document.getElementById("summaryEndDate");
+const summaryMemberSelect = document.getElementById("summaryMemberSelect");
+const applySummaryFiltersBtn = document.getElementById("applySummaryFiltersBtn");
+
 
 // !!! IMPORTANTE: Substitua pela URL PÚBLICA do seu backend no Render !!!
 // Deve ser a mesma URL definida na variável de ambiente FRONTEND_URL no seu backend Render
@@ -511,53 +517,128 @@ function showDetailedSummary() {
         return;
     }
 
-    // Calcular estatísticas para o gráfico de pizza
-    const totalFilteredMembersCount = filteredMembers.length;
+    // Populate the member select inside the modal
+    populateSummaryMemberSelect();
+
+    // Set default date range to current month
+    const today = new Date();
+    const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+    const lastDayOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+
+    // Format dates to YYYY-MM-DD for input type="date"
+    summaryStartDateInput.value = firstDayOfMonth.toISOString().split('T')[0];
+    summaryEndDateInput.value = lastDayOfMonth.toISOString().split('T')[0];
+
+    // Re-run the calculation and chart rendering when the modal is opened or filters applied
+    updateDetailedSummaryChart();
+
+    // Exibir o modal
+    detailedSummaryModal.classList.remove("hidden");
+    detailedSummaryModal.classList.add("flex"); // Use flex para centralizar
+}
+
+/**
+ * Popula o select de membros dentro do modal de resumo detalhado.
+ */
+function populateSummaryMemberSelect() {
+    summaryMemberSelect.innerHTML = '<option value="">Todos os Membros Filtrados</option>';
+    // Use filteredMembers as the base for the summary member select
+    const membersForSummarySelect = [...new Set(filteredMembers.map(m => m.Nome).filter(Boolean))].sort();
+    membersForSummarySelect.forEach(memberName => {
+        const option = document.createElement('option');
+        option.value = memberName;
+        option.textContent = memberName;
+        summaryMemberSelect.appendChild(option);
+    });
+}
+
+/**
+ * Atualiza o gráfico de pizza e o texto do resumo detalhado com base nos filtros do modal.
+ */
+function updateDetailedSummaryChart() {
+    let membersToAnalyze = filteredMembers;
+
+    // Apply specific member filter if selected
+    const selectedMemberName = summaryMemberSelect.value.trim();
+    if (selectedMemberName !== "") {
+        membersToAnalyze = filteredMembers.filter(member => String(member.Nome || '').trim() === selectedMemberName);
+        if (membersToAnalyze.length === 0) {
+            detailedSummaryText.innerHTML = `<p class="text-lg font-semibold text-gray-800 mb-2">Nenhum dado para o membro selecionado com os filtros atuais.</p>`;
+            if (myChart) myChart.destroy();
+            return;
+        }
+    }
+
+    // Get date range filters
+    const startDateStr = summaryStartDateInput.value;
+    const endDateStr = summaryEndDateInput.value;
+
+    let startDate = null;
+    let endDate = null;
+
+    if (startDateStr) {
+        startDate = new Date(startDateStr);
+        startDate.setHours(0, 0, 0, 0); // Start of the day
+    }
+    if (endDateStr) {
+        endDate = new Date(endDateStr);
+        endDate.setHours(23, 59, 59, 999); // End of the day
+    }
+
     let membersWithPresenceCount = 0;
+    let totalMembersInAnalysis = membersToAnalyze.length; // This will be the denominator for percentages
 
-    // Contar quantos membros filtrados têm pelo menos uma presença registrada no mês atual
-    // (baseado nos dados que o backend já forneceu para presencasTotal)
-    for (const member of filteredMembers) {
-        if (lastPresencesData[member.Nome]) {
-            // Verifica se a última presença é do mês atual
-            const today = new Date();
-            const lastPresenceDateStr = lastPresencesData[member.Nome].data; // Ex: "08/07/2025"
-            const [day, month, year] = lastPresenceDateStr.split('/').map(Number);
-            const lastPresenceDate = new Date(year, month - 1, day); // month - 1 porque o mês é 0-indexado
+    if (totalMembersInAnalysis === 0) {
+        detailedSummaryText.innerHTML = `<p class="text-lg font-semibold text-gray-800 mb-2">Nenhum membro para analisar com os filtros aplicados.</p>`;
+        if (myChart) myChart.destroy();
+        return;
+    }
 
-            if (lastPresenceDate.getMonth() === today.getMonth() && lastPresenceDate.getFullYear() === today.getFullYear()) {
+    for (const member of membersToAnalyze) {
+        const presence = lastPresencesData[member.Nome];
+        if (presence && presence.data) {
+            // Parse the date string "dd/MM/yyyy" into a Date object
+            const [day, month, year] = presence.data.split('/').map(Number);
+            const lastPresenceDate = new Date(year, month - 1, day); // month - 1 because it's 0-indexed
+            lastPresenceDate.setHours(0, 0, 0, 0); // Normalize to start of day for comparison
+
+            let dateMatches = true;
+            if (startDate && lastPresenceDate < startDate) dateMatches = false;
+            if (endDate && lastPresenceDate > endDate) dateMatches = false;
+
+            if (dateMatches) {
                 membersWithPresenceCount++;
             }
         }
     }
 
-    const membersWithZeroPresenceCount = totalFilteredMembersCount - membersWithPresenceCount;
+    const membersWithZeroPresenceCount = totalMembersInAnalysis - membersWithPresenceCount;
 
     let presencePercentage = 0;
     let absencePercentage = 0;
 
-    if (totalFilteredMembersCount > 0) {
-        presencePercentage = (membersWithPresenceCount / totalFilteredMembersCount) * 100;
-        absencePercentage = (membersWithZeroPresenceCount / totalFilteredMembersCount) * 100;
+    if (totalMembersInAnalysis > 0) {
+        presencePercentage = (membersWithPresenceCount / totalMembersInAnalysis) * 100;
+        absencePercentage = (membersWithZeroPresenceCount / totalMembersInAnalysis) * 100;
     }
 
-    // Atualiza o texto do resumo detalhado
+    // Update the detailed summary text
     detailedSummaryText.innerHTML = `
-        <p class="text-lg font-semibold text-gray-800 mb-2">Estatísticas do Grupo Filtrado (Mês Atual):</p>
+        <p class="text-lg font-semibold text-gray-800 mb-2">Estatísticas do Grupo/Membro Filtrado:</p>
         <ul class="list-disc list-inside text-gray-700">
-            <li>Total de Membros Filtrados: <span class="font-bold">${totalFilteredMembersCount}</span></li>
-            <li>Membros com Presença (neste mês): <span class="font-bold">${membersWithPresenceCount} (${presencePercentage.toFixed(1)}%)</span></li>
-            <li>Membros Sem Presença (neste mês): <span class="font-bold">${membersWithZeroPresenceCount} (${absencePercentage.toFixed(1)}%)</span></li>
+            <li>Total de Membros Analisados: <span class="font-bold">${totalMembersInAnalysis}</span></li>
+            <li>Membros com Presença (no período): <span class="font-bold">${membersWithPresenceCount} (${presencePercentage.toFixed(1)}%)</span></li>
+            <li>Membros Sem Presença (no período): <span class="font-bold">${membersWithZeroPresenceCount} (${absencePercentage.toFixed(1)}%)</span></li>
         </ul>
-        <p class="text-sm text-gray-600 mt-4">O gráfico abaixo mostra a proporção de membros com e sem presenças registradas no mês atual, dentro do grupo filtrado.</p>
+        <p class="text-sm text-gray-600 mt-4">O gráfico abaixo mostra a proporção de membros com e sem presenças registradas no período selecionado, dentro do grupo/membro filtrado.</p>
     `;
 
-    // Destruir gráfico anterior se existir
+    // Destroy previous chart instance if it exists
     if (myChart) {
         myChart.destroy();
     }
 
-    // Renderizar gráfico de pizza
+    // Render the pie chart
     const ctx = summaryChartCanvas.getContext('2d');
     myChart = new Chart(ctx, {
         type: 'pie',
@@ -566,8 +647,8 @@ function showDetailedSummary() {
             datasets: [{
                 data: [presencePercentage.toFixed(1), absencePercentage.toFixed(1)],
                 backgroundColor: [
-                    'rgba(75, 192, 192, 0.8)', // Verde para presença
-                    'rgba(255, 99, 132, 0.8)'  // Vermelho para ausência
+                    'rgba(75, 192, 192, 0.8)', // Green for presence
+                    'rgba(255, 99, 132, 0.8)'  // Red for absence
                 ],
                 borderColor: [
                     'rgba(75, 192, 192, 1)',
@@ -582,7 +663,7 @@ function showDetailedSummary() {
                 legend: {
                     position: 'top',
                     labels: {
-                        color: '#333', // Cor do texto da legenda
+                        color: '#333', // Legend text color
                         font: {
                             size: 14
                         }
@@ -604,7 +685,7 @@ function showDetailedSummary() {
                 },
                 title: {
                     display: true,
-                    text: 'Proporção de Presenças vs. Ausências (Mês Atual)',
+                    text: 'Proporção de Presenças vs. Ausências (Período Selecionado)',
                     color: '#333',
                     font: {
                         size: 16
@@ -613,10 +694,6 @@ function showDetailedSummary() {
             }
         }
     });
-
-    // Exibir o modal
-    detailedSummaryModal.classList.remove("hidden");
-    detailedSummaryModal.classList.add("flex"); // Use flex para centralizar
 }
 
 
@@ -655,6 +732,20 @@ if (closeModalBtn) {
         detailedSummaryModal.classList.add("hidden");
         detailedSummaryModal.classList.remove("flex");
     });
+}
+
+// Event listeners para os novos filtros dentro do modal
+if (applySummaryFiltersBtn) {
+    applySummaryFiltersBtn.addEventListener("click", updateDetailedSummaryChart);
+}
+if (summaryStartDateInput) {
+    summaryStartDateInput.addEventListener("change", updateDetailedSummaryChart);
+}
+if (summaryEndDateInput) {
+    summaryEndDateInput.addEventListener("change", updateDetailedSummaryChart);
+}
+if (summaryMemberSelect) {
+    summaryMemberSelect.addEventListener("change", updateDetailedSummaryChart);
 }
 
 
