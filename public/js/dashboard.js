@@ -1,5 +1,6 @@
+// const BACKEND_URL = "https://backendbras.onrender.com"; // **ATUALIZE COM A URL DO SEU BACKEND NO RENDER**
 // ------------------------------------------------------
-// Frontend JavaScript (dashboard.js)
+// Frontend JavaScript (dashboard.js) - SEM ALTERAÇÕES NECESSÁRIAS
 // ------------------------------------------------------
 
 const BACKEND_URL = "https://backendbras.onrender.com"; // **ATUALIZE COM A URL DO SEU BACKEND NO RENDER**
