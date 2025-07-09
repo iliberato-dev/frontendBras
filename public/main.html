@@ -8,8 +8,6 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="css/style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
-    <!-- FullCalendar CSS -->
-    <link href='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/main.min.css' rel='stylesheet' />
     <style>
         /* Estilos específicos para impressão */
         @media print {
@@ -20,7 +18,7 @@
                 box-sizing: border-box; /* Garante que padding e border sejam incluídos no cálculo do tamanho */
             }
 
-            #downloadPdfBtn, #summaryFilterSection, #logoutBtnContainer { /* Oculta o botão de logout também na impressão */
+            #downloadPdfBtn, #summaryFilterSection {
                 display: none !important; /* Oculta o botão de download e a seção de filtros ao imprimir */
             }
             /* Ajusta o layout para impressão */
@@ -36,10 +34,10 @@
             }
             #reportInfo {
                 margin-bottom: 8mm; /* Reduz a margem abaixo do reportInfo */
-                padding-top: 6mm; /* Ajusta o padding no topo para o reportInfo */
+                padding-top: 4mm; /* Ajusta o padding no topo para o reportInfo */
                 padding-bottom: 6mm; /* Ajusta o padding na base para o reportInfo */
                 width: 100%;
-                font-size: 0.8em; /* Diminui um pouco mais a fonte do reportInfo */
+                font-size: 0.9em; /* Diminui um pouco mais a fonte do reportInfo */
                 box-sizing: border-box;
             }
             #reportInfo p {
@@ -77,108 +75,15 @@
                 box-sizing: border-box;
             }
 
-            /* Estilos para o calendário na impressão */
-            #calendar-container {
-                width: 100% !important;
-                margin-top: 10mm; /* Espaçamento acima do calendário */
-                page-break-before: auto; /* Evita quebra de página antes, se possível */
-                page-break-after: auto; /* Evita quebra de página depois, se possível */
-                box-sizing: border-box;
-            }
-            .fc .fc-toolbar { /* Oculta a barra de ferramentas do calendário na impressão */
-                display: none !important;
-            }
-            .fc .fc-daygrid-day-number { /* Ajusta a fonte dos números dos dias */
-                font-size: 0.7em !important;
-            }
-            .fc .fc-event { /* Ajusta a fonte dos eventos */
-                font-size: 0.6em !important;
-                padding: 1px 2px !important;
-            }
-            .fc-daygrid-event-harness { /* Garante que os eventos não sejam cortados */
-                overflow: visible !important;
-            }
-            .fc-daygrid-day-top { /* Garante espaço para números e eventos */
-                flex-direction: column;
-                align-items: flex-start;
-            }
-            /* Ajustes para o cabeçalho do dia (ex: Seg, Ter) */
-            .fc .fc-col-header-cell-cushion {
-                font-size: 0.75em !important;
-                padding: 2px 0 !important;
-            }
-
-
             /* Garante que a página seja paisagem para melhor ajuste dos gráficos lado a lado */
             @page {
                 size: A4 landscape;
                 margin: 5mm; /* Reduz a margem da página para maximizar o espaço do conteúdo */
             }
         }
-
-        /* Estilos para o calendário em telas (não impressão) */
-        #calendar {
-            max-width: 100%;
-            margin: 0 auto;
-            font-size: 14px; /* Tamanho base da fonte para o calendário */
-        }
-
-        @media (max-width: 768px) {
-            #calendar {
-                font-size: 12px; /* Reduz a fonte para telas menores */
-            }
-            .fc .fc-toolbar-title {
-                font-size: 1.2em !important; /* Título do mês/ano */
-            }
-            .fc .fc-button {
-                font-size: 0.8em !important; /* Botões de navegação */
-                padding: 0.3em 0.6em !important;
-            }
-            .fc .fc-daygrid-day-number {
-                font-size: 0.7em !important; /* Números dos dias */
-            }
-            .fc .fc-event {
-                font-size: 0.65em !important; /* Texto dos eventos */
-                padding: 1px 2px !important;
-            }
-            .fc .fc-col-header-cell-cushion {
-                font-size: 0.7em !important; /* Nomes dos dias da semana (Seg, Ter) */
-            }
-        }
-
-        @media (max-width: 480px) {
-            #calendar {
-                font-size: 10px; /* Reduz ainda mais a fonte para celulares */
-            }
-            .fc .fc-toolbar-title {
-                font-size: 1em !important;
-            }
-            .fc .fc-button {
-                font-size: 0.7em !important;
-                padding: 0.2em 0.4em !important;
-            }
-            .fc .fc-daygrid-day-number {
-                font-size: 0.6em !important;
-            }
-            .fc .fc-event {
-                font-size: 0.55em !important;
-                padding: 0 1px !important;
-            }
-            .fc .fc-col-header-cell-cushion {
-                font-size: 0.6em !important;
-            }
-        }
-
     </style>
 </head>
 <body class="bg-gray-100 flex flex-col min-h-screen">
-    <script>
-        // Verifica se o usuário está logado. Se não, redireciona para a página de login.
-        // Esta verificação deve ser a primeira coisa a ser executada no body.
-        if (!localStorage.getItem('loggedInLeaderName')) {
-            window.location.href = "/index.html";
-        }
-    </script>
 
     <div id="globalLoadingIndicator" class="fixed inset-0 bg-white bg-opacity-80 flex items-center justify-center z-[9999] opacity-0 pointer-events-none transition-opacity duration-300">
         <div class="flex flex-col items-center">
@@ -189,7 +94,7 @@
 
     <div class="flex-grow p-4 md:p-8 flex items-center justify-center">
         <div class="main-card w-full max-w-4xl p-6 md:p-8 space-y-6">
-            <div class="flex flex-col items-center justify-center text-center mb-6 fade-in flex-grow">
+            <div class="flex flex-col items-center justify-center text-center mb-6 fade-in">
                 <img src="img/logo.jpg" alt="Logo AD" class="logo-ad mb-2 animate-bounce">
                 <h1 class="text-3xl md:text-4xl font-extrabold text-gray-900 leading-tight">
                     <span class="bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-purple-600">
@@ -197,15 +102,8 @@
                     </span>
                 </h1>
                 <p class="text-gray-600 text-lg mt-2">AD Min. Brás - Vila solange</p>
-                <!-- Elemento para exibir o nome do líder logado -->
+                <!-- NOVO: Elemento para exibir o nome do líder logado -->
                 <p id="loggedInLeaderName" class="text-lg font-semibold text-gray-700 mt-4">Logado como: Carregando...</p>
-                
-                <!-- Botão de Trocar Usuário (agora abaixo do texto "Logado como...") -->
-                <div id="logoutBtnContainer" class="mt-4">
-                    <button id="logoutBtn" class="px-4 py-2 bg-blue-600 text-white font-medium rounded-lg shadow-sm hover:bg-blue-700 transition duration-300 text-sm">
-                        <i class="fas fa-exchange-alt mr-2"></i> Trocar Usuário
-                    </button>
-                </div>
             </div>
 
             <!-- Área para mensagens temporárias -->
@@ -271,7 +169,6 @@
                         <p id="dashboardPeriodo" class="text-xl font-bold text-blue-400">N/A</p>
                     </div>
                     <div class="bg-gray-700 p-4 rounded-md shadow-inner">
-                        <p class="text-sm text-gray-300">Líder Selecionado</p>
                         <p id="dashboardLider" class="text-xl font-bold text-purple-400">N/A</p>
                     </div>
                     <div class="bg-gray-700 p-4 rounded-md shadow-inner">
@@ -339,12 +236,6 @@
                 </div>
             </div>
 
-            <!-- Contêiner para o Calendário FullCalendar -->
-            <div id="calendar-container" class="mt-6 w-full">
-                <h3 class="text-xl font-semibold text-gray-800 mb-4 text-center">Presenças no Calendário</h3>
-                <div id='calendar'></div>
-            </div>
-
             <!-- Botão de Download PDF -->
             <button id="downloadPdfBtn" class="mt-6 w-full px-6 py-3 bg-red-600 text-white font-semibold rounded-lg shadow-md hover:bg-red-700 transition duration-300">
                 <i class="fas fa-file-pdf mr-2"></i> Download PDF
@@ -358,8 +249,6 @@
     <!-- Inclua as bibliotecas html2canvas e jsPDF ANTES do seu dashboard.js -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <!-- FullCalendar JS -->
-    <script src='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.js'></script>
     <script src="js/dashboard.js"></script>
 </body>
 </html>
