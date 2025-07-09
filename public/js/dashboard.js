@@ -1159,3 +1159,13 @@ document.addEventListener("DOMContentLoaded", displayLoggedInLeaderName);
 // Chama a função para configurar a visualização do líder após o carregamento dos membros
 // Isso garante que as opções de filtro já estejam populadas
 // A chamada foi movida para o bloco 'finally' de fetchMembers
+// Adiciona um listener para o botão de logout
+document.addEventListener('DOMContentLoaded', () => {
+    const logoutBtn = document.getElementById('logoutBtn');
+    if (logoutBtn) {
+        logoutBtn.addEventListener('click', () => {
+            // Redireciona o usuário para a página index.html
+            window.location.href = 'index.html';
+        });
+    }
+});
