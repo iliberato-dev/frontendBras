@@ -91,16 +91,18 @@ async function fetchMembers() {
         const response = await fetch(`${BACKEND_URL}/get-membros`);
         const data = await response.json();
         
-        if (data.success && data.membros) {
-            allMembers = data.membros;
+        // CORREÇÃO AQUI: Verifique se data.data existe e, em seguida, acesse data.data.membros
+        if (data.success && data.data && data.data.membros) { // <-- Lógica Corrigida
+            allMembers = data.data.membros; // <-- Acessando a propriedade correta
             populateFilterOptions(allMembers);
             applyFilters(); // Aplica os filtros iniciais e renderiza os cards
         } else {
-            showMessage(`Erro ao carregar membros: ${data.message || 'Erro desconhecido.'}`, 'error');
+            // Se 'data.data.membros' não existir, ou 'success' for falso, ou 'data' não existir
+            showMessage(`Erro ao carregar membros: ${data.message || 'Dados de membros não encontrados ou erro desconhecido.'}`, 'error');
         }
     } catch (error) {
         console.error('Erro ao buscar membros:', error);
-        showMessage('Erro ao conectar com o servidor para buscar membros.', 'error');
+        showMessage('Erro ao conectar com o servidor para buscar membros. Verifique sua conexão e o backend.', 'error');
     } finally {
         hideLoadingIndicator();
     }
