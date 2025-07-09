@@ -2,7 +2,7 @@
 // Frontend JavaScript (dashboard.js)
 // ------------------------------------------------------
 
-const BACKEND_URL = "https://your-render-backend-url.onrender.com"; // **ATUALIZE COM A URL DO SEU BACKEND NO RENDER**
+const BACKEND_URL = "https://backendbras.onrender.com"; // **ATUALIZE COM A URL DO SEU BACKEND NO RENDER**
 
 let allMembers = []; // Armazena todos os membros para uso nos filtros
 let currentFilteredMembersData = []; // Armazena os dados dos membros filtrados para o dashboard
