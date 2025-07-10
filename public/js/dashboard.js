@@ -251,41 +251,17 @@ function displayMembers(members) {
         card.className = "fade-in-row bg-white rounded-xl shadow-md p-4 flex flex-col gap-2 relative";
         card.style.animationDelay = `${idx * 0.04}s`;
         card.innerHTML = `
-            // <div class="font-bold text-lg text-gray-800">${member.Nome || "N/A"}</div>
-            // <div class="text-sm text-gray-600"><b>Período:</b> ${member.Periodo || "N/A"}</div>
-            // <div class="text-sm text-gray-600"><b>Líder:</b> ${member.Lider || "N/A"}</div>
-            // <div class="text-sm text-gray-600"><b>GAPE:</b> ${member.GAPE || "N/A"}</div>
-            // <label class="flex items-center gap-2 mt-2">
-            //     <input type="checkbox" class="h-5 w-5 text-blue-600 rounded focus:ring-blue-500 presence-checkbox" data-member-name="${member.Nome}">
-            //     <span class="text-sm text-gray-700">Presente</span>
-            // </label>
-            // <button class="btn-confirm-presence w-full mt-2 hidden bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg shadow-md transition duration-300">Confirmar Presença</button>
-            // <div class="text-xs text-gray-500 mt-1 hidden presence-info"></div>
-            <div class="font-bold text-lg text-gray-800 flex items-center">
-    <i class="fas fa-user-circle text-blue-600 mr-2"></i> ${member.Nome || "N/A"}
-</div>
-<div class="text-sm text-gray-600 flex items-center">
-    <i class="${getPeriodoIcon(member.Periodo).iconClass} ${getPeriodoIcon(member.Periodo).colorClass} mr-2"></i>
-    <b>Período:</b> ${member.Periodo || "N/A"}
-</div>
-<div class="text-sm text-gray-600 flex items-center">
-    <i class="fas fa-user-tie text-purple-600 mr-2"></i> <b>Líder:</b> ${member.Lider || "N/A"}
-</div>
-<div class="text-sm text-gray-600 flex items-center">
-    <i class="${getGapeIcon(member.GAPE).iconClass} ${getGapeIcon(member.GAPE).colorClass} mr-2"></i>
-    <b>GAPE:</b> ${member.GAPE || "N/A"}
-</div>
-<label class="flex items-center gap-2 mt-2">
-    <input type="checkbox" class="h-5 w-5 text-blue-600 rounded focus:ring-blue-500 presence-checkbox" data-member-name="${member.Nome}">
-    <span class="text-sm text-gray-700 flex items-center">
-        <i class="fas fa-calendar-check text-green-500 mr-1"></i> Presente
-    </span>
-</label>
-<button class="btn-confirm-presence w-full mt-2 hidden bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg shadow-md transition duration-300">
-    <i class="fas fa-check-circle mr-2"></i> Confirmar Presença
-</button>
-<div class="text-xs text-gray-500 mt-1 hidden presence-info">
-    <i class="fas fa-info-circle mr-1"></i> </div>
+            <div class="font-bold text-lg text-gray-800">${member.Nome || "N/A"}</div>
+            <div class="text-sm text-gray-600"><b>Período:</b> ${member.Periodo || "N/A"}</div>
+            <div class="text-sm text-gray-600"><b>Líder:</b> ${member.Lider || "N/A"}</div>
+            <div class="text-sm text-gray-600"><b>GAPE:</b> ${member.GAPE || "N/A"}</div>
+            <label class="flex items-center gap-2 mt-2">
+                <input type="checkbox" class="h-5 w-5 text-blue-600 rounded focus:ring-blue-500 presence-checkbox" data-member-name="${member.Nome}">
+                <span class="text-sm text-gray-700">Presente</span>
+            </label>
+            <button class="btn-confirm-presence w-full mt-2 hidden bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg shadow-md transition duration-300">Confirmar Presença</button>
+            <div class="text-xs text-gray-500 mt-1 hidden presence-info"></div>
+           
         `;
         container.appendChild(card);
 
