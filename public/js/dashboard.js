@@ -263,8 +263,17 @@ function displayMembers(members) {
     }
 
     card.innerHTML = `
-        <div class="font-bold text-lg text-gray-800 flex items-center gap-2">
-            <i class="fas fa-user text-indigo-600"></i> ${member.Nome || "N/A"}
+        <div class="flex items-center gap-3">
+            <div class="relative w-16 h-16 rounded-full overflow-hidden border-2 border-indigo-400 flex-shrink-0">
+                <img src="${member.FotoURL || 'https://via.placeholder.com/150/F8FAFC/A0AEC0?text=Sem+Foto'}" 
+                     alt="Foto de ${member.Nome || 'Membro'}" 
+                     class="member-photo w-full h-full object-cover cursor-pointer">
+                <input type="file" class="photo-upload-input absolute inset-0 opacity-0 cursor-pointer" accept="image/*" data-member-name="${member.Nome}">
+                <div class="absolute inset-0 bg-black bg-opacity-40 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity duration-200 text-white text-xs text-center p-1">
+                    Trocar Foto
+                </div>
+            </div>
+            <div class="font-bold text-lg text-gray-800">${member.Nome || "N/A"}</div>
         </div>
         <div class="text-sm text-gray-600 flex items-center gap-2">
             ${periodoIcon} <b>Período:</b> ${member.Periodo || "N/A"}
