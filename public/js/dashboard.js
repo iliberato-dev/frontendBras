@@ -250,28 +250,40 @@ function displayMembers(members) {
         const card = document.createElement("div");
         card.className = "fade-in-row bg-white rounded-xl shadow-md p-4 flex flex-col gap-2 relative";
     card.style.animationDelay = `${idx * 0.04}s`;
+
+    // Lógica para determinar o ícone do período (sol ou lua)
+    let periodoIcon = '<i class="fas fa-question text-gray-500"></i>'; // Ícone padrão
+    if (member.Periodo) {
+        const periodoLower = member.Periodo.toLowerCase();
+        if (periodoLower.includes("manhã") || periodoLower.includes("tarde")) {
+            periodoIcon = '<i class="fas fa-sun text-yellow-500"></i>'; // Sol amarelo
+        } else if (periodoLower.includes("noite")) {
+            periodoIcon = '<i class="fas fa-moon text-blue-500"></i>'; // Lua azul
+        }
+    }
+
     card.innerHTML = `
         <div class="font-bold text-lg text-gray-800 flex items-center gap-2">
-            <i class="fas fa-user"></i> ${member.Nome || "N/A"}
+            <i class="fas fa-user text-indigo-600"></i> ${member.Nome || "N/A"}
         </div>
         <div class="text-sm text-gray-600 flex items-center gap-2">
-            <i class="fas fa-calendar-alt"></i> <b>Período:</b> ${member.Periodo || "N/A"}
+            ${periodoIcon} <b>Período:</b> ${member.Periodo || "N/A"}
         </div>
         <div class="text-sm text-gray-600 flex items-center gap-2">
-            <i class="fas fa-star"></i> <b>Líder:</b> ${member.Lider || "N/A"}
+            <i class="fas fa-star text-yellow-600"></i> <b>Líder:</b> ${member.Lider || "N/A"}
         </div>
         <div class="text-sm text-gray-600 flex items-center gap-2">
-            <i class="fas fa-users"></i> <b>GAPE:</b> ${member.GAPE || "N/A"}
+            <i class="fas fa-users text-purple-600"></i> <b>GAPE:</b> ${member.GAPE || "N/A"}
         </div>
         <label class="flex items-center gap-2 mt-2">
             <input type="checkbox" class="h-5 w-5 text-blue-600 rounded focus:ring-blue-500 presence-checkbox" data-member-name="${member.Nome}">
             <span class="text-sm text-gray-700">Presente</span>
         </label>
         <button class="btn-confirm-presence w-full mt-2 hidden bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg shadow-md transition duration-300 flex items-center justify-center gap-2">
-            <i class="fas fa-check-circle"></i> Confirmar Presença
+            <i class="fas fa-check-circle text-white"></i> Confirmar Presença
         </button>
         <div class="text-xs text-gray-500 mt-1 hidden presence-info flex items-center gap-2">
-            <i class="fas fa-info-circle"></i>
+            <i class="fas fa-info-circle text-gray-400"></i>
         </div>
     `;
     container.appendChild(card);
