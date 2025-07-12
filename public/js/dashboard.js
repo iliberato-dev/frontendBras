@@ -300,6 +300,31 @@ function displayMembers(members) {
         const checkbox = card.querySelector(".presence-checkbox");
         const infoDiv = card.querySelector(".presence-info");
         const confirmBtn = card.querySelector(".btn-confirm-presence");
+        // Variaveis para foto
+        const photoUploadInput = card.querySelector(".photo-upload-input");
+        const memberPhoto = card.querySelector(".member-photo");
+
+         // Lógica para pré-visualizar a imagem selecionada
+    photoUploadInput.addEventListener("change", (event) => {
+        const file = event.target.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                memberPhoto.src = e.target.result;
+                // AQUI É ONDE VOCÊ PRECISARÁ IMPLEMENTAR A LÓGICA DE UPLOAD REAL:
+                // 1. Enviar 'file' para um serviço de armazenamento (ex: Google Drive, Cloudinary).
+                // 2. Após o upload, você receberá uma URL para a imagem salva.
+                // 3. Essa URL deve ser salva na sua planilha associada a este membro.
+                //    Isso geralmente envolve fazer uma requisição (fetch/axios) para um script de backend
+                //    (como Google Apps Script para Google Sheets, ou uma API REST) que irá
+                //    atualizar a célula da planilha com a URL da nova foto.
+                console.log(`Arquivo selecionado para ${member.Nome}:`, file);
+                // Exemplo teórico de como você chamaria uma função para fazer o upload e salvar a URL:
+                // uploadAndSavePhotoURL(member.Nome, file);
+            };
+            reader.readAsDataURL(file); // Lê o arquivo como URL de dados para pré-visualização
+        }
+    });
 
         const updatePresenceStatus = () => {
             if (!infoDiv) return; // Add null check for infoDiv
