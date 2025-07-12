@@ -27,4 +27,11 @@ if (!fs.existsSync(jsFolderPath)) {
 fs.writeFileSync(configFilePath, envContent);
 
 console.log(`Backend URL injetada com sucesso em ${configFilePath}`);
-console.log(`BACKEND_BASE_URL: ${backendUrl}`);
+console.log(`BACKEND_BASE_URL: ${backendUrl}`);console.log(`Tentando criar pasta: ${jsFolderPath}`);
+if (!fs.existsSync(jsFolderPath)) {
+    fs.mkdirSync(jsFolderPath, { recursive: true });
+    console.log(`Pasta criada: ${jsFolderPath}`);
+}
+console.log(`Escrevendo arquivo em: ${configFilePath}`);
+fs.writeFileSync(configFilePath, envContent);
+console.log('Arquivo config.js criado com sucesso!');
