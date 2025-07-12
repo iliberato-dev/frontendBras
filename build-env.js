@@ -6,11 +6,11 @@ const path = require('path'); // Importa o módulo 'path' para lidar com caminho
 const backendUrl = process.env.BACKEND_URL;
 
 if (!backendUrl) {
-    console.error('Erro: Variável de ambiente BACKEND_URL não definida no Vercel.');
+    console.error('Erro: Variável de ambiente BACKEND_BASE_URLnão definida no Vercel.');
     process.exit(1);
 }
 
-const envContent = `const BACKEND_URL = "${backendUrl}";\n`;
+const envContent = `const BACKEND_BASE_URL= "${backendUrl}";\n`;
 
 // Define o caminho completo para a pasta 'js' dentro de 'public'
 const jsFolderPath = path.join(__dirname, 'public', 'js');
