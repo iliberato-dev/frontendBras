@@ -264,12 +264,14 @@ function displayMembers(members) {
 
     card.innerHTML = `
         <div class="flex items-center gap-3">
-            <div class="relative w-16 h-16 rounded-full overflow-hidden border-2 border-indigo-400 flex-shrink-0">
-                <img src="${member.FotoURL || 'https://png.pngtree.com/png-vector/20191208/ourmid/pngtree-beautiful-create-user-glyph-vector-icon-png-image_2084391.jpg'}" 
-                     alt="Foto de ${member.Nome || 'Membro'}" 
-                     class="member-photo w-full h-full object-cover cursor-pointer">
-                <input type="file" class="photo-upload-input absolute inset-0 opacity-0 cursor-pointer" accept="image/*" data-member-name="${member.Nome}">
-                <div class="absolute inset-0 bg-black bg-opacity-40 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity duration-200 text-white text-xs text-center p-1">
+            <div class="relative w-16 h-16 rounded-full overflow-hidden border-2 border-indigo-400 flex-shrink-0 group">
+                <img src="${member.FotoURL || 'https://via.placeholder.com/150/F8FAFC/A0AEC0?text=Sem+Foto'}"
+                     alt="Foto de ${member.Nome || 'Membro'}"
+                     class="member-photo w-full h-full object-cover">
+                
+                <input type="file" class="photo-upload-input absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" accept="image/*" data-member-name="${member.Nome}">
+                
+                <div class="absolute inset-0 bg-black bg-opacity-40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 text-white text-xs text-center p-1 z-0">
                     Trocar Foto
                 </div>
             </div>
