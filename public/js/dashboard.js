@@ -249,21 +249,32 @@ function displayMembers(members) {
     members.forEach((member, idx) => {
         const card = document.createElement("div");
         card.className = "fade-in-row bg-white rounded-xl shadow-md p-4 flex flex-col gap-2 relative";
-        card.style.animationDelay = `${idx * 0.04}s`;
-        card.innerHTML = `
-            <div class="font-bold text-lg text-gray-800">${member.Nome || "N/A"}</div>
-            <div class="text-sm text-gray-600"><b>Período:</b> ${member.Periodo || "N/A"}</div>
-            <div class="text-sm text-gray-600"><b>Líder:</b> ${member.Lider || "N/A"}</div>
-            <div class="text-sm text-gray-600"><b>GAPE:</b> ${member.GAPE || "N/A"}</div>
-            <label class="flex items-center gap-2 mt-2">
-                <input type="checkbox" class="h-5 w-5 text-blue-600 rounded focus:ring-blue-500 presence-checkbox" data-member-name="${member.Nome}">
-                <span class="text-sm text-gray-700">Presente</span>
-            </label>
-            <button class="btn-confirm-presence w-full mt-2 hidden bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg shadow-md transition duration-300">Confirmar Presença</button>
-            <div class="text-xs text-gray-500 mt-1 hidden presence-info"></div>
-           
-        `;
-        container.appendChild(card);
+    card.style.animationDelay = `${idx * 0.04}s`;
+    card.innerHTML = `
+        <div class="font-bold text-lg text-gray-800 flex items-center gap-2">
+            <i class="fas fa-user"></i> ${member.Nome || "N/A"}
+        </div>
+        <div class="text-sm text-gray-600 flex items-center gap-2">
+            <i class="fas fa-calendar-alt"></i> <b>Período:</b> ${member.Periodo || "N/A"}
+        </div>
+        <div class="text-sm text-gray-600 flex items-center gap-2">
+            <i class="fas fa-star"></i> <b>Líder:</b> ${member.Lider || "N/A"}
+        </div>
+        <div class="text-sm text-gray-600 flex items-center gap-2">
+            <i class="fas fa-users"></i> <b>GAPE:</b> ${member.GAPE || "N/A"}
+        </div>
+        <label class="flex items-center gap-2 mt-2">
+            <input type="checkbox" class="h-5 w-5 text-blue-600 rounded focus:ring-blue-500 presence-checkbox" data-member-name="${member.Nome}">
+            <span class="text-sm text-gray-700">Presente</span>
+        </label>
+        <button class="btn-confirm-presence w-full mt-2 hidden bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg shadow-md transition duration-300 flex items-center justify-center gap-2">
+            <i class="fas fa-check-circle"></i> Confirmar Presença
+        </button>
+        <div class="text-xs text-gray-500 mt-1 hidden presence-info flex items-center gap-2">
+            <i class="fas fa-info-circle"></i>
+        </div>
+    `;
+    container.appendChild(card);
 
         const checkbox = card.querySelector(".presence-checkbox");
         const infoDiv = card.querySelector(".presence-info");
