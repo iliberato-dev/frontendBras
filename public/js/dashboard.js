@@ -401,7 +401,7 @@ function displayMembers(members) {
             registerPresence(memberId, memberName, leaderName, gapeName, periodo, presenceDate);
         });
     });
-}
+
 
 function populateSummaryMemberSelect(members) {
     summaryMemberSelect.innerHTML = '<option value="">Todos os Membros Filtrados</option>';
