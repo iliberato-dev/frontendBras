@@ -94,43 +94,87 @@ function getCurrentMonthDateRange() {
 // --- Funções de Interação com Google Apps Script (Backend) ---
 
 // Função para buscar os dados iniciais (líderes, gapes, etc.)
-function fetchInitialData() {
+async function fetchInitialData() {
     showLoading("Carregando dados iniciais...");
-    google.script.run
-        .withSuccessHandler(data => {
-            hideLoading();
-            populateFilterOptions(data.leaders, data.gapes);
-            loggedInLeaderName.textContent = `Logado como: ${data.loggedInUser}`; // Supondo que o Apps Script retorne o nome do usuário logado
+    try {
+        const response = await fetch('/get-membros'); // Chama a rota do seu backend Node.js
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.message || 'Erro ao carregar dados iniciais do servidor.');
+        }
+        const data = await response.json(); // Espera um objeto como { success: true, membros: [...] }
+
+        hideLoading();
+
+        if (data.success && Array.isArray(data.membros)) {
+            // Extrair líderes e grupos (GAFEs) dos membros recebidos do backend
+            const leaders = [...new Set(data.membros
+                .filter(m => m.Lider && m.Lider.trim() !== '')
+                .map(m => m.Lider.split('|').pop().trim()))].sort(); // Extrai apenas o nome do líder e ordena
+            
+            const gapes = [...new Set(data.membros
+                .filter(m => m.Congregacao && m.Congregacao.trim() !== '')
+                .map(m => m.Congregacao.trim()))].sort(); // Extrai o nome da congregação e ordena
+            
+            populateFilterOptions(leaders, gapes);
+            
+            // O nome do usuário logado deve vir do processo de login, não da busca inicial de membros.
+            // Se você configurou seu /login para retornar o nome do líder, ele já estaria setado.
+            // loggedInLeaderName.textContent = `Logado como: ${data.loggedInUser}`; // Remova ou ajuste esta linha
+            
             fetchMembers(currentFilters); // Carrega os membros após popular os filtros
             fetchAndDisplaySummary(); // Carrega o resumo inicial
-        })
-        .withFailureHandler(error => {
-            hideLoading();
-            showMessage(`Erro ao carregar dados iniciais: ${error.message}`, 'error');
-            console.error("Erro ao carregar dados iniciais:", error);
-        })
-        .getInitialData(); // Nome da função no seu Apps Script
+
+        } else {
+            showMessage(`Erro ao processar dados iniciais: ${data.message || 'Dados inválidos recebidos.'}`, 'error');
+            console.error("Dados iniciais inválidos:", data);
+        }
+
+    } catch (error) {
+        hideLoading();
+        showMessage(`Erro ao carregar dados iniciais: ${error.message}`, 'error');
+        console.error("Erro ao carregar dados iniciais no frontend:", error);
+    }
 }
 
-// Função para buscar membros com base nos filtros
-function fetchMembers(filters) {
+// --- NOVO fetchMembers no dashboard.js ---
+async function fetchMembers(filters) {
     showLoading("Buscando membros...");
-    google.script.run
-        .withSuccessHandler(data => {
-            hideLoading();
-            membersData = data;
-            displayMembers(data);
-            populateSummaryMemberSelect(data); // Atualiza a lista de membros no modal de resumo
-            if (data.length === 0) {
+    try {
+        const queryParams = new URLSearchParams();
+        // Mapeia os filtros para os nomes esperados pelo seu backend
+        if (filters.name) queryParams.append('nome', filters.name);
+        if (filters.periodo) queryParams.append('periodo', filters.periodo);
+        if (filters.lider) queryParams.append('lider', filters.lider);
+        if (filters.gape) queryParams.append('gape', filters.gape);
+
+        const response = await fetch(`/get-membros?${queryParams.toString()}`); // Chama o backend
+        
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.message || 'Erro ao buscar membros do servidor.');
+        }
+
+        const data = await response.json();
+
+        hideLoading();
+        
+        if (data.success && Array.isArray(data.membros)) {
+            membersData = data.membros; // Atualiza a variável global membersData
+            displayMembers(data.membros);
+            populateSummaryMemberSelect(data.membros); // Atualiza a lista de membros no modal de resumo
+            if (data.membros.length === 0) {
                 showMessage("Nenhum membro encontrado com os filtros aplicados.", "info");
             }
-        })
-        .withFailureHandler(error => {
-            hideLoading();
-            showMessage(`Erro ao buscar membros: ${error.message}`, 'error');
-            console.error("Erro ao buscar membros:", error);
-        })
-        .getFilteredMembers(filters); // Nome da função no seu Apps Script
+        } else {
+            showMessage(`Erro ao buscar membros: ${data.message || 'Dados inválidos.'}`, 'error');
+            console.error("Dados de membros inválidos:", data);
+        }
+    } catch (error) {
+        hideLoading();
+        showMessage(`Erro ao buscar membros: ${error.message}`, 'error');
+        console.error("Erro ao buscar membros no frontend:", error);
+    }
 }
 
 // Função para registrar a presença
@@ -157,37 +201,49 @@ function registerPresence(memberId, memberName, leaderName, gapeName, periodo, p
 }
 
 // Função para buscar e exibir o resumo no dashboard principal
-function fetchAndDisplaySummary() {
+// --- NOVO fetchAndDisplaySummary no dashboard.js ---
+async function fetchAndDisplaySummary() {
     showLoading("Carregando resumo do dashboard...");
     const { start, end } = getCurrentMonthDateRange();
 
-    // Adapte o objeto filters para o que seu Apps Script espera para o resumo
     const summaryFilters = {
         ...currentFilters, // Inclui os filtros atuais da tela principal
         startDate: start,
         endDate: end
     };
 
-    google.script.run
-        .withSuccessHandler(summaryData => {
-            hideLoading();
-            // Supondo que summaryData.totalPresences e summaryData.totalAbsences (faltas) vêm do Apps Script
-            dashboardPresencasMes.textContent = summaryData.totalPresences !== undefined ? summaryData.totalPresences : 0;
-            dashboardFaltasMes.textContent = summaryData.totalAbsences !== undefined ? summaryData.totalAbsences : 0; // Exibe as faltas
+    try {
+        const queryParams = new URLSearchParams();
+        if (summaryFilters.startDate) queryParams.append('startDate', summaryFilters.startDate);
+        if (summaryFilters.endDate) queryParams.append('endDate', summaryFilters.endDate);
+        if (summaryFilters.lider) queryParams.append('lider', summaryFilters.lider);
+        if (summaryFilters.gape) queryParams.append('gape', summaryFilters.gape);
 
-            // Atualiza os filtros exibidos no dashboard
+        const response = await fetch(`/get-presencas-total?${queryParams.toString()}`); // Chama o backend
+        
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.message || 'Erro ao carregar resumo do servidor.');
+        }
+
+        const summaryData = await response.json(); // Espera um objeto como { success: true, totalPresences: X, totalAbsences: Y, ... }
+
+        hideLoading();
+        
+        if (summaryData.success) {
+            dashboardPresencasMes.textContent = summaryData.totalPresences !== undefined ? summaryData.totalPresences : 0;
+            dashboardFaltasMes.textContent = summaryData.totalAbsences !== undefined ? summaryData.totalAbsences : 0;
+
             dashboardPeriodo.textContent = currentFilters.periodo || 'Todos';
             dashboardLider.textContent = currentFilters.lider || 'Todos';
             dashboardGape.textContent = currentFilters.gape || 'Todos';
 
-            // Atualiza a lista de contagens individuais (ainda exibirá os membros filtrados)
             totalCountsList.innerHTML = '';
+            // Os dados `memberCounts` precisam vir do seu backend e Apps Script
             if (summaryData.memberCounts && Object.keys(summaryData.memberCounts).length > 0) {
-                // Adiciona os totais gerais primeiro na lista
                 totalCountsList.innerHTML += `<li class="text-lg font-bold text-green-300">Total Presenças (Mês): ${summaryData.totalPresences !== undefined ? summaryData.totalPresences : 0}</li>`;
-                totalCountsList.innerHTML += `<li class="text-lg font-bold text-red-300">Membros Sem Presença (Mês): ${summaryData.totalAbsences !== undefined ? summaryData.totalAbsences : 0}</li>`;
+                totalCountsList.innerHTML += `<li class="text-lg font-bold text-red-300">Membros Sem Presença (Mês): ${summaryData.totalAbsentMembers !== undefined ? summaryData.totalAbsentMembers : 0}</li>`; // Use totalAbsentMembers
                 
-                // Adiciona os detalhes por membro
                 for (const memberName in summaryData.memberCounts) {
                     const count = summaryData.memberCounts[memberName];
                     const listItem = document.createElement('li');
@@ -198,46 +254,82 @@ function fetchAndDisplaySummary() {
             } else {
                 totalCountsList.innerHTML = '<li class="text-sm text-gray-200 text-center">Nenhum dado de presença disponível para os filtros atuais.</li>';
             }
-        })
-        .withFailureHandler(error => {
-            hideLoading();
-            showMessage(`Erro ao carregar resumo: ${error.message}`, 'error');
-            console.error("Erro ao carregar resumo:", error);
-        })
-        .getMonthlySummary(summaryFilters); // Nome da função no seu Apps Script, que agora aceita startDate e endDate
+        } else {
+            showMessage(`Erro ao carregar resumo: ${summaryData.message || 'Dados inválidos.'}`, 'error');
+            console.error("Dados de resumo inválidos:", summaryData);
+        }
+    } catch (error) {
+        hideLoading();
+        showMessage(`Erro ao carregar resumo: ${error.message}`, 'error');
+        console.error("Erro ao carregar resumo no frontend:", error);
+    }
 }
 
 // Função para buscar dados detalhados para o modal de resumo
-function fetchDetailedSummary(filters) {
+// --- NOVO fetchDetailedSummary no dashboard.js ---
+async function fetchDetailedSummary(filters) {
     showLoading("Gerando resumo detalhado...");
-    google.script.run
-        .withSuccessHandler(summary => {
-            hideLoading();
+    try {
+        const queryParams = new URLSearchParams();
+        if (filters.startDate) queryParams.append('startDate', filters.startDate);
+        if (filters.endDate) queryParams.append('endDate', filters.endDate);
+        if (filters.memberId) queryParams.append('memberId', filters.memberId); // Ou memberName, dependendo do backend
+        if (filters.lider) queryParams.append('lider', filters.lider);
+        if (filters.gape) queryParams.append('gape', filters.gape);
+
+        // Se /get-faltas não retorna todos os dados que você precisa para o modal detalhado,
+        // você pode precisar de uma nova rota no server.js (ex: /get-detailed-summary)
+        // que seu Apps Script também implementaria (ex: getDetailedSummary).
+        const response = await fetch(`/get-faltas?${queryParams.toString()}`); // Adapte para a rota correta do seu backend
+        
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.message || 'Erro ao carregar resumo detalhado do servidor.');
+        }
+
+        const summary = await response.json(); // Espera o mesmo formato que google.script.run retornaria
+                                            // { success: true, totalPresentMembers: X, totalAbsentMembers: Y, totalPresencesCount: Z, filterInfo: {...}, presencesByLeader: {...}}
+
+        hideLoading();
+
+        if (summary.success) {
             updateDetailedSummaryModal(summary);
             detailedSummaryModal.classList.remove('hidden'); // Exibe o modal
-        })
-        .withFailureHandler(error => {
-            hideLoading();
-            showMessage(`Erro ao carregar resumo detalhado: ${error.message}`, 'error');
-            console.error("Erro ao carregar resumo detalhado:", error);
-        })
-        .getDetailedSummary(filters); // Nome da função no seu Apps Script
+        } else {
+            showMessage(`Erro ao carregar resumo detalhado: ${summary.message || 'Dados inválidos.'}`, 'error');
+            console.error("Dados de resumo detalhados inválidos:", summary);
+        }
+    } catch (error) {
+        hideLoading();
+        showMessage(`Erro ao carregar resumo detalhado: ${error.message}`, 'error');
+        console.error("Erro ao carregar resumo detalhado no frontend:", error);
+    }
 }
 
 // Função para fazer logout
-function logout() {
+// --- NOVO logout no dashboard.js ---
+async function logout() {
     showLoading("Saindo...");
-    google.script.run
-        .withSuccessHandler(() => {
-            // Após o logout bem-sucedido no Apps Script, redirecionar para a página de login
-            window.top.location.href = 'index.html'; // Altere para a sua página de login
-        })
-        .withFailureHandler(error => {
-            hideLoading();
-            showMessage(`Erro ao fazer logout: ${error.message}`, 'error');
-            console.error("Erro ao fazer logout:", error);
-        })
-        .doLogout(); // Nome da função no seu Apps Script
+    try {
+        // Se você tiver uma rota de logout no Node.js para limpar tokens/sessões:
+        const response = await fetch('/logout', { method: 'POST' }); 
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.message || 'Erro ao fazer logout no servidor.');
+        }
+        
+        // Limpar qualquer token/info de sessão armazenada no frontend (localStorage, sessionStorage)
+        localStorage.removeItem('authToken'); 
+        localStorage.removeItem('loggedInLeaderName'); // Remova qualquer info de login que você armazena
+
+        hideLoading();
+        // Redirecionar para a página de login após o logout bem-sucedido
+        window.location.href = '/login.html'; // Ou 'index.html' se for a sua página de login
+    } catch (error) {
+        hideLoading();
+        showMessage(`Erro ao fazer logout: ${error.message}`, 'error');
+        console.error("Erro ao fazer logout no frontend:", error);
+    }
 }
 
 
