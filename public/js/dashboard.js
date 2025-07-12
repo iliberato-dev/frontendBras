@@ -366,21 +366,22 @@ function displayMembers(members) {
         const card = document.createElement('div');
         card.className = 'bg-white rounded-lg shadow-md p-4 transition duration-300 ease-in-out hover:shadow-lg flex flex-col';
         card.innerHTML = `
-            <h3 class="text-lg font-semibold text-gray-800">${member.nome}</h3>
-            <p class="text-sm text-gray-600">Período: ${member.periodo}</p>
-            <p class="text-sm text-gray-600">Líder: ${member.lider}</p>
-            <p class="text-sm text-gray-600 mb-4">GAPE: ${member.gape}</p>
+            <h3 class="text-lg font-semibold text-gray-800">${member.Nome}</h3>       
+            <p class="text-sm text-gray-600">Período: ${member.Periodo}</p>     
+            <p class="text-sm text-gray-600">Líder: ${member.Lider}</p>         
+            <p class="text-sm text-gray-600 mb-4">GAPE: ${member.GAPE}</p>       
             <button class="btn-sm btn-primary mt-auto confirm-presence-btn" 
-                    data-member-id="${member.id}" 
-                    data-member-name="${member.nome}"
-                    data-leader-name="${member.lider}"
-                    data-gape-name="${member.gape}"
-                    data-periodo="${member.periodo}">
+                    data-member-id="${member.RI}"  
+                    data-member-name="${member.Nome}"
+                    data-leader-name="${member.Lider}"
+                    data-gape-name="${member.GAPE}" 
+                    data-periodo="${member.Periodo}">
                 Confirmar Presença
             </button>
         `;
         membersCardsContainer.appendChild(card);
     });
+}
 
     // Adiciona event listeners aos novos botões
     document.querySelectorAll('.confirm-presence-btn').forEach(button => {
