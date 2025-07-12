@@ -10,7 +10,7 @@ if (!backendUrl) {
     process.exit(1);
 }
 
-const envContent = `const BACKEND_BASE_URL = "${backendUrl}";\n`;
+const envContent = `const BACKEND_URL = "${backendUrl}";\n`;
 
 // Define o caminho completo para a pasta 'js' dentro de 'public'
 const jsFolderPath = path.join(__dirname, 'public', 'js');
@@ -27,7 +27,7 @@ if (!fs.existsSync(jsFolderPath)) {
 fs.writeFileSync(configFilePath, envContent);
 
 console.log(`Backend URL injetada com sucesso em ${configFilePath}`);
-console.log(`BACKEND_BASE_URL: ${backendUrl}`);console.log(`Tentando criar pasta: ${jsFolderPath}`);
+console.log(`BACKEND_URL: ${backendUrl}`);console.log(`Tentando criar pasta: ${jsFolderPath}`);
 if (!fs.existsSync(jsFolderPath)) {
     fs.mkdirSync(jsFolderPath, { recursive: true });
     console.log(`Pasta criada: ${jsFolderPath}`);
