@@ -97,7 +97,7 @@ function getCurrentMonthDateRange() {
 async function fetchInitialData() {
     showLoading("Carregando dados iniciais...");
     try {
-        const response = await fetch('/get-membros'); // Chama a rota do seu backend Node.js
+        const response = await fetch(`${BACKEND_URL}/get-membros`); // Chama a rota do seu backend Node.js
         if (!response.ok) {
             const errorData = await response.json();
             throw new Error(errorData.message || 'Erro ao carregar dados iniciais do servidor.');
@@ -148,7 +148,7 @@ async function fetchMembers(filters) {
         if (filters.lider) queryParams.append('lider', filters.lider);
         if (filters.gape) queryParams.append('gape', filters.gape);
 
-        const response = await fetch(`/get-membros?${queryParams.toString()}`); // Chama o backend
+        const response = await fetch(`${BACKEND_URL}/get-membros?${queryParams.toString()}`); // Chama o backend
         
         if (!response.ok) {
             const errorData = await response.json();
@@ -219,7 +219,7 @@ async function fetchAndDisplaySummary() {
         if (summaryFilters.lider) queryParams.append('lider', summaryFilters.lider);
         if (summaryFilters.gape) queryParams.append('gape', summaryFilters.gape);
 
-        const response = await fetch(`/get-presencas-total?${queryParams.toString()}`); // Chama o backend
+        const response = await fetch(`${BACKEND_URL}/get-presencas-total?${queryParams.toString()}`); // Chama o backend
         
         if (!response.ok) {
             const errorData = await response.json();
@@ -280,7 +280,7 @@ async function fetchDetailedSummary(filters) {
         // Se /get-faltas não retorna todos os dados que você precisa para o modal detalhado,
         // você pode precisar de uma nova rota no server.js (ex: /get-detailed-summary)
         // que seu Apps Script também implementaria (ex: getDetailedSummary).
-        const response = await fetch(`/get-faltas?${queryParams.toString()}`); // Adapte para a rota correta do seu backend
+        const response = await fetch(`${BACKEND_URL}/get-faltas?${queryParams.toString()}`); // Adapte para a rota correta do seu backend
         
         if (!response.ok) {
             const errorData = await response.json();
@@ -312,7 +312,7 @@ async function logout() {
     showLoading("Saindo...");
     try {
         // Se você tiver uma rota de logout no Node.js para limpar tokens/sessões:
-        const response = await fetch('/logout', { method: 'POST' }); 
+        const response = await fetch(`${BACKEND_URL}/logout`, { method: 'POST' }); 
         if (!response.ok) {
             const errorData = await response.json();
             throw new Error(errorData.message || 'Erro ao fazer logout no servidor.');
