@@ -1,13 +1,15 @@
+// js/dashboard.js
+
 // Constantes e elementos do DOM
 const globalLoadingIndicator = document.getElementById('globalLoadingIndicator');
 const loadingMessage = document.getElementById('loadingMessage');
-const loggedInLeaderName = document.getElementById('loggedInLeaderName');
+const loggedInLeaderNameDisplay = document.getElementById('loggedInLeaderName'); // Renomeado para clareza
 const logoutBtn = document.getElementById('logoutBtn');
 const messageArea = document.getElementById('messageArea');
-const filterName = document.getElementById('filterName');
-const filterPeriodo = document.getElementById('filterPeriodo');
-const filterLider = document.getElementById('filterLider');
-const filterGape = document.getElementById('filterGape');
+const filterNameInput = document.getElementById('filterName'); // Renomeado para clareza
+const filterPeriodoSelect = document.getElementById('filterPeriodo'); // Renomeado para clareza
+const filterLiderSelect = document.getElementById('filterLider'); // Renomeado para clareza
+const filterGapeSelect = document.getElementById('filterGape'); // Renomeado para clareza
 const applyFiltersBtn = document.getElementById('applyFiltersBtn');
 const clearFiltersBtn = document.getElementById('clearFiltersBtn');
 const toggleDashboardBtn = document.getElementById('toggleDashboardBtn');
@@ -17,7 +19,7 @@ const dashboardOpenText = document.getElementById('dashboardOpenText');
 const dashboardCloseIcon = document.getElementById('dashboardCloseIcon');
 const dashboardCloseText = document.getElementById('dashboardCloseText');
 const dashboardPresencasMes = document.getElementById('dashboardPresencasMes');
-const dashboardFaltasMes = document.getElementById('dashboardFaltasMes'); // Novo elemento para faltas
+const dashboardFaltasMes = document.getElementById('dashboardFaltasMes');
 const dashboardPeriodo = document.getElementById('dashboardPeriodo');
 const dashboardLider = document.getElementById('dashboardLider');
 const dashboardGape = document.getElementById('dashboardGape');
@@ -35,12 +37,15 @@ const summaryStartDateInput = document.getElementById('summaryStartDate');
 const summaryEndDateInput = document.getElementById('summaryEndDate');
 const summaryMemberSelect = document.getElementById('summaryMemberSelect');
 const downloadPdfBtn = document.getElementById('downloadPdfBtn');
-
-// Novo elemento para o input de data de presença
 const presenceDateInput = document.getElementById('presenceDateInput');
 
-let currentFilters = {};
-let membersData = [];
+let currentFilters = {
+    name: '',
+    periodo: '',
+    lider: '',
+    gape: ''
+};
+let membersData = []; // Esta variável armazenará os membros para exibição
 let summaryPieChart, summaryBarChart; // Variáveis para os gráficos
 
 // --- Funções de Utilitários ---
@@ -68,41 +73,50 @@ function showMessage(message, type = 'info') {
     }
     setTimeout(() => {
         messageArea.classList.add('hidden');
-    }, 5000); // Esconde a mensagem após 5 segundos
+    }, 5000);
 }
 
-// Formata a data para 'DD/MM/YYYY'
 function formatDate(dateString) {
     if (!dateString) return '';
     const [year, month, day] = dateString.split('-');
     return `${day}/${month}/${year}`;
 }
 
-// Pega o primeiro e o último dia do mês atual para o resumo
 function getCurrentMonthDateRange() {
     const today = new Date();
     const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
-    const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0); // Last day of current month
-    
+    const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+
     return {
         start: firstDay.toISOString().split('T')[0],
         end: lastDay.toISOString().split('T')[0]
     };
 }
 
+// --- Funções de Autenticação e Login Display ---
 
-// --- Funções de Interação com Google Apps Script (Backend) ---
+function updateLoginStatusDisplay() {
+    const storedName = localStorage.getItem('loggedInLeaderName');
+    if (storedName) {
+        loggedInLeaderNameDisplay.textContent = `Logado como: ${storedName}`;
+    } else {
+        loggedInLeaderNameDisplay.textContent = 'Logado como: Não Autorizado';
+        // Opcional: redirecionar para a página de login se não estiver autorizado
+        // window.location.href = '/login.html';
+    }
+}
 
-// Função para buscar os dados iniciais (líderes, gapes, etc.)
+// --- Funções de Interação com o Backend (Node.js) ---
+
 async function fetchInitialData() {
     showLoading("Carregando dados iniciais...");
     try {
-        const response = await fetch(`${BACKEND_BASE_URL}/get-membros`); // Chama a rota do seu backend Node.js
+        const response = await fetch(`${BACKEND_BASE_URL}/get-membros`);
         if (!response.ok) {
             const errorData = await response.json();
             throw new Error(errorData.message || 'Erro ao carregar dados iniciais do servidor.');
         }
-        const data = await response.json(); // Espera um objeto como { success: true, membros: [...] }
+        const data = await response.json();
 
         hideLoading();
 
@@ -110,19 +124,16 @@ async function fetchInitialData() {
             // Extrair líderes e grupos (GAFEs) dos membros recebidos do backend
             const leaders = [...new Set(data.membros
                 .filter(m => m.Lider && m.Lider.trim() !== '')
-                .map(m => m.Lider.split('|').pop().trim()))].sort(); // Extrai apenas o nome do líder e ordena
-            
+                .map(m => m.Lider.split('|').pop().trim()))].sort();
+
             const gapes = [...new Set(data.membros
-                .filter(m => m.Congregacao && m.Congregacao.trim() !== '')
-                .map(m => m.Congregacao.trim()))].sort(); // Extrai o nome da congregação e ordena
-            
+                .filter(m => m.GAPE && m.GAPE.trim() !== '') // Use m.GAPE conforme o seu card
+                .map(m => m.GAPE.trim()))].sort(); // Use m.GAPE conforme o seu card
+
             populateFilterOptions(leaders, gapes);
-            
-            // O nome do usuário logado deve vir do processo de login, não da busca inicial de membros.
-            // Se você configurou seu /login para retornar o nome do líder, ele já estaria setado.
-            // loggedInLeaderName.textContent = `Logado como: ${data.loggedInUser}`; // Remova ou ajuste esta linha
-            
-            fetchMembers(currentFilters); // Carrega os membros após popular os filtros
+            membersData = data.membros; // Armazena todos os membros para populardropdowns de resumo
+            populateSummaryMemberSelect(membersData); // Popula o select do modal de resumo com TODOS os membros iniciais
+            fetchMembers(currentFilters); // Carrega os membros com os filtros atuais (vazios no início)
             fetchAndDisplaySummary(); // Carrega o resumo inicial
 
         } else {
@@ -137,19 +148,17 @@ async function fetchInitialData() {
     }
 }
 
-// --- NOVO fetchMembers no dashboard.js ---
 async function fetchMembers(filters) {
     showLoading("Buscando membros...");
     try {
         const queryParams = new URLSearchParams();
-        // Mapeia os filtros para os nomes esperados pelo seu backend
         if (filters.name) queryParams.append('nome', filters.name);
         if (filters.periodo) queryParams.append('periodo', filters.periodo);
         if (filters.lider) queryParams.append('lider', filters.lider);
         if (filters.gape) queryParams.append('gape', filters.gape);
 
-        const response = await fetch(`${BACKEND_BASE_URL}/get-membros?${queryParams.toString()}`); // Chama o backend
-        
+        const response = await fetch(`${BACKEND_BASE_URL}/get-membros?${queryParams.toString()}`);
+
         if (!response.ok) {
             const errorData = await response.json();
             throw new Error(errorData.message || 'Erro ao buscar membros do servidor.');
@@ -158,11 +167,13 @@ async function fetchMembers(filters) {
         const data = await response.json();
 
         hideLoading();
-        
+
         if (data.success && Array.isArray(data.membros)) {
-            membersData = data.membros; // Atualiza a variável global membersData
+            membersData = data.membros; // Atualiza a variável global membersData para os membros FILTRADOS
             displayMembers(data.membros);
-            populateSummaryMemberSelect(data.membros); // Atualiza a lista de membros no modal de resumo
+            // populateSummaryMemberSelect(data.membros); // Descomente se quiser que o select do modal mostre APENAS membros filtrados.
+                                                        // Mantive a versão que popula com TODOS os membros em fetchInitialData
+                                                        // para o caso de querer o resumo detalhado de qualquer membro, não apenas os visíveis.
             if (data.membros.length === 0) {
                 showMessage("Nenhum membro encontrado com os filtros aplicados.", "info");
             }
@@ -177,37 +188,46 @@ async function fetchMembers(filters) {
     }
 }
 
-// Função para registrar a presença
-function registerPresence(memberId, memberName, leaderName, gapeName, periodo, presenceDate) {
+// **Função para registrar a presença (AGORA USANDO FETCH PARA O NODE.JS)**
+async function registerPresence(memberId, memberName, leaderName, gapeName, periodo, presenceDate) {
     showLoading(`Registrando presença para ${memberName}...`);
-    google.script.run
-        .withSuccessHandler(response => {
-            hideLoading();
-            if (response.success) {
-                showMessage(`Presença de ${memberName} registrada com sucesso para ${formatDate(presenceDate)}.`, 'success');
-                // Opcional: Atualizar apenas o card do membro ou recarregar tudo
-                fetchMembers(currentFilters); // Recarregar para garantir dados atualizados
-                fetchAndDisplaySummary(); // Atualizar o dashboard após o registro
-            } else {
-                showMessage(`Erro ao registrar presença para ${memberName}: ${response.message}`, 'error');
-            }
-        })
-        .withFailureHandler(error => {
-            hideLoading();
-            showMessage(`Erro de comunicação ao registrar presença: ${error.message}`, 'error');
-            console.error("Erro de comunicação ao registrar presença:", error);
-        })
-        .registerMemberPresence(memberId, memberName, leaderName, gapeName, periodo, presenceDate); // Nome da função no seu Apps Script
+    try {
+        const response = await fetch(`${BACKEND_BASE_URL}/register-presence`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ memberId, memberName, leaderName, gapeName, periodo, presenceDate })
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.message || 'Erro ao registrar presença no servidor.');
+        }
+
+        const data = await response.json();
+
+        hideLoading();
+        if (data.success) {
+            showMessage(`Presença de ${memberName} registrada com sucesso para ${formatDate(presenceDate)}.`, 'success');
+            fetchMembers(currentFilters); // Recarrega para garantir dados atualizados (cards e filtros)
+            fetchAndDisplaySummary(); // Atualiza o dashboard após o registro
+        } else {
+            showMessage(`Erro ao registrar presença para ${memberName}: ${data.message}`, 'error');
+        }
+    } catch (error) {
+        hideLoading();
+        showMessage(`Erro de comunicação ao registrar presença: ${error.message}`, 'error');
+        console.error("Erro de comunicação ao registrar presença:", error);
+    }
 }
 
-// Função para buscar e exibir o resumo no dashboard principal
-// --- NOVO fetchAndDisplaySummary no dashboard.js ---
 async function fetchAndDisplaySummary() {
     showLoading("Carregando resumo do dashboard...");
     const { start, end } = getCurrentMonthDateRange();
 
     const summaryFilters = {
-        ...currentFilters, // Inclui os filtros atuais da tela principal
+        ...currentFilters,
         startDate: start,
         endDate: end
     };
@@ -219,31 +239,30 @@ async function fetchAndDisplaySummary() {
         if (summaryFilters.lider) queryParams.append('lider', summaryFilters.lider);
         if (summaryFilters.gape) queryParams.append('gape', summaryFilters.gape);
 
-        const response = await fetch(`${BACKEND_BASE_URL}/get-presencas-total?${queryParams.toString()}`); // Chama o backend
-        
+        const response = await fetch(`${BACKEND_BASE_URL}/get-presencas-total?${queryParams.toString()}`);
+
         if (!response.ok) {
             const errorData = await response.json();
             throw new Error(errorData.message || 'Erro ao carregar resumo do servidor.');
         }
 
-        const summaryData = await response.json(); // Espera um objeto como { success: true, totalPresences: X, totalAbsences: Y, ... }
+        const summaryData = await response.json();
 
         hideLoading();
-        
+
         if (summaryData.success) {
             dashboardPresencasMes.textContent = summaryData.totalPresences !== undefined ? summaryData.totalPresences : 0;
-            dashboardFaltasMes.textContent = summaryData.totalAbsences !== undefined ? summaryData.totalAbsences : 0;
+            dashboardFaltasMes.textContent = summaryData.totalAbsences !== undefined ? summaryData.totalAbsences : 0; // Verifica se totalAbsences existe
 
             dashboardPeriodo.textContent = currentFilters.periodo || 'Todos';
             dashboardLider.textContent = currentFilters.lider || 'Todos';
             dashboardGape.textContent = currentFilters.gape || 'Todos';
 
             totalCountsList.innerHTML = '';
-            // Os dados `memberCounts` precisam vir do seu backend e Apps Script
             if (summaryData.memberCounts && Object.keys(summaryData.memberCounts).length > 0) {
                 totalCountsList.innerHTML += `<li class="text-lg font-bold text-green-300">Total Presenças (Mês): ${summaryData.totalPresences !== undefined ? summaryData.totalPresences : 0}</li>`;
-                totalCountsList.innerHTML += `<li class="text-lg font-bold text-red-300">Membros Sem Presença (Mês): ${summaryData.totalAbsentMembers !== undefined ? summaryData.totalAbsentMembers : 0}</li>`; // Use totalAbsentMembers
-                
+                totalCountsList.innerHTML += `<li class="text-lg font-bold text-red-300">Membros Sem Presença (Mês): ${summaryData.totalAbsentMembers !== undefined ? summaryData.totalAbsentMembers : 0}</li>`;
+
                 for (const memberName in summaryData.memberCounts) {
                     const count = summaryData.memberCounts[memberName];
                     const listItem = document.createElement('li');
@@ -265,36 +284,31 @@ async function fetchAndDisplaySummary() {
     }
 }
 
-// Função para buscar dados detalhados para o modal de resumo
-// --- NOVO fetchDetailedSummary no dashboard.js ---
 async function fetchDetailedSummary(filters) {
     showLoading("Gerando resumo detalhado...");
     try {
         const queryParams = new URLSearchParams();
         if (filters.startDate) queryParams.append('startDate', filters.startDate);
         if (filters.endDate) queryParams.append('endDate', filters.endDate);
-        if (filters.memberId) queryParams.append('memberId', filters.memberId); // Ou memberName, dependendo do backend
+        if (filters.memberId) queryParams.append('memberId', filters.memberId);
         if (filters.lider) queryParams.append('lider', filters.lider);
         if (filters.gape) queryParams.append('gape', filters.gape);
 
-        // Se /get-faltas não retorna todos os dados que você precisa para o modal detalhado,
-        // você pode precisar de uma nova rota no server.js (ex: /get-detailed-summary)
-        // que seu Apps Script também implementaria (ex: getDetailedSummary).
-        const response = await fetch(`${BACKEND_BASE_URL}/get-faltas?${queryParams.toString()}`); // Adapte para a rota correta do seu backend
-        
+        // Adapte esta rota para o seu backend Node.js
+        const response = await fetch(`${BACKEND_BASE_URL}/get-detailed-summary?${queryParams.toString()}`);
+
         if (!response.ok) {
             const errorData = await response.json();
             throw new Error(errorData.message || 'Erro ao carregar resumo detalhado do servidor.');
         }
 
-        const summary = await response.json(); // Espera o mesmo formato que google.script.run retornaria
-                                            // { success: true, totalPresentMembers: X, totalAbsentMembers: Y, totalPresencesCount: Z, filterInfo: {...}, presencesByLeader: {...}}
+        const summary = await response.json();
 
         hideLoading();
 
         if (summary.success) {
             updateDetailedSummaryModal(summary);
-            detailedSummaryModal.classList.remove('hidden'); // Exibe o modal
+            detailedSummaryModal.classList.remove('hidden');
         } else {
             showMessage(`Erro ao carregar resumo detalhado: ${summary.message || 'Dados inválidos.'}`, 'error');
             console.error("Dados de resumo detalhados inválidos:", summary);
@@ -306,25 +320,20 @@ async function fetchDetailedSummary(filters) {
     }
 }
 
-// Função para fazer logout
-// --- NOVO logout no dashboard.js ---
 async function logout() {
     showLoading("Saindo...");
     try {
-        // Se você tiver uma rota de logout no Node.js para limpar tokens/sessões:
-        const response = await fetch(`${BACKEND_BASE_URL}/logout`, { method: 'POST' }); 
+        const response = await fetch(`${BACKEND_BASE_URL}/logout`, { method: 'POST' });
         if (!response.ok) {
             const errorData = await response.json();
             throw new Error(errorData.message || 'Erro ao fazer logout no servidor.');
         }
-        
-        // Limpar qualquer token/info de sessão armazenada no frontend (localStorage, sessionStorage)
-        localStorage.removeItem('authToken'); 
-        localStorage.removeItem('loggedInLeaderName'); // Remova qualquer info de login que você armazena
+
+        localStorage.removeItem('authToken');
+        localStorage.removeItem('loggedInLeaderName');
 
         hideLoading();
-        // Redirecionar para a página de login após o logout bem-sucedido
-        window.location.href = '/login.html'; // Ou 'index.html' se for a sua página de login
+        window.location.href = '/login.html';
     } catch (error) {
         hideLoading();
         showMessage(`Erro ao fazer logout: ${error.message}`, 'error');
@@ -332,31 +341,28 @@ async function logout() {
     }
 }
 
-
 // --- Funções de Manipulação do DOM ---
 
 function populateFilterOptions(leaders, gapes) {
-    // Popula líderes
-    filterLider.innerHTML = '<option value="">Todos</option>';
+    filterLiderSelect.innerHTML = '<option value="">Todos</option>';
     leaders.forEach(leader => {
         const option = document.createElement('option');
         option.value = leader;
         option.textContent = leader;
-        filterLider.appendChild(option);
+        filterLiderSelect.appendChild(option);
     });
 
-    // Popula GAPEs
-    filterGape.innerHTML = '<option value="">Todos</option>';
+    filterGapeSelect.innerHTML = '<option value="">Todos</option>';
     gapes.forEach(gape => {
         const option = document.createElement('option');
         option.value = gape;
         option.textContent = gape;
-        filterGape.appendChild(option);
+        filterGapeSelect.appendChild(option);
     });
 }
 
 function displayMembers(members) {
-    membersCardsContainer.innerHTML = ''; // Limpa os cartões existentes
+    membersCardsContainer.innerHTML = '';
     if (members.length === 0) {
         membersCardsContainer.innerHTML = '<p class="text-center text-gray-600 col-span-full">Nenhum membro encontrado com os filtros aplicados.</p>';
         return;
@@ -366,24 +372,23 @@ function displayMembers(members) {
         const card = document.createElement('div');
         card.className = 'bg-white rounded-lg shadow-md p-4 transition duration-300 ease-in-out hover:shadow-lg flex flex-col';
         card.innerHTML = `
-            <h3 class="text-lg font-semibold text-gray-800">${member.Nome}</h3>       
-            <p class="text-sm text-gray-600">Período: ${member.Periodo}</p>     
-            <p class="text-sm text-gray-600">Líder: ${member.Lider}</p>         
-            <p class="text-sm text-gray-600 mb-4">GAPE: ${member.GAPE}</p>       
-            <button class="btn-sm btn-primary mt-auto confirm-presence-btn" 
-                    data-member-id="${member.RI}"  
-                    data-member-name="${member.Nome}"
-                    data-leader-name="${member.Lider}"
-                    data-gape-name="${member.GAPE}" 
-                    data-periodo="${member.Periodo}">
+            <h3 class="text-lg font-semibold text-gray-800">${member.Nome || 'N/A'}</h3>
+            <p class="text-sm text-gray-600">Período: ${member.Periodo || 'N/A'}</p>
+            <p class="text-sm text-gray-600">Líder: ${member.Lider || 'N/A'}</p>
+            <p class="text-sm text-gray-600 mb-4">GAPE: ${member.GAPE || 'N/A'}</p>
+            <button class="btn-sm btn-primary mt-auto confirm-presence-btn"
+                    data-member-id="${member.RI || ''}"
+                    data-member-name="${member.Nome || ''}"
+                    data-leader-name="${member.Lider || ''}"
+                    data-gape-name="${member.GAPE || ''}"
+                    data-periodo="${member.Periodo || ''}">
                 Confirmar Presença
             </button>
         `;
         membersCardsContainer.appendChild(card);
     });
-}
 
-    // Adiciona event listeners aos novos botões
+    // Adiciona event listeners aos novos botões DEPOIS que eles são criados
     document.querySelectorAll('.confirm-presence-btn').forEach(button => {
         button.addEventListener('click', (event) => {
             const memberId = event.target.dataset.memberId;
@@ -391,7 +396,7 @@ function displayMembers(members) {
             const leaderName = event.target.dataset.leaderName;
             const gapeName = event.target.dataset.gapeName;
             const periodo = event.target.dataset.periodo;
-            const presenceDate = presenceDateInput.value; // Pega a data do input
+            const presenceDate = presenceDateInput.value;
 
             if (!presenceDate) {
                 showMessage('Por favor, selecione uma Data da Presença.', 'error');
@@ -401,14 +406,15 @@ function displayMembers(members) {
             registerPresence(memberId, memberName, leaderName, gapeName, periodo, presenceDate);
         });
     });
+}
 
 
 function populateSummaryMemberSelect(members) {
     summaryMemberSelect.innerHTML = '<option value="">Todos os Membros Filtrados</option>';
     members.forEach(member => {
         const option = document.createElement('option');
-        option.value = member.id; // Ou member.nome, dependendo de como você filtra no backend
-        option.textContent = member.nome;
+        option.value = member.RI; // Use RI como ID
+        option.textContent = member.Nome;
         summaryMemberSelect.appendChild(option);
     });
 }
@@ -445,18 +451,16 @@ function updateDetailedSummaryChart(summary) {
     const ctxPie = document.getElementById('summaryChart').getContext('2d');
     const ctxBar = document.getElementById('summaryBarChart').getContext('2d');
 
-    // Destroi gráficos existentes para evitar duplicidade
     if (summaryPieChart) summaryPieChart.destroy();
     if (summaryBarChart) summaryBarChart.destroy();
 
-    // Gráfico de Pizza/Donut (Presenças vs Faltas)
     summaryPieChart = new Chart(ctxPie, {
         type: 'doughnut',
         data: {
             labels: ['Membros com Presença', 'Membros Sem Presença (Faltas)'],
             datasets: [{
                 data: [summary.totalPresentMembers, summary.totalAbsentMembers],
-                backgroundColor: ['#4CAF50', '#F44336'], // Verde para presença, Vermelho para faltas
+                backgroundColor: ['#4CAF50', '#F44336'],
                 hoverOffset: 4
             }]
         },
@@ -485,8 +489,6 @@ function updateDetailedSummaryChart(summary) {
         plugins: [ChartDataLabels]
     });
 
-    // Gráfico de Barras (Presenças por Líder)
-    // Adapte 'summary.presencesByLeader' para o formato que seu Apps Script retorna
     const leaders = Object.keys(summary.presencesByLeader || {});
     const presences = Object.values(summary.presencesByLeader || {});
 
@@ -497,7 +499,7 @@ function updateDetailedSummaryChart(summary) {
             datasets: [{
                 label: 'Total de Presenças',
                 data: presences,
-                backgroundColor: '#3B82F6', // Azul
+                backgroundColor: '#3B82F6',
                 borderColor: '#2563EB',
                 borderWidth: 1
             }]
@@ -545,26 +547,25 @@ function updateDetailedSummaryChart(summary) {
     });
 }
 
-// Função para fazer download do PDF
 function downloadPdf() {
     showLoading("Gerando PDF...");
     html2canvas(detailedSummaryContent, {
-        scale: 2, // Aumenta a resolução para melhor qualidade no PDF
-        useCORS: true // Importante se tiver imagens externas
+        scale: 2,
+        useCORS: true
     }).then(canvas => {
         const { jsPDF } = window.jspdf;
         const imgData = canvas.toDataURL('image/png');
-        const pdf = new jsPDF('landscape', 'mm', 'a4'); // 'landscape' para paisagem, 'mm' para milímetros, 'a4' para tamanho A4
+        const pdf = new jsPDF('landscape', 'mm', 'a4');
 
-        const imgWidth = 280; // Largura para A4 paisagem em mm (aprox. 297mm - margens)
-        const pageHeight = 210; // Altura para A4 paisagem em mm
+        const imgWidth = 280;
+        const pageHeight = 210;
 
         const imgHeight = canvas.height * imgWidth / canvas.width;
         let heightLeft = imgHeight;
-        let position = 5; // Margem superior inicial
+        let position = 5;
 
-        pdf.addImage(imgData, 'PNG', 5, position, imgWidth, imgHeight); // 5mm de margem em todos os lados
-        heightLeft -= pageHeight - 10; // Remove a altura da primeira página (menos as margens)
+        pdf.addImage(imgData, 'PNG', 5, position, imgWidth, imgHeight);
+        heightLeft -= pageHeight - 10;
 
         while (heightLeft >= 0) {
             position = heightLeft - imgHeight;
@@ -585,8 +586,8 @@ function downloadPdf() {
 // --- Event Listeners ---
 
 document.addEventListener('DOMContentLoaded', () => {
+    updateLoginStatusDisplay(); // Exibe o nome do líder ao carregar
     fetchInitialData();
-    // Define a data de hoje como padrão no input de presença
     const today = new Date();
     const year = today.getFullYear();
     const month = (today.getMonth() + 1).toString().padStart(2, '0');
@@ -598,34 +599,34 @@ logoutBtn.addEventListener('click', logout);
 
 applyFiltersBtn.addEventListener('click', () => {
     currentFilters = {
-        name: filterName.value,
-        periodo: filterPeriodo.value,
-        lider: filterLider.value,
-        gape: filterGape.value
+        name: filterNameInput.value, // Usar filterNameInput
+        periodo: filterPeriodoSelect.value, // Usar filterPeriodoSelect
+        lider: filterLiderSelect.value, // Usar filterLiderSelect
+        gape: filterGapeSelect.value // Usar filterGapeSelect
     };
     fetchMembers(currentFilters);
-    fetchAndDisplaySummary(); // Atualiza o resumo com os novos filtros
+    fetchAndDisplaySummary();
 });
 
 clearFiltersBtn.addEventListener('click', () => {
-    filterName.value = '';
-    filterPeriodo.value = '';
-    filterLider.value = '';
-    filterGape.value = '';
+    filterNameInput.value = '';
+    filterPeriodoSelect.value = '';
+    filterLiderSelect.value = '';
+    filterGapeSelect.value = '';
     currentFilters = {};
     fetchMembers(currentFilters);
-    fetchAndDisplaySummary(); // Limpa o resumo também
+    fetchAndDisplaySummary();
 });
 
 toggleDashboardBtn.addEventListener('click', () => {
     if (dashboardContainer.classList.contains('max-h-0')) {
         dashboardContainer.classList.remove('max-h-0', 'opacity-0');
-        dashboardContainer.classList.add('max-h-screen', 'opacity-100'); // max-h-screen para transição suave
+        dashboardContainer.classList.add('max-h-screen', 'opacity-100');
         dashboardOpenIcon.classList.add('hidden');
         dashboardOpenText.classList.add('hidden');
         dashboardCloseIcon.classList.remove('hidden');
         dashboardCloseText.classList.remove('hidden');
-        fetchAndDisplaySummary(); // Garante que o resumo esteja atualizado ao abrir
+        fetchAndDisplaySummary();
     } else {
         dashboardContainer.classList.add('max-h-0', 'opacity-0');
         dashboardContainer.classList.remove('max-h-screen', 'opacity-100');
@@ -637,17 +638,16 @@ toggleDashboardBtn.addEventListener('click', () => {
 });
 
 showDetailedSummaryBtn.addEventListener('click', () => {
-    const { start, end } = getCurrentMonthDateRange(); // Filtro padrão para o modal: mês atual
+    const { start, end } = getCurrentMonthDateRange();
     summaryStartDateInput.value = start;
     summaryEndDateInput.value = end;
-    summaryMemberSelect.value = ''; // Limpa a seleção de membro no modal
+    summaryMemberSelect.value = '';
 
-    // Prepara os filtros para o modal (pode começar com os filtros da tela principal ou zerar)
     const modalFilters = {
         startDate: summaryStartDateInput.value,
         endDate: summaryEndDateInput.value,
-        memberId: summaryMemberSelect.value, // Ou memberName, dependendo do seu backend
-        lider: currentFilters.lider || '', // Passa os filtros da tela principal
+        memberId: summaryMemberSelect.value,
+        lider: currentFilters.lider || '',
         gape: currentFilters.gape || ''
     };
     fetchDetailedSummary(modalFilters);
@@ -657,7 +657,6 @@ closeModalBtn.addEventListener('click', () => {
     detailedSummaryModal.classList.add('hidden');
 });
 
-// Listener para aplicar filtros no modal de resumo
 detailedSummaryModal.querySelectorAll('#summaryStartDate, #summaryEndDate, #summaryMemberSelect').forEach(input => {
     input.addEventListener('change', () => {
         const modalFilters = {
@@ -670,6 +669,5 @@ detailedSummaryModal.querySelectorAll('#summaryStartDate, #summaryEndDate, #summ
         fetchDetailedSummary(modalFilters);
     });
 });
-
 
 downloadPdfBtn.addEventListener('click', downloadPdf);
