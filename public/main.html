@@ -8,7 +8,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="css/style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
-    
+   
     <style>
         /* Estilos específicos para impressão */
         @media print {
@@ -81,72 +81,6 @@
                 size: A4 landscape;
                 margin: 5mm; /* Reduz a margem da página para maximizar o espaço do conteúdo */
             }
-        }
-
-        /* Estilos personalizados do seu HTML (mantidos) */
-        .loading-indicator {
-            transition: opacity 0.3s ease-in-out;
-        }
-        .modal-overlay {
-            background-color: rgba(0, 0, 0, 0.7);
-        }
-        .btn-primary {
-            @apply bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition duration-300;
-        }
-        .btn-secondary {
-            @apply bg-gray-300 text-gray-800 px-4 py-2 rounded-md hover:bg-gray-400 transition duration-300;
-        }
-        .btn-sm {
-            @apply px-3 py-1 text-sm;
-        }
-        .dashboard-transition {
-            transition: max-height 0.5s ease-in-out, opacity 0.5s ease-in-out;
-            overflow: hidden;
-        }
-        .input-field {
-            @apply mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-blue-500 focus:border-blue-500;
-        }
-        .btn-primary-dark {
-            @apply bg-blue-800 text-white font-semibold rounded-md shadow-sm hover:bg-blue-900 transition duration-300;
-        }
-        .message-box {
-            @apply text-white; /* Corrigido para garantir que a mensagem tenha texto visível */
-        }
-        /* Estilos de animação que você tinha no HTML */
-        .fade-in {
-            animation: fadeIn 0.8s ease-out forwards;
-            opacity: 0;
-        }
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-        .animate-bounce {
-            animation: bounce 1s infinite;
-        }
-        @keyframes bounce {
-            0%, 100% { transform: translateY(-5%); animation-timing-function: cubic-bezier(0.8,0,1,1); }
-            50% { transform: translateY(0); animation-timing-function: cubic-bezier(0,0,0.2,1); }
-        }
-        .logo-ad {
-            width: 80px; /* ou o tamanho desejado */
-            height: 80px; /* para manter a proporção, se for uma imagem quadrada */
-            object-fit: cover; /* para garantir que a imagem preencha a área sem distorção */
-            border-radius: 50%; /* se você quiser que seja redonda */
-        }
-        .custom-scrollbar::-webkit-scrollbar {
-            width: 8px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-track {
-            background: #4a5568; /* bg-gray-700 */
-            border-radius: 10px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb {
-            background: #2b6cb0; /* um tom de azul para o polegar */
-            border-radius: 10px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-            background: #2c5282; /* um tom mais escuro no hover */
         }
     </style>
 </head>
@@ -236,10 +170,11 @@
                         <p id="dashboardPeriodo" class="text-xl font-bold text-blue-400">N/A</p>
                     </div>
                     <div class="bg-gray-700 p-4 rounded-md shadow-inner">
-                        <p class="text-sm text-gray-300">Líder Selecionado</p> <p id="dashboardLider" class="text-xl font-bold text-purple-400">N/A</p>
+                        <p id="dashboardLider" class="text-xl font-bold text-purple-400">N/A</p>
                     </div>
                     <div class="bg-gray-700 p-4 rounded-md shadow-inner">
-                        <p class="text-sm text-gray-300">GAPE Selecionado</p> <p id="dashboardGape" class="text-xl font-bold text-red-400">N/A</p>
+                        <p class="text-sm text-gray-300">GAPE Selecionado</p>
+                        <p id="dashboardGape" class="text-xl font-bold text-red-400">N/A</p>
                     </div>
                 </div>
                 <h3 class="text-xl font-semibold mb-3 text-center">Presenças por Membro (Filtrado)</h3>
@@ -249,7 +184,7 @@
             </div>
 
             <div id="membersCardsContainer" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-6">
-            </div>
+                </div>
         </div>
     </div>
 
@@ -279,10 +214,10 @@
             </div>
 
             <div id="reportInfo" class="mb-6 p-4 bg-blue-50 rounded-lg border border-blue-200 text-blue-800">
-            </div>
+                </div>
             
             <div id="detailedSummaryText" class="mb-6">
-            </div>
+                </div>
             
             <div class="chart-container-wrapper flex flex-col md:flex-row justify-around items-center gap-4">
                 <div class="chart-container relative h-64 w-full md:w-1/2">
@@ -301,7 +236,6 @@
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    
     <script src="js/dashboard.js"></script>
 </body>
 </html>
