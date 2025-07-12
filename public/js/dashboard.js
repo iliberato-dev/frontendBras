@@ -1,3 +1,4 @@
+
 // ------------------------------------------------------
 // Frontend (js/dashboard.js) - Versão Final com Informações de Relatório no PDF
 // ------------------------------------------------------
@@ -225,74 +226,17 @@ function applyFilters() {
     // ou pela função applyFiltersWithMessage/clearFilters. Evita chamadas duplicadas.
 }
 
-// Adicione esta função auxiliar para upload (se ainda não estiver presente)
-async function uploadAndSavePhotoURL(memberName, file) {
-    showGlobalLoading(true, `Enviando foto para ${memberName}...`);
-    try {
-        const reader = new FileReader();
-        reader.readAsDataURL(file); // Lê o arquivo como Base64
-        reader.onloadend = async () => {
-            const base64Data = reader.result.split(',')[1]; // Pega apenas a parte Base64
-            const mimeType = file.type;
-
-            const response = await fetch(`${BACKEND_URL}/upload-photo`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    memberName,
-                    base64Data,
-                    mimeType
-                }),
-            });
-
-            const responseData = await response.json();
-
-            if (response.ok && responseData.success) {
-                showMessage(`Foto de ${memberName} atualizada com sucesso!`, "success");
-                // Atualiza a foto no cartão imediatamente
-                const memberCard = document.querySelector(`.photo-upload-input[data-member-name="${memberName}"]`).closest('.fade-in-row');
-                if (memberCard) {
-                    const memberPhoto = memberCard.querySelector(".member-photo");
-                    if (memberPhoto) {
-                        memberPhoto.src = responseData.photoUrl;
-                    }
-                }
-
-                // Atualiza allMembersData e filteredMembers com a nova URL da foto
-                // Isso garante que os dados em memória estejam atualizados para futuras operações
-                const updateMemberPhotoUrl = (memberArray) => {
-                    const memberIndex = memberArray.findIndex(m => String(m.Nome || '').toLowerCase().trim() === String(memberName || '').toLowerCase().trim());
-                    if (memberIndex !== -1) {
-                        memberArray[memberIndex].FotoURL = responseData.photoUrl;
-                    }
-                };
-
-                updateMemberPhotoUrl(allMembersData);
-                updateMemberPhotoUrl(filteredMembers); // Importante para manter o estado da lista filtrada
-
-            } else {
-                throw new Error(responseData.message || "Falha no upload da foto.");
-            }
-        };
-    } catch (error) {
-        console.error("Erro no upload da foto:", error);
-        showMessage(`Erro ao fazer upload da foto: ${error.message}`, "error");
-    } finally {
-        showGlobalLoading(false);
-    }
-}
-
 /**
  * Exibe os cards dos membros no contêiner.
  * @param {Array<Object>} members - A lista de membros a serem exibidos.
  */
-// --- Sua função displayMembers ATUALIZADA ---
 function displayMembers(members) {
     const container = document.getElementById("membersCardsContainer");
-
+    
+    // Adiciona verificação para garantir que o contêiner existe
     if (!container) {
         console.error("Erro: Elemento 'membersCardsContainer' não encontrado no DOM para exibição de cards.");
-        return;
+        return; // Sai da função
     }
 
     container.classList.remove("hidden");
@@ -306,84 +250,84 @@ function displayMembers(members) {
     members.forEach((member, idx) => {
         const card = document.createElement("div");
         card.className = "fade-in-row bg-white rounded-xl shadow-md p-4 flex flex-col gap-2 relative";
-        card.style.animationDelay = `${idx * 0.04}s`;
+    card.style.animationDelay = `${idx * 0.04}s`;
 
-        let periodoIcon = '<i class="fas fa-question text-gray-500"></i>';
-        if (member.Periodo) {
-            const periodoLower = member.Periodo.toLowerCase();
-            if (periodoLower.includes("manhã") || periodoLower.includes("tarde")) {
-                periodoIcon = '<i class="fas fa-sun text-yellow-500"></i>';
-            } else if (periodoLower.includes("noite")) {
-                periodoIcon = '<i class="fas fa-moon text-blue-500"></i>';
-            }
+    // Lógica para determinar o ícone do período (sol ou lua)
+    let periodoIcon = '<i class="fas fa-question text-gray-500"></i>'; // Ícone padrão
+    if (member.Periodo) {
+        const periodoLower = member.Periodo.toLowerCase();
+        if (periodoLower.includes("manhã") || periodoLower.includes("tarde")) {
+            periodoIcon = '<i class="fas fa-sun text-yellow-500"></i>'; // Sol amarelo
+        } else if (periodoLower.includes("noite")) {
+            periodoIcon = '<i class="fas fa-moon text-blue-500"></i>'; // Lua azul
         }
-        
-        // Define a URL da foto ou um placeholder, garantindo que seja um link válido
-        const photoSrc = member.FotoURL && String(member.FotoURL).startsWith('http')
-            ? member.FotoURL
-            : 'https://png.pngtree.com/png-vector/20191208/ourmid/pngtree-beautiful-create-user-glyph-vector-icon-png-image_2084391.jpg';
+    }
 
-
-        card.innerHTML = `
-            <div class="flex items-center gap-3">
-                <div class="relative w-16 h-16 rounded-full overflow-hidden border-2 border-indigo-400 flex-shrink-0 group">
-                    <img src="${photoSrc}"
-                        alt="Foto de ${member.Nome || 'Membro'}"
-                        class="member-photo w-full h-full object-cover">
-                    
-                    <input type="file" class="photo-upload-input absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" accept="image/*" data-member-name="${member.Nome}">
-                    
-                    <div class="absolute inset-0 bg-black bg-opacity-40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 text-white text-xs text-center p-1 z-0">
-                        Trocar Foto
-                    </div>
+    card.innerHTML = `
+        <div class="flex items-center gap-3">
+            <div class="relative w-16 h-16 rounded-full overflow-hidden border-2 border-indigo-400 flex-shrink-0 group">
+                <img src="${member.FotoURL || 'https://png.pngtree.com/png-vector/20191208/ourmid/pngtree-beautiful-create-user-glyph-vector-icon-png-image_2084391.jpg'}"
+                     alt="Foto de ${member.Nome || 'Membro'}"
+                     class="member-photo w-full h-full object-cover">
+                
+                <input type="file" class="photo-upload-input absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" accept="image/*" data-member-name="${member.Nome}">
+                
+                <div class="absolute inset-0 bg-black bg-opacity-40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 text-white text-xs text-center p-1 z-0">
+                    Trocar Foto
                 </div>
-                <div class="font-bold text-lg text-gray-800">${member.Nome || "N/A"}</div>
             </div>
-            <div class="text-sm text-gray-600 flex items-center gap-2">
-                ${periodoIcon} <b>Período:</b> ${member.Periodo || "N/A"}
-            </div>
-            <div class="text-sm text-gray-600 flex items-center gap-2">
-                <i class="fas fa-star text-yellow-600"></i> <b>Líder:</b> ${member.Lider || "N/A"}
-            </div>
-            <div class="text-sm text-gray-600 flex items-center gap-2">
-                <i class="fas fa-users text-purple-600"></i> <b>GAPE:</b> ${member.GAPE || "N/A"}
-            </div>
-            <label class="flex items-center gap-2 mt-2">
-                <input type="checkbox" class="h-5 w-5 text-blue-600 rounded focus:ring-blue-500 presence-checkbox" data-member-name="${member.Nome}">
-                <span class="text-sm text-gray-700">Presente</span>
-            </label>
-            <button class="btn-confirm-presence w-full mt-2 hidden bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg shadow-md transition duration-300 flex items-center justify-center gap-2">
-                <i class="fas fa-check-circle text-white"></i> Confirmar Presença
-            </button>
-            <div class="text-xs text-gray-500 mt-1 hidden presence-info flex items-center gap-2">
-                <i class="fas fa-info-circle text-gray-400"></i>
-            </div>
-        `;
-        container.appendChild(card);
+            <div class="font-bold text-lg text-gray-800">${member.Nome || "N/A"}</div>
+        </div>
+        <div class="text-sm text-gray-600 flex items-center gap-2">
+            ${periodoIcon} <b>Período:</b> ${member.Periodo || "N/A"}
+        </div>
+        <div class="text-sm text-gray-600 flex items-center gap-2">
+            <i class="fas fa-star text-yellow-600"></i> <b>Líder:</b> ${member.Lider || "N/A"}
+        </div>
+        <div class="text-sm text-gray-600 flex items-center gap-2">
+            <i class="fas fa-users text-purple-600"></i> <b>GAPE:</b> ${member.GAPE || "N/A"}
+        </div>
+        <label class="flex items-center gap-2 mt-2">
+            <input type="checkbox" class="h-5 w-5 text-blue-600 rounded focus:ring-blue-500 presence-checkbox" data-member-name="${member.Nome}">
+            <span class="text-sm text-gray-700">Presente</span>
+        </label>
+        <button class="btn-confirm-presence w-full mt-2 hidden bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg shadow-md transition duration-300 flex items-center justify-center gap-2">
+            <i class="fas fa-check-circle text-white"></i> Confirmar Presença
+        </button>
+        <div class="text-xs text-gray-500 mt-1 hidden presence-info flex items-center gap-2">
+            <i class="fas fa-info-circle text-gray-400"></i>
+        </div>
+    `;
+    container.appendChild(card);
 
         const checkbox = card.querySelector(".presence-checkbox");
         const infoDiv = card.querySelector(".presence-info");
         const confirmBtn = card.querySelector(".btn-confirm-presence");
+        // Variaveis para foto
         const photoUploadInput = card.querySelector(".photo-upload-input");
         const memberPhoto = card.querySelector(".member-photo");
 
-        // --- Lógica para o upload da foto integrada ---
-        if (photoUploadInput && member.Nome) {
-            photoUploadInput.addEventListener("change", (event) => {
-                const file = event.target.files[0];
-                if (file) {
-                    // 1. Pré-visualiza a imagem selecionada imediatamente
-                    const reader = new FileReader();
-                    reader.onload = (e) => {
-                        memberPhoto.src = e.target.result;
-                    };
-                    reader.readAsDataURL(file); // Lê o arquivo como URL de dados para pré-visualização
-
-                    // 2. Chama a função assíncrona para fazer o upload e salvar a URL no backend/Apps Script
-                    uploadAndSavePhotoURL(member.Nome, file);
-                }
-            });
+         // Lógica para pré-visualizar a imagem selecionada
+    photoUploadInput.addEventListener("change", (event) => {
+        const file = event.target.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                memberPhoto.src = e.target.result;
+                // AQUI É ONDE VOCÊ PRECISARÁ IMPLEMENTAR A LÓGICA DE UPLOAD REAL:
+                // 1. Enviar 'file' para um serviço de armazenamento (ex: Google Drive, Cloudinary).
+                // 2. Após o upload, você receberá uma URL para a imagem salva.
+                // 3. Essa URL deve ser salva na sua planilha associada a este membro.
+                //    Isso geralmente envolve fazer uma requisição (fetch/axios) para um script de backend
+                //    (como Google Apps Script para Google Sheets, ou uma API REST) que irá
+                //    atualizar a célula da planilha com a URL da nova foto.
+                console.log(`Arquivo selecionado para ${member.Nome}:`, file);
+                // Exemplo teórico de como você chamaria uma função para fazer o upload e salvar a URL:
+                // uploadAndSavePhotoURL(member.Nome, file);
+            };
+            reader.readAsDataURL(file); // Lê o arquivo como URL de dados para pré-visualização
         }
+    });
 
         const updatePresenceStatus = () => {
             if (!infoDiv) return; // Add null check for infoDiv
