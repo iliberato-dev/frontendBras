@@ -471,107 +471,140 @@ function populateSummaryMemberSelect() {
 async function updateDetailedSummaryChart() {
     showGlobalLoading(true, "Carregando resumo detalhado...");
 
-    // Zera os gráficos e a lista de faltas antes de começar
+    // Limpa o estado anterior
     if (myChart) myChart.destroy();
     if (myBarChart) myBarChart.destroy();
-    if (absentMembersList) absentMembersList.innerHTML = '';
-    
+    detailedSummaryText.innerHTML = '';
+    absentMembersList.innerHTML = '';
+
     try {
         const startDateStr = summaryStartDateInput.value;
         const endDateStr = summaryEndDateInput.value;
         const selectedMemberName = summaryMemberSelect.value;
-
-        // Constrói os parâmetros de busca
+        
+        let title = '';
+        let membersToAnalyze = [];
+        
+        // Constrói a base dos parâmetros de busca (sempre usa as datas do modal)
         const queryParams = new URLSearchParams();
         if (startDateStr) queryParams.append('dataInicio', startDateStr);
         if (endDateStr) queryParams.append('dataFim', endDateStr);
+        
+        // --- LÓGICA DIVIDIDA PARA GRUPO VS INDIVIDUAL ---
 
-        let title = '';
-        let membersToAnalyze = [];
-
-        // Cenário 1: Um membro específico foi selecionado
         if (selectedMemberName) {
+            // --- CENÁRIO 1: VISÃO INDIVIDUAL ---
             title = `Estatísticas para ${selectedMemberName}`;
             membersToAnalyze = allMembersData.filter(m => m.Nome === selectedMemberName);
+            
+            // Adiciona o nome do membro aos parâmetros para TODAS as buscas
             queryParams.append('nome', selectedMemberName);
-        } 
-        // Cenário 2: Visão de grupo ("Todos os Membros Filtrados")
-        else {
-            title = `Estatísticas do Grupo Filtrado`;
-            membersToAnalyze = filteredMembers; // Usa os membros já filtrados na página principal
-            // Adiciona os filtros principais à busca
+
+            const [presencesRes, absencesRes] = await Promise.all([
+                fetch(`${BACKEND_URL}/get-presencas-total?${queryParams.toString()}`),
+                fetch(`${BACKEND_URL}/get-faltas?${queryParams.toString()}`)
+            ]);
+
+            if (!presencesRes.ok || !absencesRes.ok) throw new Error("Falha ao buscar dados do membro.");
+            
+            const presencesResponse = await presencesRes.json();
+            const absencesResponse = await absencesRes.json();
+            
+            const totalPresencesInPeriod = presencesResponse.data?.[selectedMemberName] || 0;
+            const totalAbsencesInPeriod = absencesResponse.data?.[selectedMemberName]?.totalFaltas || 0;
+            const totalMeetingDays = absencesResponse.totalMeetingDays || (totalPresencesInPeriod + totalAbsencesInPeriod);
+            
+            detailedSummaryText.innerHTML = `
+                <h3 class="text-lg font-semibold text-gray-800 mb-2">${title}</h3>
+                <ul class="list-disc list-inside text-gray-700 space-y-1">
+                    <li>Total de Reuniões no Período: <span class="font-bold">${totalMeetingDays}</span></li>
+                    <li>Presenças Registradas: <span class="font-bold text-green-600">${totalPresencesInPeriod}</span></li>
+                    <li>Faltas Calculadas: <span class="font-bold text-red-600">${totalAbsencesInPeriod}</span></li>
+                </ul>`;
+
+            const pieCtx = summaryChartCanvas.getContext('2d');
+            myChart = new Chart(pieCtx, {
+                type: 'pie',
+                data: {
+                    labels: ['Presenças', 'Faltas'],
+                    datasets: [{
+                        data: [totalPresencesInPeriod, totalAbsencesInPeriod],
+                        backgroundColor: ['rgba(75, 192, 192, 0.8)', 'rgba(255, 99, 132, 0.8)'],
+                    }]
+                },
+                options: { /* ... suas opções de gráfico ... */ }
+            });
+
+        } else {
+            // --- CENÁRIO 2: VISÃO DE GRUPO ---
+            title = 'Estatísticas do Grupo Filtrado';
+            membersToAnalyze = filteredMembers;
+
+            // Adiciona os filtros da página principal aos parâmetros
             if (filterLiderInput.value) queryParams.append('lider', filterLiderInput.value);
             if (filterGapeInput.value) queryParams.append('gape', filterGapeInput.value);
             if (filterPeriodoSelect.value) queryParams.append('periodo', filterPeriodoSelect.value);
-        }
 
-        if (membersToAnalyze.length === 0) {
-            detailedSummaryText.innerHTML = `<p class="text-lg font-semibold text-gray-800 mb-2">Nenhum membro para analisar.</p>`;
-            return;
-        }
+            const [presencesRes, absencesRes] = await Promise.all([
+                fetch(`${BACKEND_URL}/get-presencas-total?${queryParams.toString()}`),
+                fetch(`${BACKEND_URL}/get-faltas?${queryParams.toString()}`)
+            ]);
 
-        // Busca os dados de presenças e faltas do backend com os filtros corretos
-        const [presencesRes, absencesRes] = await Promise.all([
-            fetch(`${BACKEND_URL}/get-presencas-total?${queryParams.toString()}`),
-            fetch(`${BACKEND_URL}/get-faltas?${queryParams.toString()}`)
-        ]);
+            if (!presencesRes.ok || !absencesRes.ok) throw new Error("Falha ao buscar dados do grupo.");
 
-        const presencesResponse = await presencesRes.json();
-        const absencesResponse = await absencesRes.json();
-        
-        const presencesData = presencesResponse.data || {};
-        const absencesData = absencesResponse.data || {};
+            const presencesResponse = await presencesRes.json();
+            const absencesResponse = await absencesRes.json();
 
-        const totalPresencesInPeriod = Object.values(presencesData).reduce((sum, count) => sum + count, 0);
-        const totalAbsencesInPeriod = Object.values(absencesData).reduce((sum, data) => sum + data.totalFaltas, 0);
-        const membersWithPresence = Object.keys(presencesData).length;
-        const totalMembersInAnalysis = membersToAnalyze.length;
-        const membersWithoutPresence = totalMembersInAnalysis - membersWithPresence;
+            const presencesData = presencesResponse.data || {};
+            const absencesData = absencesResponse.data || {};
+            
+            const membersWithPresence = Object.keys(presencesData).length;
+            const totalMembersInAnalysis = membersToAnalyze.length;
+            const membersWithoutPresence = totalMembersInAnalysis - membersWithPresence;
+            const totalAbsencesInPeriod = Object.values(absencesData).reduce((sum, data) => sum + data.totalFaltas, 0);
 
-        // Atualiza a UI com os dados agregados
-        detailedSummaryText.innerHTML = `
-            <h3 class="text-lg font-semibold text-gray-800 mb-2">${title}</h3>
-            <ul class="list-disc list-inside text-gray-700 space-y-1">
-                <li>Total de Membros Analisados: <span class="font-bold">${totalMembersInAnalysis}</span></li>
-                <li>Membros com Presença no Período: <span class="font-bold text-green-600">${membersWithPresence}</span></li>
-                <li>Membros Sem Presença no Período: <span class="font-bold text-red-600">${membersWithoutPresence}</span></li>
-                <li>Total de Faltas Registradas: <span class="font-bold">${totalAbsencesInPeriod}</span></li>
-            </ul>`;
+            detailedSummaryText.innerHTML = `
+                <h3 class="text-lg font-semibold text-gray-800 mb-2">${title}</h3>
+                <ul class="list-disc list-inside text-gray-700 space-y-1">
+                    <li>Total de Membros Analisados: <span class="font-bold">${totalMembersInAnalysis}</span></li>
+                    <li>Membros com Presença no Período: <span class="font-bold text-green-600">${membersWithPresence}</span></li>
+                    <li>Membros Sem Presença no Período: <span class="font-bold text-red-600">${membersWithoutPresence}</span></li>
+                    <li>Total de Faltas Registradas: <span class="font-bold">${totalAbsencesInPeriod}</span></li>
+                </ul>`;
 
-        const absentMembersHtml = Object.entries(absencesData)
-            .map(([name, data]) => `<li><strong>${name}</strong>: ${data.totalFaltas} falta(s)</li>`)
-            .join('');
-        absentMembersList.innerHTML = absentMembersHtml || '<li>Nenhuma falta registrada no período.</li>';
+            const absentMembersHtml = Object.entries(absencesData)
+                .map(([name, data]) => `<li><strong>${name}</strong>: ${data.totalFaltas} falta(s)</li>`)
+                .join('');
+            absentMembersList.innerHTML = absentMembersHtml || '<li>Nenhuma falta registrada para o grupo no período.</li>';
 
-        // Desenha os gráficos (agora para o grupo ou individual)
-        const pieCtx = summaryChartCanvas.getContext('2d');
-        myChart = new Chart(pieCtx, {
-            type: 'pie',
-            data: {
-                labels: ['Membros com Presença', 'Membros Sem Presença'],
-                datasets: [{
-                    data: [membersWithPresence, membersWithoutPresence],
-                    backgroundColor: ['rgba(75, 192, 192, 0.8)', 'rgba(255, 99, 132, 0.8)'],
-                }]
-            },
-            options: {
-                responsive: true,
-                plugins: {
-                    title: { display: true, text: 'Proporção de Membros com/sem Presença' },
-                    datalabels: {
-                        formatter: (value, context) => {
-                            const total = context.chart.data.datasets[0].data.reduce((a, b) => a + b, 0);
-                            if (total === 0 || value === 0) return '';
-                            const percentage = (value / total * 100).toFixed(1) + '%';
-                            return percentage;
-                        },
-                        color: '#fff', font: { weight: 'bold', size: 14 }
+            const pieCtx = summaryChartCanvas.getContext('2d');
+            myChart = new Chart(pieCtx, {
+                type: 'pie',
+                data: {
+                    labels: ['Membros com Presença', 'Membros Sem Presença'],
+                    datasets: [{
+                        data: [membersWithPresence, membersWithoutPresence],
+                        backgroundColor: ['rgba(75, 192, 192, 0.8)', 'rgba(255, 99, 132, 0.8)'],
+                    }]
+                },
+                 options: {
+                    responsive: true,
+                    plugins: {
+                        title: { display: true, text: 'Proporção de Membros com/sem Presença' },
+                        datalabels: {
+                            formatter: (value, context) => {
+                                const total = context.chart.data.datasets[0].data.reduce((a, b) => a + b, 0);
+                                if (total === 0 || value === 0) return '';
+                                const percentage = (value / total * 100).toFixed(1) + '%';
+                                return percentage;
+                            },
+                            color: '#fff', font: { weight: 'bold', size: 14 }
+                        }
                     }
-                }
-            },
-            plugins: [ChartDataLabels]
-        });
-
+                },
+                plugins: [ChartDataLabels]
+            });
+        }
     } catch (error) {
         showMessage(`Erro ao atualizar resumo: ${error.message}`, 'error');
         detailedSummaryText.innerHTML = `<p class="text-red-500">Falha ao carregar dados: ${error.message}</p>`;
