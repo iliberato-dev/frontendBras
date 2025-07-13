@@ -297,6 +297,7 @@ function displayMembers(members) {
 
 async function showPresenceHistory(memberName) {
     if (!historyModal || !historyModalTitle || !historyListContainer) return;
+
     historyModalTitle.textContent = `Histórico de Presenças de ${memberName}`;
     historyListContainer.innerHTML = `<p class="text-center text-gray-500">Carregando...</p>`;
     historyModal.classList.remove("hidden");
@@ -311,11 +312,24 @@ async function showPresenceHistory(memberName) {
             historyListContainer.innerHTML = `<p class="text-center text-gray-500">Nenhuma presença registrada.</p>`;
             return;
         }
-        historyListContainer.innerHTML = `<ul class="space-y-2" id="history-ul">${presences.map(p => `
+
+        // --- ALTERAÇÃO AQUI ---
+        // Modificamos o HTML para incluir o dia da semana
+        historyListContainer.innerHTML = `<ul class="space-y-2" id="history-ul">${presences.map(p => {
+            const diaSemanaFormatado = p.diaSemana ? `(${p.diaSemana})` : '';
+            const horaFormatada = (p.hora && p.hora !== '00:00:00') ? `às ${p.hora}` : '';
+
+            return `
             <li class="flex justify-between items-center bg-gray-100 p-2 rounded-md">
-                <span><i class="fas fa-check-circle text-green-500 mr-2"></i><strong>Data:</strong> ${p.data} <span class="text-gray-600 text-sm ml-2">(${p.hora})</span></span>
+                <span>
+                    <i class="fas fa-check-circle text-green-500 mr-2"></i>
+                    <strong>Data:</strong> ${p.data}
+                    <span class="text-gray-600 text-sm ml-2">${diaSemanaFormatado}</span>
+                    <span class="text-gray-500 text-xs ml-2">${horaFormatada}</span>
+                </span>
                 <button class="btn-remove-presence text-red-500 hover:text-red-700 font-bold" data-nome="${memberName}" data-data="${p.data}" title="Remover">&times;</button>
-            </li>`).join('')}</ul>`;
+            </li>`;
+        }).join('')}</ul>`;
     } catch (error) {
         historyListContainer.innerHTML = `<p class="text-center text-red-500">${error.message}</p>`;
     }
