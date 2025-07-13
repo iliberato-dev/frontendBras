@@ -461,9 +461,6 @@ function displayMembers(members) {
                 if (dateContainer) dateContainer.classList.add("hidden");
                 checkbox.checked = false;
             }
-        });
-    });
-}
 
         // --- ALTERADO: Lógica do botão de confirmação para usar a data selecionada ---
         confirmBtn.addEventListener("click", async function () {
