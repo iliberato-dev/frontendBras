@@ -1,10 +1,10 @@
-
 // ------------------------------------------------------
-// Frontend (js/dashboard.js) - Versão Final com Informações de Relatório no PDF
+// Frontend (js/dashboard.js) - Versão Final com Informações de Relatório no PDF e Faltas
 // ------------------------------------------------------
 let allMembersData = [];
 let filteredMembers = [];
 let lastPresencesData = {}; // Variável para armazenar todas as últimas presenças
+let allAbsencesData = {}; // NOVO: Variável para armazenar todas as faltas detalhadas
 let myChart = null; // Variável para armazenar a instância do Chart.js (Pizza)
 let myBarChart = null; // Variável para armazenar a instância do Chart.js (Barras)
 
@@ -31,6 +31,7 @@ const dashboardPeriodo = document.getElementById("dashboardPeriodo");
 const dashboardLider = document.getElementById("dashboardLider");
 const dashboardGape = document.getElementById("dashboardGape");
 const totalCountsList = document.getElementById("totalCountsList");
+const dashboardFaltasMes = document.getElementById("dashboardFaltasMes"); // NOVO: Elemento para total de faltas
 
 // Referência ao elemento onde o nome do líder será exibido
 const loggedInLeaderNameElement = document.getElementById("loggedInLeaderName");
@@ -43,6 +44,8 @@ const summaryBarChartCanvas = document.getElementById("summaryBarChart"); // Can
 const detailedSummaryText = document.getElementById("detailedSummaryText");
 const showDetailedSummaryBtn = document.getElementById("showDetailedSummaryBtn");
 const detailedSummaryContent = document.getElementById("detailedSummaryContent"); // Referência ao conteúdo do modal para PDF
+const detailedAbsencesList = document.getElementById("detailedAbsencesList"); // NOVO: Contêiner para a lista de faltas
+const absentMembersList = document.getElementById("absentMembersList"); // NOVO: Lista UL para membros ausentes
 
 // Novos elementos de filtro dentro do modal
 const summaryStartDateInput = document.getElementById("summaryStartDate");
@@ -307,7 +310,7 @@ function displayMembers(members) {
         const photoUploadInput = card.querySelector(".photo-upload-input");
         const memberPhoto = card.querySelector(".member-photo");
 
-         // Lógica para pré-visualizar a imagem selecionada
+        // Lógica para pré-visualizar a imagem selecionada
     photoUploadInput.addEventListener("change", (event) => {
         const file = event.target.files[0];
         if (file) {
@@ -543,7 +546,7 @@ function toggleDashboardVisibility() {
 }
 
 /**
- * Busca e exibe o resumo das presenças totais no dashboard.
+ * Busca e exibe o resumo das presenças totais e faltas no dashboard.
  */
 async function fetchAndDisplaySummary() {
     showGlobalLoading(true, "Carregando resumo do dashboard...");
@@ -559,23 +562,39 @@ async function fetchAndDisplaySummary() {
         if (liderFilter) queryParams.append('lider', liderFilter);
         if (gapeFilter) queryParams.append('gape', gapeFilter);
 
-        const url = `${BACKEND_URL}/get-presencas-total?${queryParams.toString()}`;
-        console.log("URL da API para resumo do dashboard:", url); // Para depuração
+        const urlPresencas = `${BACKEND_URL}/get-presencas-total?${queryParams.toString()}`;
+        const urlFaltas = `${BACKEND_URL}/get-faltas?${queryParams.toString()}`; // NOVO: URL para faltas
 
-        const responseTotal = await fetch(url);
-        if (!responseTotal.ok) {
-            throw new Error(`Erro ao buscar presenças totais: ${responseTotal.statusText}`);
+        console.log("URL da API para resumo de presenças:", urlPresencas);
+        console.log("URL da API para resumo de faltas:", urlFaltas); // NOVO log
+
+        const [responseTotalPresences, responseTotalAbsences] = await Promise.all([
+            fetch(urlPresencas),
+            fetch(urlFaltas) // NOVO: Faz a requisição para faltas
+        ]);
+
+        if (!responseTotalPresences.ok) {
+            throw new Error(`Erro ao buscar presenças totais: ${responseTotalPresences.statusText}`);
         }
-        const rawDataTotal = await responseTotal.json();
-        
-        // DEBUG: Logs para rastrear o valor de rawDataTotal e dataTotal
-        console.log("DEBUG: rawDataTotal APÓS .json():", rawDataTotal);
-        const dataTotal = rawDataTotal; // Mantido como rawDataTotal diretamente, sem || {}
-        console.log("DEBUG: dataTotal APÓS atribuição:", dataTotal);
+        if (!responseTotalAbsences.ok) { // NOVO: Verifica erro na resposta de faltas
+            throw new Error(`Erro ao buscar faltas totais: ${responseTotalAbsences.statusText}`);
+        }
 
-        const filteredTotalCounts = dataTotal; // O backend já enviará os dados filtrados
-        let totalFilteredPresences = Object.values(dataTotal).reduce((sum, count) => sum + count, 0);
-        console.log("DEBUG: totalFilteredPresences calculado:", totalFilteredPresences); // Novo log
+        const rawDataTotalPresences = await responseTotalPresences.json();
+        const dataTotalPresences = rawDataTotalPresences;
+        let totalFilteredPresences = Object.values(dataTotalPresences).reduce((sum, count) => sum + count, 0);
+
+        // NOVO: Processa os dados de faltas
+        const rawDataTotalAbsences = await responseTotalAbsences.json();
+        allAbsencesData = rawDataTotalAbsences.data || {}; // Armazena os dados detalhados de faltas
+        let totalFilteredAbsences = 0;
+        // Calcula o total de faltas somando 'totalFaltas' de cada membro
+        for (const memberName in allAbsencesData) {
+            if (allAbsencesData[memberName] && typeof allAbsencesData[memberName].totalFaltas === 'number') {
+                totalFilteredAbsences += allAbsencesData[memberName].totalFaltas;
+            }
+        }
+        console.log("DEBUG: totalFilteredAbsences calculado:", totalFilteredAbsences);
 
         if (dashboardPresencasMes) {
             dashboardPresencasMes.textContent = totalFilteredPresences;
@@ -583,9 +602,17 @@ async function fetchAndDisplaySummary() {
             console.warn("Elemento 'dashboardPresencasMes' não encontrado.");
         }
 
+        // NOVO: Atualiza o elemento de faltas no dashboard
+        if (dashboardFaltasMes) {
+            dashboardFaltasMes.textContent = totalFilteredAbsences;
+        } else {
+            console.warn("Elemento 'dashboardFaltasMes' não encontrado.");
+        }
+
+
         if (totalCountsList) {
             totalCountsList.innerHTML = '';
-            const sortedCounts = Object.entries(filteredTotalCounts).sort(([, countA], [, countB]) => countB - countA);
+            const sortedCounts = Object.entries(dataTotalPresences).sort(([, countA], [, countB]) => countB - countA);
 
             if (sortedCounts.length > 0) {
                 sortedCounts.forEach(([name, count]) => {
@@ -618,6 +645,7 @@ async function fetchAndDisplaySummary() {
         showMessage(`Erro ao carregar o resumo: ${error.message}`, "error");
         // Limpar os campos do dashboard em caso de erro
         if (dashboardPresencasMes) dashboardPresencasMes.textContent = "Erro";
+        if (dashboardFaltasMes) dashboardFaltasMes.textContent = "Erro"; // NOVO: Limpa faltas também
         if (dashboardPeriodo) dashboardPeriodo.textContent = "Erro";
         if (dashboardLider) dashboardLider.textContent = "Erro";
         if (dashboardGape) dashboardGape.textContent = "Erro";
@@ -681,7 +709,7 @@ function populateSummaryMemberSelect() {
 /**
  * Atualiza os gráficos e o texto do resumo detalhado com base nos filtros do modal.
  */
-function updateDetailedSummaryChart() {
+async function updateDetailedSummaryChart() { // Tornada async para buscar faltas
     let membersToAnalyze = filteredMembers;
     const selectedMemberName = summaryMemberSelect ? summaryMemberSelect.value.trim() : '';
     let summaryTitle = "Estatísticas do Grupo Filtrado";
@@ -702,6 +730,7 @@ function updateDetailedSummaryChart() {
             if (myChart) myChart.destroy();
             if (myBarChart) myBarChart.destroy(); // Destrói o gráfico de barras também
             if (reportInfo) reportInfo.innerHTML = `<p class="text-red-600">Nenhum dado de membro encontrado para o relatório.</p>`;
+            if (absentMembersList) absentMembersList.innerHTML = `<li>Nenhuma falta registrada para os membros filtrados no período.</li>`; // Limpa a lista de faltas
             return;
         }
     } else {
@@ -748,18 +777,17 @@ function updateDetailedSummaryChart() {
         if (myChart) myChart.destroy();
         if (myBarChart) myBarChart.destroy();
         if (reportInfo) reportInfo.innerHTML = `<p class="text-red-600">Nenhum dado de membro encontrado para o relatório.</p>`;
+        if (absentMembersList) absentMembersList.innerHTML = `<li>Nenhuma falta registrada para os membros filtrados no período.</li>`; // Limpa a lista de faltas
         return;
     }
 
+    // Recalcula membersWithPresenceCount com base nos filtros de data do modal
     for (const member of membersToAnalyze) {
         const presence = lastPresencesData[member.Nome];
-        let hasPresenceInPeriod = false;
-
         if (presence && presence.data) {
-            // Analisa a string de data "dd/MM/yyyy" em um objeto Date
             const [day, month, year] = presence.data.split('/').map(Number);
-            const lastPresenceDate = new Date(year, month - 1, day); // month - 1 porque é baseado em 0
-            lastPresenceDate.setHours(0, 0, 0, 0); // Normaliza para o início do dia para comparação
+            const lastPresenceDate = new Date(year, month - 1, day);
+            lastPresenceDate.setHours(0, 0, 0, 0);
 
             let dateMatches = true;
             if (startDate && lastPresenceDate < startDate) dateMatches = false;
@@ -767,7 +795,6 @@ function updateDetailedSummaryChart() {
 
             if (dateMatches) {
                 membersWithPresenceCount++;
-                hasPresenceInPeriod = true;
             }
         }
     }
@@ -782,17 +809,86 @@ function updateDetailedSummaryChart() {
         absencePercentage = (membersWithZeroPresenceCount / totalMembersInAnalysis) * 100;
     }
 
+    // --- NOVO: Lógica para buscar e exibir faltas detalhadas no modal ---
+    let membersWithRecordedAbsences = [];
+    let totalRecordedAbsencesInPeriod = 0;
+
+    // Constrói os queryParams para a requisição de faltas no modal
+    const queryParamsFaltasModal = new URLSearchParams();
+    if (selectedMemberName) queryParamsFaltasModal.append('nome', selectedMemberName); // Se um membro específico foi selecionado
+    else { // Se "Todos os Membros Filtrados"
+        const currentLiderFilter = filterLiderInput ? filterLiderInput.value.trim() : '';
+        const currentGapeFilter = filterGapeInput ? filterGapeInput.value.trim() : '';
+        if (currentLiderFilter) queryParamsFaltasModal.append('lider', currentLiderFilter);
+        if (currentGapeFilter) queryParamsFaltasModal.append('gape', currentGapeFilter);
+    }
+    if (startDateStr) queryParamsFaltasModal.append('dataInicio', startDateStr);
+    if (endDateStr) queryParamsFaltasModal.append('dataFim', endDateStr);
+
+    try {
+        const responseFaltas = await fetch(`${BACKEND_URL}/get-faltas?${queryParamsFaltasModal.toString()}`);
+        if (!responseFaltas.ok) {
+            throw new Error(`Erro ao buscar faltas para o resumo detalhado: ${responseFaltas.statusText}`);
+        }
+        const faltasDataRaw = await responseFaltas.json();
+        const faltasData = faltasDataRaw.data || {}; // Dados detalhados de faltas
+
+        // Filtra os membros com faltas e calcula o total de faltas no período
+        for (const member of membersToAnalyze) {
+            const memberAbsence = faltasData[member.Nome];
+            if (memberAbsence && memberAbsence.totalFaltas > 0) {
+                membersWithRecordedAbsences.push({
+                    name: member.Nome,
+                    totalFaltas: memberAbsence.totalFaltas,
+                    details: memberAbsence.faltas || [] // Detalhes das datas/períodos das faltas
+                });
+                totalRecordedAbsencesInPeriod += memberAbsence.totalFaltas;
+            }
+        }
+
+        // Atualiza a lista de membros com faltas no modal
+        if (absentMembersList) {
+            absentMembersList.innerHTML = ''; // Limpa a lista existente
+            if (membersWithRecordedAbsences.length > 0) {
+                membersWithRecordedAbsences.sort((a, b) => b.totalFaltas - a.totalFaltas); // Ordena por mais faltas
+                membersWithRecordedAbsences.forEach(member => {
+                    const listItem = document.createElement('li');
+                    let detailsHtml = '';
+                    if (member.details.length > 0) {
+                        detailsHtml = ` (${member.details.map(d => `${d.data} - ${d.periodo}`).join(', ')})`;
+                    }
+                    listItem.innerHTML = `<strong>${member.name}</strong>: ${member.totalFaltas} falta(s)${detailsHtml}`;
+                    absentMembersList.appendChild(listItem);
+                });
+            } else {
+                const listItem = document.createElement('li');
+                listItem.textContent = 'Nenhuma falta registrada para os membros filtrados no período.';
+                absentMembersList.appendChild(listItem);
+            }
+        }
+        if (detailedAbsencesList) {
+            detailedAbsencesList.classList.remove('hidden'); // Garante que a seção de faltas esteja visível
+        }
+
+    } catch (error) {
+        console.error("Erro ao carregar faltas para o resumo detalhado:", error);
+        if (absentMembersList) absentMembersList.innerHTML = `<li>Erro ao carregar faltas: ${error.message}</li>`;
+        if (detailedAbsencesList) detailedAbsencesList.classList.remove('hidden');
+    }
+    // --- FIM: Lógica para buscar e exibir faltas detalhadas no modal ---
+
+
     // Formata o intervalo de datas para exibição
     let dateRangeDisplay = "Todo o período disponível";
     if (startDateStr && endDateStr) {
-        const formattedStartDate = new Date(startDateStr).toLocaleDateString('pt-BR');
-        const formattedEndDate = new Date(endDateStr).toLocaleDateString('pt-BR');
+        const formattedStartDate = new Date(startDateStr + 'T00:00:00').toLocaleDateString('pt-BR'); // Adiciona T00:00:00 para evitar problemas de fuso horário
+        const formattedEndDate = new Date(endDateStr + 'T00:00:00').toLocaleDateString('pt-BR');
         dateRangeDisplay = `Período: ${formattedStartDate} a ${formattedEndDate}`;
     } else if (startDateStr) {
-        const formattedStartDate = new Date(startDateStr).toLocaleDateString('pt-BR');
+        const formattedStartDate = new Date(startDateStr + 'T00:00:00').toLocaleDateString('pt-BR');
         dateRangeDisplay = `A partir de: ${formattedStartDate}`;
     } else if (endDateStr) {
-        const formattedEndDate = new Date(endDateStr).toLocaleDateString('pt-BR');
+        const formattedEndDate = new Date(endDateStr + 'T00:00:00').toLocaleDateString('pt-BR');
         dateRangeDisplay = `Até: ${formattedEndDate}`;
     }
 
@@ -814,10 +910,11 @@ function updateDetailedSummaryChart() {
             <h3 class="text-lg font-semibold text-gray-800 mb-2">${summaryTitle}</h3>
             <ul class="list-disc list-inside text-gray-700 space-y-1">
                 <li>Total de Membros Analisados: <span class="font-bold">${totalMembersInAnalysis}</span></li>
-                <li>Membros com Presença: <span class="font-bold">${membersWithPresenceCount} (${presencePercentage.toFixed(1)}%)</span></li>
-                <li>Membros Sem Presença: <span class="font-bold">${membersWithZeroPresenceCount} (${absencePercentage.toFixed(1)}%)</span></li>
+                <li>Membros com Presença (no período): <span class="font-bold">${membersWithPresenceCount} (${presencePercentage.toFixed(1)}%)</span></li>
+                <li>Membros Sem Presença (no período): <span class="font-bold">${membersWithZeroPresenceCount} (${absencePercentage.toFixed(1)}%)</span></li>
+                <li>Total de Faltas Registradas (no período): <span class="font-bold">${totalRecordedAbsencesInPeriod}</span></li>
             </ul>
-            <p class="text-sm text-gray-600 mt-4">As estatísticas e gráficos abaixo ilustram a proporção de membros com e sem presenças registradas no período selecionado. "Presença" significa ter ao menos um registro no período.</p>
+            <p class="text-sm text-gray-600 mt-4">As estatísticas e gráficos abaixo ilustram a proporção de membros com e sem presenças registradas no período selecionado. "Presença" significa ter ao menos um registro no período. A seção de "Membros com Faltas Registradas" detalha as faltas específicas.</p>
         `;
     }
 
