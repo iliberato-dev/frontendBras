@@ -1,5 +1,5 @@
 // ------------------------------------------------------
-// Frontend (js/dashboard.js) - Versão Final com Correção de Data e Depuração
+// Frontend (js/dashboard.js) - Versão Completa com Melhoria Visual
 // ------------------------------------------------------
 let allMembersData = [];
 let filteredMembers = [];
@@ -317,9 +317,14 @@ function displayMembers(members) {
             if (!infoDiv) return;
             infoDiv.classList.remove("text-green-700", "text-red-600", "text-yellow-700", "text-blue-700", "text-gray-500");
             infoDiv.classList.add("block");
+
             const presence = lastPresencesData[member.Nome];
-            if (presence && presence.data && presence.hora) {
-                infoDiv.textContent = `Últ. presença: ${presence.data} às ${presence.hora}`;
+            if (presence && presence.data) {
+                let displayText = `Últ. presença: ${presence.data}`;
+                if (presence.hora && presence.hora !== '00:00:00') {
+                    displayText += ` às ${presence.hora}`;
+                }
+                infoDiv.textContent = displayText;
                 infoDiv.classList.add("text-green-700");
             } else {
                 infoDiv.textContent = `Nenhuma presença registrada ainda.`;
@@ -350,37 +355,22 @@ function displayMembers(members) {
 
         confirmBtn.addEventListener("click", async function() {
             if (!infoDiv || !confirmBtn || !checkbox || !card || !dateInput) return;
-
             const selectedDate = dateInput.value;
-
-            console.log(`[DEBUG] Tentando registrar para ${member.Nome}. Valor do campo de data: '${selectedDate}'`);
-
             let presenceDate;
             let presenceTime;
 
             if (selectedDate && selectedDate !== "") {
-                console.log("[DEBUG] Condição: Data selecionada. Usando a data do campo.");
                 presenceDate = selectedDate.split('-').reverse().join('/');
                 presenceTime = "00:00:00";
             } else {
-                console.log("[DEBUG] Condição: Nenhuma data selecionada. Usando data e hora atuais.");
                 const now = new Date();
-                const dia = String(now.getDate()).padStart(2, "0");
-                const mes = String(now.getMonth() + 1).padStart(2, "0");
-                const ano = now.getFullYear();
-                const hora = String(now.getHours()).padStart(2, "0");
-                const min = String(now.getMinutes()).padStart(2, "0");
-                const seg = String(now.getSeconds()).padStart(2, "0");
-                presenceDate = `${dia}/${mes}/${ano}`;
-                presenceTime = `${hora}:${min}:${seg}`;
+                presenceDate = `${String(now.getDate()).padStart(2, "0")}/${String(now.getMonth() + 1).padStart(2, "0")}/${now.getFullYear()}`;
+                presenceTime = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}:${String(now.getSeconds()).padStart(2, "0")}`;
             }
-
-            console.log(`[DEBUG] Enviando para o backend -> Data: ${presenceDate}, Hora: ${presenceTime}`);
 
             infoDiv.textContent = `Registrando presença para ${member.Nome}...`;
             infoDiv.classList.remove("hidden", "text-green-700", "text-red-600", "text-yellow-700", "text-gray-500");
             infoDiv.classList.add("text-blue-700");
-
             confirmBtn.disabled = true;
             checkbox.disabled = true;
             card.classList.remove('animate-pulse-green', 'animate-shake-red');
@@ -400,14 +390,20 @@ function displayMembers(members) {
                 const responseData = await response.json();
 
                 if (response.ok && responseData.success === true) {
-                    infoDiv.textContent = `Presença de ${member.Nome} registrada com sucesso em ${responseData.lastPresence?.data || presenceDate} às ${responseData.lastPresence?.hora || presenceTime}.`;
+                    const newPresence = responseData.lastPresence || { data: presenceDate, hora: presenceTime };
+                    
+                    let successText = `Presença de ${member.Nome} registrada com sucesso em ${newPresence.data}`;
+                    if (newPresence.hora && newPresence.hora !== '00:00:00') {
+                        successText += ` às ${newPresence.hora}`;
+                    }
+                    infoDiv.textContent = successText + ".";
+                    
                     infoDiv.classList.remove("text-blue-700", "text-yellow-700");
                     infoDiv.classList.add("text-green-700");
                     showMessage("Presença registrada com sucesso!", "success");
                     card.classList.add('animate-pulse-green');
                     setTimeout(() => card.classList.remove('animate-pulse-green'), 1000);
-                    lastPresencesData[member.Nome] = responseData.lastPresence || { data: presenceDate, hora: presenceTime };
-                    updatePresenceStatus();
+                    lastPresencesData[member.Nome] = newPresence;
                     if (isDashboardOpen) {
                         fetchAndDisplaySummary();
                     }
@@ -421,16 +417,8 @@ function displayMembers(members) {
                     if (responseData.lastPresence) {
                         lastPresencesData[member.Nome] = responseData.lastPresence;
                     }
-                    updatePresenceStatus();
                 } else {
-                    infoDiv.textContent = `Erro: ${responseData.message || "Falha ao registrar"}`;
-                    infoDiv.classList.remove("text-blue-700", "text-green-700", "text-yellow-700");
-                    infoDiv.classList.add("text-red-600");
-                    showMessage(`Erro ao registrar presença: ${responseData.message || "Erro desconhecido"}`, "error");
-                    card.classList.add('animate-shake-red');
-                    setTimeout(() => card.classList.remove('animate-shake-red'), 1000);
-                    confirmBtn.disabled = false;
-                    checkbox.disabled = false;
+                    throw new Error(responseData.message || "Falha ao registrar");
                 }
             } catch (e) {
                 console.error("Erro na requisição POST do frontend:", e);
@@ -446,6 +434,7 @@ function displayMembers(members) {
                 confirmBtn.classList.add("hidden");
                 if (dateContainer) dateContainer.classList.add("hidden");
                 checkbox.checked = false;
+                setTimeout(updatePresenceStatus, 100); 
             }
         });
     });
