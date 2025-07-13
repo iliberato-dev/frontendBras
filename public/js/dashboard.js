@@ -350,6 +350,12 @@ function toggleDashboardVisibility() {
 }
 
 async function fetchAndDisplaySummary() {
+    // Adiciona o seletor para a nova lista de faltas
+    const totalAbsencesList = document.getElementById("totalAbsencesList");
+    if (!totalAbsencesList) {
+        console.error("Elemento 'totalAbsencesList' não encontrado no HTML.");
+    }
+
     showGlobalLoading(true, "Carregando resumo...");
     try {
         const queryParams = new URLSearchParams({
@@ -363,7 +369,6 @@ async function fetchAndDisplaySummary() {
             fetch(`${BACKEND_URL}/get-faltas?${queryParams.toString()}`)
         ]);
 
-        // Verificação de erro melhorada
         if (!presencesRes.ok) {
             const errorData = await presencesRes.json();
             throw new Error(`Erro ao buscar presenças: ${errorData.message || presencesRes.statusText}`);
@@ -376,8 +381,6 @@ async function fetchAndDisplaySummary() {
         const presencesResponse = await presencesRes.json();
         const absencesResponse = await absencesRes.json();
 
-        // --- CORREÇÃO APLICADA AQUI ---
-        // Acessamos a propriedade 'data' do objeto de resposta antes de processar.
         const presencesData = presencesResponse.data || {};
         allAbsencesData = absencesResponse.data || {};
 
@@ -390,11 +393,28 @@ async function fetchAndDisplaySummary() {
         dashboardLider.textContent = filterLiderInput.value || "Todos";
         dashboardGape.textContent = filterGapeInput.value || "Todos";
 
-        // --- CORREÇÃO APLICADA AQUI TAMBÉM ---
-        const sortedCounts = Object.entries(presencesData).sort(([, a], [, b]) => b - a);
-        totalCountsList.innerHTML = sortedCounts.length > 0 
-            ? sortedCounts.map(([name, count]) => `<li class="text-sm text-gray-100"><span class="font-semibold">${name}:</span> ${count} presenças</li>`).join('')
-            : '<li class="text-sm text-gray-200 text-center">Nenhuma presença para os filtros.</li>';
+        // --- LÓGICA ATUALIZADA ---
+
+        // 1. Preenche o Ranking de Presenças (em verde)
+        const sortedPresences = Object.entries(presencesData).sort(([, a], [, b]) => b - a);
+        totalCountsList.innerHTML = sortedPresences.length > 0 
+            ? sortedPresences.map(([name, count]) => 
+                `<li class="text-sm text-green-300"><span class="font-semibold text-green-100">${name}:</span> ${count} presenças</li>`
+              ).join('')
+            : '<li class="text-sm text-gray-400 text-center">Nenhuma presença para os filtros.</li>';
+
+        // 2. Preenche o NOVO Ranking de Faltas (em vermelho)
+        const sortedAbsences = Object.entries(allAbsencesData)
+            .filter(([, memberData]) => memberData.totalFaltas > 0) // Mostra apenas quem tem faltas
+            .sort(([, a], [, b]) => b.totalFaltas - a.totalFaltas); // Ordena por quem tem mais faltas
+
+        if (totalAbsencesList) {
+            totalAbsencesList.innerHTML = sortedAbsences.length > 0
+                ? sortedAbsences.map(([name, memberData]) => 
+                    `<li class="text-sm text-red-300"><span class="font-semibold text-red-100">${name}:</span> ${memberData.totalFaltas} faltas</li>`
+                  ).join('')
+                : '<li class="text-sm text-gray-400 text-center">Nenhuma falta para os filtros.</li>';
+        }
 
     } catch (error) {
         showMessage(`Erro ao carregar resumo: ${error.message}`, "error");
