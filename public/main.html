@@ -8,267 +8,60 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="css/style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
-    
-    <style>
-        /* Estilos específicos para impressão */
-        @media print {
-            body {
-                margin: 0;
-                padding: 0;
-                box-sizing: border-box;
-            }
-            #downloadPdfBtn, #summaryFilterSection {
-                display: none !important;
-            }
-            #detailedSummaryContent {
-                display: flex;
-                flex-direction: column;
-                align-items: center;
-                padding: 8mm;
-                max-height: none !important;
-                overflow: visible !important;
-                width: 100%;
-                box-sizing: border-box;
-            }
-            #reportInfo {
-                margin-bottom: 8mm;
-                padding-top: 4mm;
-                padding-bottom: 6mm;
-                width: 100%;
-                font-size: 0.9em;
-                box-sizing: border-box;
-            }
-            #reportInfo p { margin-bottom: 0.2mm; }
-            #detailedSummaryText {
-                margin-bottom: 8mm;
-                width: 100%;
-                font-size: 0.8em;
-                box-sizing: border-box;
-            }
-            #detailedSummaryText h3 { font-size: 0.95em; }
-            #detailedSummaryText ul { font-size: 0.8em; }
-            #detailedSummaryText p { font-size: 0.7em; }
-            .chart-container-wrapper {
-                display: flex;
-                flex-direction: row;
-                justify-content: space-around;
-                align-items: flex-start;
-                width: 100%;
-                gap: 0.3rem;
-                box-sizing: border-box;
-            }
-            .chart-container {
-                width: 49% !important;
-                height: auto;
-                max-height: 80mm;
-                box-sizing: border-box;
-            }
-            @page {
-                size: A4 landscape;
-                margin: 5mm;
-            }
-        }
-    </style>
 </head>
-<body class="bg-gray-100 flex flex-col min-h-screen">
+<body class="bg-gray-100">
 
-    <div id="globalLoadingIndicator" class="fixed inset-0 bg-white bg-opacity-80 flex items-center justify-center z-[9999] opacity-0 pointer-events-none transition-opacity duration-300">
+    <div id="globalLoadingIndicator" class="fixed inset-0 bg-white bg-opacity-80 flex items-center justify-center z-[9999]" style="display: none;">
         <div class="flex flex-col items-center">
             <div class="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-blue-500"></div>
             <p id="loadingMessage" class="mt-4 text-blue-700 text-lg font-semibold">Carregando...</p>
         </div>
     </div>
 
-    <div class="flex-grow p-4 md:p-8 flex items-center justify-center">
-        <div class="main-card w-full max-w-4xl p-6 md:p-8 space-y-6">
-            <div class="flex flex-col items-center justify-center text-center mb-6 fade-in">
-                <img src="img/logo.jpg" alt="Logo AD" class="logo-ad mb-2 animate-bounce">
-                <h1 class="text-3xl md:text-4xl font-extrabold text-gray-900 leading-tight">
-                    <span class="bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-purple-600">
-                        Gerenciamento de Membros
-                    </span>
-                </h1>
-                <p class="text-gray-600 text-lg mt-2">AD Min. Brás - Vila solange</p>
-                <p id="loggedInLeaderName" class="text-lg font-semibold text-gray-700 mt-4">Logado como: Carregando...</p>
-                <button id="logoutBtn" class="mt-2 px-4 py-2 bg-red-500 text-white font-semibold rounded-md shadow-sm hover:bg-red-600 transition duration-300 text-sm">
-                    Trocar Usuário
-                </button>
+    <main class="p-4 md:p-8">
+        <div class="max-w-7xl mx-auto bg-white p-6 rounded-2xl shadow-lg">
+            
+            <div class="text-center mb-6">
+                <h1 class="text-3xl font-bold text-gray-800">Gerenciamento de Membros</h1>
+                <p id="loggedInLeaderName" class="text-gray-600 mt-2">Logado como: ...</p>
+                <button id="logoutBtn" class="mt-2 text-sm text-red-600 hover:underline">Sair</button>
             </div>
 
-            <div id="messageArea" class="message-box hidden text-center py-2 px-4 rounded-lg shadow-md mb-4 transition-all duration-500 ease-in-out"></div>
+            <div id="messageArea" class="hidden mb-4 p-3 rounded-lg text-center"></div>
 
-            <div class="bg-gray-50 p-6 rounded-lg shadow-inner fade-in" style="animation-delay: 0.3s;">
-                <h2 class="text-xl font-semibold text-gray-800 mb-4">Filtrar Membros</h2>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                        <label for="filterName" class="block text-sm font-medium text-gray-700 mb-1">Nome:</label>
-                        <input type="text" id="filterName" placeholder="Buscar por nome..." class="input-field">
-                    </div>
-                    <div>
-                        <label for="filterPeriodo" class="block text-sm font-medium text-gray-700 mb-1">Período:</label>
-                        <select id="filterPeriodo" class="input-field">
-                            <option value="">Todos</option>
-                            <option value="Manhã">Manhã</option>
-                            <option value="Tarde">Tarde</option>
-                            <option value="Noite">Noite</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label for="filterLider" class="block text-sm font-medium text-gray-700 mb-1">Líder:</label>
-                        <select id="filterLider" class="input-field">
-                            <option value="">Todos</option>
-                            </select>
-                    </div>
-                    <div>
-                        <label for="filterGape" class="block text-sm font-medium text-gray-700 mb-1">GAPE:</label>
-                        <select id="filterGape" class="input-field">
-                            <option value="">Todos</option>
-                            </select>
-                    </div>
-                </div>
-                <div class="mt-6 flex flex-col md:flex-row gap-4">
-                    <button id="applyFiltersBtn" class="btn-primary flex-1">Aplicar Filtros</button>
-                    <button id="clearFiltersBtn" class="btn-secondary flex-1">Limpar Filtros</button>
-                </div>
-            </div>
-
-            <div class="text-center mt-6 fade-in" style="animation-delay: 0.5s;">
-                <button id="toggleDashboardBtn" class="btn-primary-dark inline-flex items-center px-6 py-3 rounded-full text-sm">
-                    <i id="dashboardOpenIcon" class="fas fa-chart-bar mr-2"></i>
-                    <span id="dashboardOpenText">Abrir Resumo</span>
-                    <i id="dashboardCloseIcon" class="fas fa-times mr-2 hidden"></i>
-                    <span id="dashboardCloseText" class="hidden">Fechar Resumo</span>
-                </button>
-                <button id="showDetailedSummaryBtn" class="mt-4 px-6 py-3 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700 transition duration-300">
-                    Resumo Detalhado
-                </button>
-            </div>
-            
-            <div id="dashboardContainer" class="bg-gray-800 text-white p-6 rounded-lg shadow-lg mt-6 max-h-0 opacity-0 overflow-hidden transition-all duration-700 ease-in-out">
-                <h2 class="text-2xl font-bold mb-4 text-center">Dashboard de Presenças e Faltas</h2>
-                <div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4 text-center mb-6">
-                    
-                    <div class="bg-blue-600 p-4 rounded-lg text-white shadow-lg">
-                        <h4 class="font-semibold text-sm text-blue-200">Presenças no Mês</h4>
-                        <p class="text-3xl font-bold" id="dashboardPresencasMes">0</p>
-                    </div>
-            
-                    <div class="bg-red-600 p-4 rounded-lg text-white shadow-lg">
-                        <h4 class="font-semibold text-sm text-red-200">Faltas no Mês</h4>
-                        <p class="text-3xl font-bold" id="dashboardFaltasMes">0</p>
-                    </div>
-            
-                    <div class="bg-gray-700 p-4 rounded-lg text-white shadow-lg">
-                        <h4 class="font-semibold text-sm text-gray-300">Filtro Período</h4>
-                        <p class="text-xl font-bold" id="dashboardPeriodo">Todos</p>
-                    </div>
-            
-                    <div class="bg-gray-700 p-4 rounded-lg text-white shadow-lg">
-                        <h4 class="font-semibold text-sm text-gray-300">Filtro Líder</h4>
-                        <p class="text-xl font-bold" id="dashboardLider">Todos</p>
-                    </div>
-            
-                    <div class="bg-gray-700 p-4 rounded-lg text-white shadow-lg">
-                        <h4 class="font-semibold text-sm text-gray-300">Filtro GAPE</h4>
-                        <p class="text-xl font-bold" id="dashboardGape">Todos</p>
-                    </div>
-            
-                </div>
-            
-              <div class="flex space-x-4">
-                <div class="p-4 w-1/2">
-                <h4 class="font-semibold text-white mb-2">Ranking de Presenças (Mês Atual)</h4>
-                <ul id="totalCountsList" class="space-y-1 max-h-48 overflow-y-auto pr-2">
-                </ul>
-            </div>
-
-    <div class="p-4 w-1/2">
-        <h4 class="font-semibold text-white mb-2">Ranking de Faltas (Mês Atual)</h4>
-        <ul id="totalAbsencesList" class="space-y-1 max-h-48 overflow-y-auto pr-2">
-            <li class="text-sm text-gray-200 text-center">Carregando...</li>
-        </ul>
-    </div>
-</div>
-            </div>
-
-            <div id="membersCardsContainer" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-6">
-                </div>
-        </div>
-    </div>
-
-    <div id="detailedSummaryModal" class="fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center z-50 hidden">
-        <div id="detailedSummaryContent" class="bg-white rounded-lg shadow-xl p-6 w-11/12 md:w-2/3 lg:w-1/2 max-h-[90vh] overflow-y-auto relative">
-            <button id="closeModalBtn" class="absolute top-3 right-3 text-gray-500 hover:text-gray-700 text-2xl font-bold">&times;</button>
-            <h2 class="text-2xl font-bold text-gray-800 mb-4">Resumo Detalhado de Presenças e Faltas</h2>
-            
-            <div id="summaryFilterSection" class="mb-4 p-4 bg-gray-100 rounded-lg">
-                <h3 class="text-lg font-semibold text-gray-700 mb-2">Filtrar Resumo:</h3>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                    <div>
-                        <label for="summaryStartDate" class="block text-sm font-medium text-gray-700">Data Início:</label>
-                        <input type="date" id="summaryStartDate" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2">
-                    </div>
-                    <div>
-                        <label for="summaryEndDate" class="block text-sm font-medium text-gray-700">Data Fim:</label>
-                        <input type="date" id="summaryEndDate" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2">
-                    </div>
-                </div>
-                <div>
-                    <label for="summaryMemberSelect" class="block text-sm font-medium text-gray-700">Membro Específico:</label>
-                    <select id="summaryMemberSelect" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2">
-                        <option value="">Todos os Membros Filtrados</option>
+            <div class="bg-gray-50 p-4 rounded-lg shadow-inner mb-6">
+                <h2 class="text-xl font-semibold text-gray-700 mb-4">Filtros</h2>
+                <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+                    <input type="text" id="filterName" placeholder="Nome do membro..." class="input-field">
+                    <select id="filterPeriodo" class="input-field">
+                        <option value="">Todo Período</option>
+                        <option value="Manhã">Manhã</option>
+                        <option value="Tarde">Tarde</option>
+                        <option value="Noite">Noite</option>
                     </select>
+                    <select id="filterLider" class="input-field"><option value="">Todo Líder</option></select>
+                    <select id="filterGape" class="input-field"><option value="">Todo GAPE</option></select>
                 </div>
             </div>
 
-            <div id="reportInfo" class="mb-6 p-4 bg-blue-50 rounded-lg border border-blue-200 text-blue-800"></div>
-            
-            <div id="detailedSummaryText" class="mb-6"></div>
-            
-            <div class="chart-container-wrapper flex flex-col md:flex-row justify-around items-center gap-4">
-                <div class="chart-container relative h-64 w-full md:w-1/2">
-                    <canvas id="summaryChart"></canvas>
-                </div>
-                <div class="chart-container relative h-64 w-full md:w-1/2">
-                    <canvas id="summaryBarChart"></canvas>
-                </div>
+            <div class="text-center mb-6">
+                <button id="toggleDashboardBtn" class="btn-primary">Abrir Resumo</button>
+                <button id="showDetailedSummaryBtn" class="btn-secondary">Relatório Detalhado</button>
             </div>
 
-           <div class="mt-6 grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div id="detailedAbsencesContainer" class="p-4 bg-red-50 border border-red-200 rounded-lg shadow-inner">
-            <h4 class="text-lg font-semibold text-red-700 mb-3 flex items-center gap-2">
-            <i class="fas fa-calendar-times"></i> Datas das Faltas
-            </h4>
-                <ul id="absentDatesList" class="space-y-2 max-h-48 overflow-y-auto custom-scrollbar pr-2">
-                </ul>
-            </div>
+            <div id="dashboardContainer" class="bg-gray-800 text-white p-4 rounded-lg shadow-lg mb-6 hidden">
+                </div>
 
-    <div id="detailedPresencesContainer" class="p-4 bg-green-50 border border-green-200 rounded-lg shadow-inner">
-        <h4 class="text-lg font-semibold text-green-700 mb-3 flex items-center gap-2">
-            <i class="fas fa-calendar-check"></i> Datas das Presenças
-        </h4>
-        <ul id="presentDatesList" class="space-y-2 max-h-48 overflow-y-auto custom-scrollbar pr-2">
-            </ul>
-    </div>
-</div>
-
-            <button id="downloadPdfBtn" class="mt-6 w-full px-6 py-3 bg-red-600 text-white font-semibold rounded-lg shadow-md hover:bg-red-700 transition duration-300">
-                <i class="fas fa-file-pdf mr-2"></i> Download PDF
-            </button>
+            <div id="membersCardsContainer" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                </div>
         </div>
-    </div>
+    </main>
 
-    <div id="historyModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 hidden z-50">
-        <div class="bg-white rounded-lg shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col">
-            <div class="flex justify-between items-center p-4 border-b">
-                <h3 class="text-xl font-bold text-gray-800" id="historyModalTitle">Histórico de Presenças</h3>
-                <button id="closeHistoryModalBtn" class="text-gray-500 hover:text-gray-800 text-2xl">&times;</button>
-            </div>
-            <div class="p-6 overflow-y-auto" id="presenceHistoryListContainer">
-                <p class="text-center text-gray-500">Carregando histórico...</p>
-            </div>
+    <div id="detailedSummaryModal" class="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center p-4 hidden z-50">
         </div>
-    </div>
+
+    <div id="historyModal" class="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center p-4 hidden z-50">
+        </div>
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
