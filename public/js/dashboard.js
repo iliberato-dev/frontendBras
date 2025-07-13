@@ -608,7 +608,13 @@ async function updateDetailedSummaryChart() {
 }
 
 async function handleDownloadPdf() {
-     // A lógica desta função foi mantida das versões anteriores, focada em usar jspdf e html2canvas.
+  const doc = new jsPDF();
+  const container = document.getElementById('detailedSummaryContent');
+  const canvas = await html2canvas(container);
+
+  const imgData = canvas.toDataURL('image/png');
+  doc.addImage(imgData, 'PNG', 10, 10, 180, 0);
+  doc.save('resumo_presenca.pdf');
 }
 
 function fillSelectOptions() {
