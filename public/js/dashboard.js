@@ -1,5 +1,5 @@
 // ------------------------------------------------------
-// Frontend (js/dashboard.js) - Versão Completa com Melhoria Visual
+// Frontend (js/dashboard.js) - Versão Completa com Todas as Correções
 // ------------------------------------------------------
 let allMembersData = [];
 let filteredMembers = [];
