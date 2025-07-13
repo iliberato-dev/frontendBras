@@ -233,9 +233,13 @@ function applyFilters() {
  * Exibe os cards dos membros no contêiner.
  * @param {Array<Object>} members - A lista de membros a serem exibidos.
  */
+/**
+ * Exibe os cards dos membros no contêiner.
+ * @param {Array<Object>} members - A lista de membros a serem exibidos.
+ */
 function displayMembers(members) {
     const container = document.getElementById("membersCardsContainer");
-    
+
     // Adiciona verificação para garantir que o contêiner existe
     if (!container) {
         console.error("Erro: Elemento 'membersCardsContainer' não encontrado no DOM para exibição de cards.");
@@ -253,84 +257,221 @@ function displayMembers(members) {
     members.forEach((member, idx) => {
         const card = document.createElement("div");
         card.className = "fade-in-row bg-white rounded-xl shadow-md p-4 flex flex-col gap-2 relative";
-    card.style.animationDelay = `${idx * 0.04}s`;
+        card.style.animationDelay = `${idx * 0.04}s`;
 
-    // Lógica para determinar o ícone do período (sol ou lua)
-    let periodoIcon = '<i class="fas fa-question text-gray-500"></i>'; // Ícone padrão
-    if (member.Periodo) {
-        const periodoLower = member.Periodo.toLowerCase();
-        if (periodoLower.includes("manhã") || periodoLower.includes("tarde")) {
-            periodoIcon = '<i class="fas fa-sun text-yellow-500"></i>'; // Sol amarelo
-        } else if (periodoLower.includes("noite")) {
-            periodoIcon = '<i class="fas fa-moon text-blue-500"></i>'; // Lua azul
+        // Lógica para determinar o ícone do período (sol ou lua)
+        let periodoIcon = '<i class="fas fa-question text-gray-500"></i>'; // Ícone padrão
+        if (member.Periodo) {
+            const periodoLower = member.Periodo.toLowerCase();
+            if (periodoLower.includes("manhã") || periodoLower.includes("tarde")) {
+                periodoIcon = '<i class="fas fa-sun text-yellow-500"></i>'; // Sol amarelo
+            } else if (periodoLower.includes("noite")) {
+                periodoIcon = '<i class="fas fa-moon text-blue-500"></i>'; // Lua azul
+            }
         }
-    }
 
-    card.innerHTML = `
-        <div class="flex items-center gap-3">
-            <div class="relative w-16 h-16 rounded-full overflow-hidden border-2 border-indigo-400 flex-shrink-0 group">
-                <img src="${member.FotoURL || 'https://png.pngtree.com/png-vector/20191208/ourmid/pngtree-beautiful-create-user-glyph-vector-icon-png-image_2084391.jpg'}"
-                     alt="Foto de ${member.Nome || 'Membro'}"
-                     class="member-photo w-full h-full object-cover">
-                
-                <input type="file" class="photo-upload-input absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" accept="image/*" data-member-name="${member.Nome}">
-                
-                <div class="absolute inset-0 bg-black bg-opacity-40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 text-white text-xs text-center p-1 z-0">
-                    Trocar Foto
+        // --- ALTERAÇÃO NO HTML DO CARD ---
+        card.innerHTML = `
+            <div class="flex items-center gap-3">
+                <div class="relative w-16 h-16 rounded-full overflow-hidden border-2 border-indigo-400 flex-shrink-0 group">
+                    <img src="${member.FotoURL || 'https://png.pngtree.com/png-vector/20191208/ourmid/pngtree-beautiful-create-user-glyph-vector-icon-png-image_2084391.jpg'}"
+                         alt="Foto de ${member.Nome || 'Membro'}"
+                         class="member-photo w-full h-full object-cover">
+                    <input type="file" class="photo-upload-input absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" accept="image/*" data-member-name="${member.Nome}">
+                    <div class="absolute inset-0 bg-black bg-opacity-40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 text-white text-xs text-center p-1 z-0">
+                        Trocar Foto
+                    </div>
                 </div>
+                <div class="font-bold text-lg text-gray-800">${member.Nome || "N/A"}</div>
             </div>
-            <div class="font-bold text-lg text-gray-800">${member.Nome || "N/A"}</div>
-        </div>
-        <div class="text-sm text-gray-600 flex items-center gap-2">
-            ${periodoIcon} <b>Período:</b> ${member.Periodo || "N/A"}
-        </div>
-        <div class="text-sm text-gray-600 flex items-center gap-2">
-            <i class="fas fa-star text-yellow-600"></i> <b>Líder:</b> ${member.Lider || "N/A"}
-        </div>
-        <div class="text-sm text-gray-600 flex items-center gap-2">
-            <i class="fas fa-users text-purple-600"></i> <b>GAPE:</b> ${member.GAPE || "N/A"}
-        </div>
-        <label class="flex items-center gap-2 mt-2">
-            <input type="checkbox" class="h-5 w-5 text-blue-600 rounded focus:ring-blue-500 presence-checkbox" data-member-name="${member.Nome}">
-            <span class="text-sm text-gray-700">Presente</span>
-        </label>
-        <button class="btn-confirm-presence w-full mt-2 hidden bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg shadow-md transition duration-300 flex items-center justify-center gap-2">
-            <i class="fas fa-check-circle text-white"></i> Confirmar Presença
-        </button>
-        <div class="text-xs text-gray-500 mt-1 hidden presence-info flex items-center gap-2">
-            <i class="fas fa-info-circle text-gray-400"></i>
-        </div>
-    `;
-    container.appendChild(card);
+            <div class="text-sm text-gray-600 flex items-center gap-2">
+                ${periodoIcon} <b>Período:</b> ${member.Periodo || "N/A"}
+            </div>
+            <div class="text-sm text-gray-600 flex items-center gap-2">
+                <i class="fas fa-star text-yellow-600"></i> <b>Líder:</b> ${member.Lider || "N/A"}
+            </div>
+            <div class="text-sm text-gray-600 flex items-center gap-2">
+                <i class="fas fa-users text-purple-600"></i> <b>GAPE:</b> ${member.GAPE || "N/A"}
+            </div>
+            <label class="flex items-center gap-2 mt-2">
+                <input type="checkbox" class="h-5 w-5 text-blue-600 rounded focus:ring-blue-500 presence-checkbox" data-member-name="${member.Nome}">
+                <span class="text-sm text-gray-700">Presente</span>
+            </label>
+
+            <div class="presence-date-container mt-2 hidden">
+                <label for="presence-date-${idx}" class="text-sm text-gray-600 font-semibold">Escolha a data da presença (opcional):</label>
+                <input type="date" id="presence-date-${idx}" class="presence-date-input mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 text-sm">
+            </div>
+
+            <button class="btn-confirm-presence w-full mt-2 hidden bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg shadow-md transition duration-300 flex items-center justify-center gap-2">
+                <i class="fas fa-check-circle text-white"></i> Confirmar Presença
+            </button>
+            <div class="text-xs text-gray-500 mt-1 hidden presence-info flex items-center gap-2">
+                <i class="fas fa-info-circle text-gray-400"></i>
+            </div>
+        `;
+        container.appendChild(card);
 
         const checkbox = card.querySelector(".presence-checkbox");
         const infoDiv = card.querySelector(".presence-info");
         const confirmBtn = card.querySelector(".btn-confirm-presence");
-        // Variaveis para foto
+        const dateContainer = card.querySelector(".presence-date-container"); // NOVO: Referência ao contêiner da data
         const photoUploadInput = card.querySelector(".photo-upload-input");
         const memberPhoto = card.querySelector(".member-photo");
 
         // Lógica para pré-visualizar a imagem selecionada
-    photoUploadInput.addEventListener("change", (event) => {
-        const file = event.target.files[0];
-        if (file) {
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                memberPhoto.src = e.target.result;
-                // AQUI É ONDE VOCÊ PRECISARÁ IMPLEMENTAR A LÓGICA DE UPLOAD REAL:
-                // 1. Enviar 'file' para um serviço de armazenamento (ex: Google Drive, Cloudinary).
-                // 2. Após o upload, você receberá uma URL para a imagem salva.
-                // 3. Essa URL deve ser salva na sua planilha associada a este membro.
-                //    Isso geralmente envolve fazer uma requisição (fetch/axios) para um script de backend
-                //    (como Google Apps Script para Google Sheets, ou uma API REST) que irá
-                //    atualizar a célula da planilha com a URL da nova foto.
-                console.log(`Arquivo selecionado para ${member.Nome}:`, file);
-                // Exemplo teórico de como você chamaria uma função para fazer o upload e salvar a URL:
-                // uploadAndSavePhotoURL(member.Nome, file);
-            };
-            reader.readAsDataURL(file); // Lê o arquivo como URL de dados para pré-visualização
-        }
+        photoUploadInput.addEventListener("change", (event) => {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    memberPhoto.src = e.target.result;
+                    // Lógica de upload da foto...
+                    console.log(`Arquivo selecionado para ${member.Nome}:`, file);
+                    // uploadAndSavePhotoURL(member.Nome, file);
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+
+        const updatePresenceStatus = () => {
+            if (!infoDiv) return;
+            infoDiv.classList.remove("text-green-700", "text-red-600", "text-yellow-700", "text-blue-700", "text-gray-500");
+            infoDiv.classList.add("block");
+
+            const presence = lastPresencesData[member.Nome];
+
+            if (presence && presence.data && presence.hora) {
+                infoDiv.textContent = `Últ. presença: ${presence.data} às ${presence.hora}`;
+                infoDiv.classList.add("text-green-700");
+            } else {
+                infoDiv.textContent = `Nenhuma presença registrada ainda.`;
+                infoDiv.classList.add("text-gray-500");
+            }
+            infoDiv.classList.remove("hidden");
+        };
+
+        updatePresenceStatus();
+
+        // --- ALTERADO: Evento do checkbox para mostrar/ocultar o campo de data ---
+        checkbox.addEventListener("change", function () {
+            if (!confirmBtn || !infoDiv || !dateContainer) return;
+            if (this.checked) {
+                confirmBtn.classList.remove("hidden");
+                dateContainer.classList.remove("hidden"); // NOVO: Mostra o contêiner da data
+                infoDiv.textContent = "Clique em confirmar para registrar.";
+                infoDiv.classList.remove("hidden", "text-green-700", "text-red-600", "text-yellow-700");
+                infoDiv.classList.add("text-gray-500");
+            } else {
+                confirmBtn.classList.add("hidden");
+                dateContainer.classList.add("hidden"); // NOVO: Oculta o contêiner da data
+                updatePresenceStatus();
+                confirmBtn.disabled = false;
+                checkbox.disabled = false;
+                if (card) card.classList.remove('animate-pulse-green', 'animate-shake-red');
+            }
+        });
+
+        // --- ALTERADO: Lógica do botão de confirmação para usar a data selecionada ---
+        confirmBtn.addEventListener("click", async function () {
+            if (!infoDiv || !confirmBtn || !checkbox || !card) return;
+
+            const dateInput = card.querySelector(".presence-date-input");
+            const selectedDate = dateInput.value; // Formato AAAA-MM-DD
+
+            let presenceDate;
+            let presenceTime;
+
+            if (selectedDate) {
+                // Se uma data foi escolhida, usa ela e uma hora padrão
+                presenceDate = selectedDate.split('-').reverse().join('/'); // Converte AAAA-MM-DD para DD/MM/AAAA
+                presenceTime = "00:00:00";
+            } else {
+                // Se não, usa a data e hora atuais (comportamento original)
+                const now = new Date();
+                const dia = String(now.getDate()).padStart(2, "0");
+                const mes = String(now.getMonth() + 1).padStart(2, "0");
+                const ano = now.getFullYear();
+                const hora = String(now.getHours()).padStart(2, "0");
+                const min = String(now.getMinutes()).padStart(2, "0");
+                const seg = String(now.getSeconds()).padStart(2, "0");
+                presenceDate = `${dia}/${mes}/${ano}`;
+                presenceTime = `${hora}:${min}:${seg}`;
+            }
+
+            infoDiv.textContent = `Registrando presença para ${member.Nome}...`;
+            infoDiv.classList.remove("hidden", "text-green-700", "text-red-600", "text-yellow-700", "text-gray-500");
+            infoDiv.classList.add("text-blue-700");
+
+            confirmBtn.disabled = true;
+            checkbox.disabled = true;
+            card.classList.remove('animate-pulse-green', 'animate-shake-red');
+
+            try {
+                const response = await fetch(`${BACKEND_URL}/presenca`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        nome: member.Nome,
+                        data: presenceDate, // ALTERADO: Usa a variável da data
+                        hora: presenceTime, // ALTERADO: Usa a variável da hora
+                        sheet: "PRESENCAS",
+                    }),
+                });
+
+                const responseData = await response.json();
+
+                if (response.ok && responseData.success === true) {
+                    infoDiv.textContent = `Presença de ${member.Nome} registrada com sucesso em ${responseData.lastPresence?.data || presenceDate} às ${responseData.lastPresence?.hora || presenceTime}.`;
+                    infoDiv.classList.remove("text-blue-700", "text-yellow-700");
+                    infoDiv.classList.add("text-green-700");
+                    showMessage("Presença registrada com sucesso!", "success");
+                    card.classList.add('animate-pulse-green');
+                    setTimeout(() => card.classList.remove('animate-pulse-green'), 1000);
+                    lastPresencesData[member.Nome] = responseData.lastPresence || { data: presenceDate, hora: presenceTime };
+                    updatePresenceStatus();
+                    if (isDashboardOpen) {
+                        fetchAndDisplaySummary();
+                    }
+                } else if (responseData.success === false && responseData.message && responseData.message.includes("já foi registrada")) {
+                    infoDiv.textContent = `Presença de ${member.Nome} já registrada nesta data.`; // ALTERADO
+                    infoDiv.classList.remove("text-blue-700", "text-green-700");
+                    infoDiv.classList.add("text-yellow-700");
+                    showMessage(`Presença de ${member.Nome} já foi registrada nesta data.`, "warning"); // ALTERADO
+                    card.classList.add('animate-shake-red');
+                    setTimeout(() => card.classList.remove('animate-shake-red'), 1000);
+                    if (responseData.lastPresence) {
+                        lastPresencesData[member.Nome] = responseData.lastPresence;
+                    }
+                    updatePresenceStatus();
+                } else {
+                    infoDiv.textContent = `Erro: ${responseData.message || "Falha ao registrar"}`;
+                    infoDiv.classList.remove("text-blue-700", "text-green-700", "text-yellow-700");
+                    infoDiv.classList.add("text-red-600");
+                    showMessage(`Erro ao registrar presença: ${responseData.message || "Erro desconhecido"}`, "error");
+                    card.classList.add('animate-shake-red');
+                    setTimeout(() => card.classList.remove('animate-shake-red'), 1000);
+                    confirmBtn.disabled = false;
+                    checkbox.disabled = false;
+                }
+            } catch (e) {
+                console.error("Erro na requisição POST do frontend:", e);
+                infoDiv.textContent = "Falha de conexão com o servidor.";
+                infoDiv.classList.remove("text-blue-700", "text-green-700", "text-yellow-700");
+                infoDiv.classList.add("text-red-600");
+                showMessage("Falha ao enviar presença para o servidor. Verifique sua conexão.", "error");
+                card.classList.add('animate-shake-red');
+                setTimeout(() => card.classList.remove('animate-shake-red'), 1000);
+                confirmBtn.disabled = false;
+                checkbox.disabled = false;
+            } finally {
+                confirmBtn.classList.add("hidden");
+                if (dateContainer) dateContainer.classList.add("hidden"); // NOVO: Oculta o contêiner da data no final
+                checkbox.checked = false;
+            }
+        });
     });
+}
 
         const updatePresenceStatus = () => {
             if (!infoDiv) return; // Add null check for infoDiv
