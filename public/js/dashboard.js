@@ -493,150 +493,124 @@ async function updateDetailedSummaryChart() {
     if (myChart) myChart.destroy();
     if (myBarChart) myBarChart.destroy();
     detailedSummaryText.innerHTML = '';
-    absentMembersList.innerHTML = '';
+    const absentDatesList = document.getElementById('absentDatesList');
+    const presentDatesList = document.getElementById('presentDatesList');
+    if(absentDatesList) absentDatesList.innerHTML = '';
+    if(presentDatesList) presentDatesList.innerHTML = '';
 
     try {
         const startDateStr = summaryStartDateInput.value;
         const endDateStr = summaryEndDateInput.value;
         const selectedMemberName = summaryMemberSelect.value;
         
-        let title = '';
-        let membersToAnalyze = [];
-        
+        // Constrói os parâmetros de busca
         const queryParams = new URLSearchParams();
         if (startDateStr) queryParams.append('dataInicio', startDateStr);
         if (endDateStr) queryParams.append('dataFim', endDateStr);
-        
-        // --- LÓGICA DIVIDIDA PARA GRUPO VS INDIVIDUAL ---
 
+        let title = '';
+        let membersToAnalyze = [];
+
+        // Define os filtros da busca
         if (selectedMemberName) {
-            // --- CENÁRIO 1: VISÃO INDIVIDUAL ---
             title = `Estatísticas para ${selectedMemberName}`;
             membersToAnalyze = allMembersData.filter(m => m.Nome === selectedMemberName);
-            
             queryParams.append('nome', selectedMemberName);
-
-            const [presencesRes, absencesRes] = await Promise.all([
-                fetch(`${BACKEND_URL}/get-presencas-total?${queryParams.toString()}`),
-                fetch(`${BACKEND_URL}/get-faltas?${queryParams.toString()}`)
-            ]);
-
-            if (!presencesRes.ok || !absencesRes.ok) throw new Error("Falha ao buscar dados do membro.");
-            
-            const presencesResponse = await presencesRes.json();
-            const absencesResponse = await absencesRes.json();
-            
-            const totalPresencesInPeriod = presencesResponse.data?.[selectedMemberName] || 0;
-            const totalAbsencesInPeriod = absencesResponse.data?.[selectedMemberName]?.totalFaltas || 0;
-            const totalMeetingDays = absencesResponse.totalMeetingDays || (totalPresencesInPeriod + totalAbsencesInPeriod);
-            
-            detailedSummaryText.innerHTML = `
-                <h3 class="text-lg font-semibold text-gray-800 mb-2">${title}</h3>
-                <ul class="list-disc list-inside text-gray-700 space-y-1">
-                    <li>Total de Reuniões no Período: <span class="font-bold">${totalMeetingDays}</span></li>
-                    <li>Presenças Registradas: <span class="font-bold text-green-600">${totalPresencesInPeriod}</span></li>
-                    <li>Faltas Calculadas: <span class="font-bold text-red-600">${totalAbsencesInPeriod}</span></li>
-                </ul>`;
-
-            const pieCtx = summaryChartCanvas.getContext('2d');
-            myChart = new Chart(pieCtx, {
-                type: 'pie',
-                data: {
-                    labels: ['Presenças', 'Faltas'],
-                    datasets: [{
-                        data: [totalPresencesInPeriod, totalAbsencesInPeriod],
-                        backgroundColor: ['rgba(75, 192, 192, 0.8)', 'rgba(255, 99, 132, 0.8)'],
-                    }]
-                },
-                // --- CORREÇÃO APLICADA AQUI ---
-                // Adicionando as opções completas do gráfico, incluindo o plugin datalabels.
-                options: {
-                    responsive: true,
-                    plugins: {
-                        title: { display: true, text: 'Proporção Presenças vs Faltas' },
-                        datalabels: {
-                            formatter: (value, context) => {
-                                const total = context.chart.data.datasets[0].data.reduce((a, b) => a + b, 0);
-                                if (total === 0 || value === 0) return '';
-                                const percentage = (value / total * 100).toFixed(1) + '%';
-                                return percentage;
-                            },
-                            color: '#fff',
-                            font: { weight: 'bold', size: 14 }
-                        }
-                    }
-                },
-                plugins: [ChartDataLabels] // Ativa o plugin para este gráfico
-            });
-
         } else {
-            // --- CENÁRIO 2: VISÃO DE GRUPO (Já estava correto) ---
             title = 'Estatísticas do Grupo Filtrado';
             membersToAnalyze = filteredMembers;
-
             if (filterLiderInput.value) queryParams.append('lider', filterLiderInput.value);
             if (filterGapeInput.value) queryParams.append('gape', filterGapeInput.value);
             if (filterPeriodoSelect.value) queryParams.append('periodo', filterPeriodoSelect.value);
+        }
 
-            const [presencesRes, absencesRes] = await Promise.all([
-                fetch(`${BACKEND_URL}/get-presencas-total?${queryParams.toString()}`),
-                fetch(`${BACKEND_URL}/get-faltas?${queryParams.toString()}`)
-            ]);
+        if (membersToAnalyze.length === 0) {
+            detailedSummaryText.innerHTML = `<p class="text-lg font-semibold">Nenhum membro para analisar.</p>`;
+            showGlobalLoading(false);
+            return;
+        }
 
-            if (!presencesRes.ok || !absencesRes.ok) throw new Error("Falha ao buscar dados do grupo.");
+        // --- CHAMADA ÚNICA E OTIMIZADA ---
+        const response = await fetch(`${BACKEND_URL}/detailed-summary?${queryParams.toString()}`);
+        if (!response.ok) throw new Error("Falha ao buscar dados detalhados.");
+        
+        const summaryResponse = await response.json();
+        if (!summaryResponse.success) throw new Error(summaryResponse.message);
+        
+        const summaryData = summaryResponse.data;
+        const presencesDetails = summaryData.presences || {};
+        const absencesDetails = summaryData.absences || {};
+        
+        // Processa os dados recebidos
+        const totalPresences = Object.values(presencesDetails).reduce((sum, data) => sum + data.totalPresencas, 0);
+        const totalAbsences = Object.values(absencesDetails).reduce((sum, data) => sum + data.totalFaltas, 0);
+        
+        let summaryHtml, chartData, chartLabels, chartTitle;
 
-            const presencesResponse = await presencesRes.json();
-            const absencesResponse = await absencesRes.json();
-            const presencesData = presencesResponse.data || {};
-            const absencesData = absencesResponse.data || {};
-            
-            const membersWithPresence = Object.keys(presencesData).length;
-            const totalMembersInAnalysis = membersToAnalyze.length;
-            const membersWithoutPresence = totalMembersInAnalysis - membersWithPresence;
-            const totalAbsencesInPeriod = Object.values(absencesData).reduce((sum, data) => sum + data.totalFaltas, 0);
-
-            detailedSummaryText.innerHTML = `
+        if (selectedMemberName) {
+            // --- LÓGICA PARA VISÃO INDIVIDUAL ---
+            const totalMeetingDays = summaryData.totalMeetingDays || (totalPresences + totalAbsences);
+            summaryHtml = `
                 <h3 class="text-lg font-semibold text-gray-800 mb-2">${title}</h3>
                 <ul class="list-disc list-inside text-gray-700 space-y-1">
-                    <li>Total de Membros Analisados: <span class="font-bold">${totalMembersInAnalysis}</span></li>
+                    <li>Total de Reuniões no Período: <span class="font-bold">${totalMeetingDays}</span></li>
+                    <li>Presenças Registradas: <span class="font-bold text-green-600">${totalPresences}</span></li>
+                    <li>Faltas Calculadas: <span class="font-bold text-red-600">${totalAbsences}</span></li>
+                </ul>`;
+            chartData = [totalPresences, totalAbsences];
+            chartLabels = ['Presenças', 'Faltas'];
+            chartTitle = 'Proporção Presenças vs Faltas';
+
+        } else {
+            // --- LÓGICA PARA VISÃO DE GRUPO ---
+            const membersWithPresence = Object.keys(presencesDetails).length;
+            const membersWithoutPresence = membersToAnalyze.length - membersWithPresence;
+            summaryHtml = `
+                <h3 class="text-lg font-semibold text-gray-800 mb-2">${title}</h3>
+                <ul class="list-disc list-inside text-gray-700 space-y-1">
+                    <li>Total de Membros Analisados: <span class="font-bold">${membersToAnalyze.length}</span></li>
                     <li>Membros com Presença no Período: <span class="font-bold text-green-600">${membersWithPresence}</span></li>
                     <li>Membros Sem Presença no Período: <span class="font-bold text-red-600">${membersWithoutPresence}</span></li>
-                    <li>Total de Faltas Registradas: <span class="font-bold">${totalAbsencesInPeriod}</span></li>
+                    <li>Total de Faltas Registradas no Grupo: <span class="font-bold">${totalAbsences}</span></li>
                 </ul>`;
-
-            const absentMembersHtml = Object.entries(absencesData)
-                .map(([name, data]) => `<li><strong>${name}</strong>: ${data.totalFaltas} falta(s)</li>`)
-                .join('');
-            absentMembersList.innerHTML = absentMembersHtml || '<li>Nenhuma falta registrada para o grupo no período.</li>';
-
-            const pieCtx = summaryChartCanvas.getContext('2d');
-            myChart = new Chart(pieCtx, {
-                type: 'pie',
-                data: {
-                    labels: ['Membros com Presença', 'Membros Sem Presença'],
-                    datasets: [{
-                        data: [membersWithPresence, membersWithoutPresence],
-                        backgroundColor: ['rgba(75, 192, 192, 0.8)', 'rgba(255, 99, 132, 0.8)'],
-                    }]
-                },
-                 options: {
-                    responsive: true,
-                    plugins: {
-                        title: { display: true, text: 'Proporção de Membros com/sem Presença' },
-                        datalabels: {
-                            formatter: (value, context) => {
-                                const total = context.chart.data.datasets[0].data.reduce((a, b) => a + b, 0);
-                                if (total === 0 || value === 0) return '';
-                                const percentage = (value / total * 100).toFixed(1) + '%';
-                                return percentage;
-                            },
-                            color: '#fff', font: { weight: 'bold', size: 14 }
-                        }
-                    }
-                },
-                plugins: [ChartDataLabels]
-            });
+            chartData = [membersWithPresence, membersWithoutPresence];
+            chartLabels = ['Membros com Presença', 'Membros Sem Presença'];
+            chartTitle = 'Proporção de Membros com/sem Presença';
         }
+
+        detailedSummaryText.innerHTML = summaryHtml;
+        
+        let presencesHtml = Object.entries(presencesDetails).map(([name, data]) => (selectedMemberName ? '' : `<h5 class="font-semibold mt-2 text-gray-700">${name}</h5>`) + (data.presencas || []).map(date => `<li class="text-sm text-gray-800">${date}</li>`).join('')).join('');
+        let absencesHtml = Object.entries(absencesDetails).map(([name, data]) => (selectedMemberName ? '' : `<h5 class="font-semibold mt-2 text-gray-700">${name}</h5>`) + (data.faltas || []).map(date => `<li class="text-sm text-gray-800">${date}</li>`).join('')).join('');
+
+        if (presentDatesList) presentDatesList.innerHTML = presencesHtml || '<li>Nenhuma presença no período.</li>';
+        if (absentDatesList) absentDatesList.innerHTML = absencesHtml || '<li>Nenhuma falta no período.</li>';
+
+        // Lógica do gráfico (agora unificada)
+        const pieCtx = summaryChartCanvas.getContext('2d');
+        myChart = new Chart(pieCtx, {
+            type: 'pie',
+            data: {
+                labels: chartLabels,
+                datasets: [{ data: chartData, backgroundColor: ['rgba(75, 192, 192, 0.8)', 'rgba(255, 99, 132, 0.8)'] }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    title: { display: true, text: chartTitle },
+                    datalabels: {
+                        formatter: (value, context) => {
+                            const total = context.chart.data.datasets[0].data.reduce((a, b) => a + b, 0);
+                            if (total === 0 || value === 0) return '';
+                            return (value / total * 100).toFixed(1) + '%';
+                        },
+                        color: '#fff', font: { weight: 'bold', size: 14 }
+                    }
+                }
+            },
+            plugins: [ChartDataLabels]
+        });
+
     } catch (error) {
         showMessage(`Erro ao atualizar resumo: ${error.message}`, 'error');
         detailedSummaryText.innerHTML = `<p class="text-red-500">Falha ao carregar dados: ${error.message}</p>`;
