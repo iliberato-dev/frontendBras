@@ -236,10 +236,9 @@ function applyFilters() {
 function displayMembers(members) {
     const container = document.getElementById("membersCardsContainer");
 
-    // Adiciona verificação para garantir que o contêiner existe
     if (!container) {
-        console.error("Erro: Elemento 'membersCardsContainer' não encontrado no DOM para exibição de cards.");
-        return; // Sai da função
+        console.error("Erro: Elemento 'membersCardsContainer' não encontrado no DOM.");
+        return;
     }
 
     container.classList.remove("hidden");
@@ -255,18 +254,16 @@ function displayMembers(members) {
         card.className = "fade-in-row bg-white rounded-xl shadow-md p-4 flex flex-col gap-2 relative";
         card.style.animationDelay = `${idx * 0.04}s`;
 
-        // Lógica para determinar o ícone do período (sol ou lua)
-        let periodoIcon = '<i class="fas fa-question text-gray-500"></i>'; // Ícone padrão
+        let periodoIcon = '<i class="fas fa-question text-gray-500"></i>';
         if (member.Periodo) {
             const periodoLower = member.Periodo.toLowerCase();
             if (periodoLower.includes("manhã") || periodoLower.includes("tarde")) {
-                periodoIcon = '<i class="fas fa-sun text-yellow-500"></i>'; // Sol amarelo
+                periodoIcon = '<i class="fas fa-sun text-yellow-500"></i>';
             } else if (periodoLower.includes("noite")) {
-                periodoIcon = '<i class="fas fa-moon text-blue-500"></i>'; // Lua azul
+                periodoIcon = '<i class="fas fa-moon text-blue-500"></i>';
             }
         }
 
-        // --- ALTERAÇÃO NO HTML DO CARD ---
         card.innerHTML = `
             <div class="flex items-center gap-3">
                 <div class="relative w-16 h-16 rounded-full overflow-hidden border-2 border-indigo-400 flex-shrink-0 group">
@@ -293,12 +290,10 @@ function displayMembers(members) {
                 <input type="checkbox" class="h-5 w-5 text-blue-600 rounded focus:ring-blue-500 presence-checkbox" data-member-name="${member.Nome}">
                 <span class="text-sm text-gray-700">Presente</span>
             </label>
-
             <div class="presence-date-container mt-2 hidden">
                 <label for="presence-date-${idx}" class="text-sm text-gray-600 font-semibold">Escolha a data da presença (opcional):</label>
                 <input type="date" id="presence-date-${idx}" class="presence-date-input mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 text-sm">
             </div>
-
             <button class="btn-confirm-presence w-full mt-2 hidden bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg shadow-md transition duration-300 flex items-center justify-center gap-2">
                 <i class="fas fa-check-circle text-white"></i> Confirmar Presença
             </button>
@@ -308,23 +303,22 @@ function displayMembers(members) {
         `;
         container.appendChild(card);
 
+        // --- DECLARAÇÃO DE VARIÁVEIS DO CARD ---
         const checkbox = card.querySelector(".presence-checkbox");
         const infoDiv = card.querySelector(".presence-info");
         const confirmBtn = card.querySelector(".btn-confirm-presence");
-        const dateContainer = card.querySelector(".presence-date-container"); // NOVO: Referência ao contêiner da data
+        const dateContainer = card.querySelector(".presence-date-container");
+        const dateInput = card.querySelector(".presence-date-input"); // CORREÇÃO: Declarar a referência ao input aqui.
         const photoUploadInput = card.querySelector(".photo-upload-input");
         const memberPhoto = card.querySelector(".member-photo");
 
-        // Lógica para pré-visualizar a imagem selecionada
         photoUploadInput.addEventListener("change", (event) => {
             const file = event.target.files[0];
             if (file) {
                 const reader = new FileReader();
                 reader.onload = (e) => {
                     memberPhoto.src = e.target.result;
-                    // Lógica de upload da foto...
                     console.log(`Arquivo selecionado para ${member.Nome}:`, file);
-                    // uploadAndSavePhotoURL(member.Nome, file);
                 };
                 reader.readAsDataURL(file);
             }
@@ -334,9 +328,7 @@ function displayMembers(members) {
             if (!infoDiv) return;
             infoDiv.classList.remove("text-green-700", "text-red-600", "text-yellow-700", "text-blue-700", "text-gray-500");
             infoDiv.classList.add("block");
-
             const presence = lastPresencesData[member.Nome];
-
             if (presence && presence.data && presence.hora) {
                 infoDiv.textContent = `Últ. presença: ${presence.data} às ${presence.hora}`;
                 infoDiv.classList.add("text-green-700");
@@ -349,24 +341,129 @@ function displayMembers(members) {
 
         updatePresenceStatus();
 
-        // --- ALTERADO: Evento do checkbox para mostrar/ocultar o campo de data ---
-        checkbox.addEventListener("change", function () {
+        checkbox.addEventListener("change", function() {
             if (!confirmBtn || !infoDiv || !dateContainer) return;
             if (this.checked) {
                 confirmBtn.classList.remove("hidden");
-                dateContainer.classList.remove("hidden"); // NOVO: Mostra o contêiner da data
+                dateContainer.classList.remove("hidden");
                 infoDiv.textContent = "Clique em confirmar para registrar.";
                 infoDiv.classList.remove("hidden", "text-green-700", "text-red-600", "text-yellow-700");
                 infoDiv.classList.add("text-gray-500");
             } else {
                 confirmBtn.classList.add("hidden");
-                dateContainer.classList.add("hidden"); // NOVO: Oculta o contêiner da data
+                dateContainer.classList.add("hidden");
                 updatePresenceStatus();
                 confirmBtn.disabled = false;
                 checkbox.disabled = false;
                 if (card) card.classList.remove('animate-pulse-green', 'animate-shake-red');
             }
         });
+        
+        // --- LÓGICA DE CONFIRMAÇÃO TOTALMENTE REVISADA ---
+        confirmBtn.addEventListener("click", async function() {
+            if (!infoDiv || !confirmBtn || !checkbox || !card || !dateInput) return;
+
+            const selectedDate = dateInput.value;
+            
+            // Para depuração: Verifique o valor no console do navegador (pressione F12)
+            console.log(`[DEBUG] Tentando registrar para ${member.Nome}. Valor do campo de data: '${selectedDate}'`);
+
+            let presenceDate;
+            let presenceTime;
+
+            // Condição explícita para garantir que a string não está vazia
+            if (selectedDate && selectedDate !== "") {
+                console.log("[DEBUG] Condição: Data selecionada. Usando a data do campo.");
+                presenceDate = selectedDate.split('-').reverse().join('/'); // Converte AAAA-MM-DD para DD/MM/AAAA
+                presenceTime = "00:00:00";
+            } else {
+                console.log("[DEBUG] Condição: Nenhuma data selecionada. Usando data e hora atuais.");
+                const now = new Date();
+                const dia = String(now.getDate()).padStart(2, "0");
+                const mes = String(now.getMonth() + 1).padStart(2, "0");
+                const ano = now.getFullYear();
+                const hora = String(now.getHours()).padStart(2, "0");
+                const min = String(now.getMinutes()).padStart(2, "0");
+                const seg = String(now.getSeconds()).padStart(2, "0");
+                presenceDate = `${dia}/${mes}/${ano}`;
+                presenceTime = `${hora}:${min}:${seg}`;
+            }
+
+            console.log(`[DEBUG] Enviando para o backend -> Data: ${presenceDate}, Hora: ${presenceTime}`);
+
+            infoDiv.textContent = `Registrando presença para ${member.Nome}...`;
+            infoDiv.classList.remove("hidden", "text-green-700", "text-red-600", "text-yellow-700", "text-gray-500");
+            infoDiv.classList.add("text-blue-700");
+
+            confirmBtn.disabled = true;
+            checkbox.disabled = true;
+            card.classList.remove('animate-pulse-green', 'animate-shake-red');
+
+            try {
+                const response = await fetch(`${BACKEND_URL}/presenca`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        nome: member.Nome,
+                        data: presenceDate,
+                        hora: presenceTime,
+                        sheet: "PRESENCAS",
+                    }),
+                });
+
+                const responseData = await response.json();
+
+                if (response.ok && responseData.success === true) {
+                    infoDiv.textContent = `Presença de ${member.Nome} registrada com sucesso em ${responseData.lastPresence?.data || presenceDate} às ${responseData.lastPresence?.hora || presenceTime}.`;
+                    infoDiv.classList.remove("text-blue-700", "text-yellow-700");
+                    infoDiv.classList.add("text-green-700");
+                    showMessage("Presença registrada com sucesso!", "success");
+                    card.classList.add('animate-pulse-green');
+                    setTimeout(() => card.classList.remove('animate-pulse-green'), 1000);
+                    lastPresencesData[member.Nome] = responseData.lastPresence || { data: presenceDate, hora: presenceTime };
+                    updatePresenceStatus();
+                    if (isDashboardOpen) {
+                        fetchAndDisplaySummary();
+                    }
+                } else if (responseData.success === false && responseData.message && responseData.message.includes("já foi registrada")) {
+                    infoDiv.textContent = `Presença de ${member.Nome} já registrada nesta data.`;
+                    infoDiv.classList.remove("text-blue-700", "text-green-700");
+                    infoDiv.classList.add("text-yellow-700");
+                    showMessage(`Presença de ${member.Nome} já foi registrada nesta data.`, "warning");
+                    card.classList.add('animate-shake-red');
+                    setTimeout(() => card.classList.remove('animate-shake-red'), 1000);
+                    if (responseData.lastPresence) {
+                        lastPresencesData[member.Nome] = responseData.lastPresence;
+                    }
+                    updatePresenceStatus();
+                } else {
+                    infoDiv.textContent = `Erro: ${responseData.message || "Falha ao registrar"}`;
+                    infoDiv.classList.remove("text-blue-700", "text-green-700", "text-yellow-700");
+                    infoDiv.classList.add("text-red-600");
+                    showMessage(`Erro ao registrar presença: ${responseData.message || "Erro desconhecido"}`, "error");
+                    card.classList.add('animate-shake-red');
+                    setTimeout(() => card.classList.remove('animate-shake-red'), 1000);
+                    confirmBtn.disabled = false;
+                    checkbox.disabled = false;
+                }
+            } catch (e) {
+                console.error("Erro na requisição POST do frontend:", e);
+                infoDiv.textContent = "Falha de conexão com o servidor.";
+                infoDiv.classList.remove("text-blue-700", "text-green-700", "text-yellow-700");
+                infoDiv.classList.add("text-red-600");
+                showMessage("Falha ao enviar presença para o servidor. Verifique sua conexão.", "error");
+                card.classList.add('animate-shake-red');
+                setTimeout(() => card.classList.remove('animate-shake-red'), 1000);
+                confirmBtn.disabled = false;
+                checkbox.disabled = false;
+            } finally {
+                confirmBtn.classList.add("hidden");
+                if (dateContainer) dateContainer.classList.add("hidden");
+                checkbox.checked = false;
+            }
+        });
+    });
+}
 
         // --- ALTERADO: Lógica do botão de confirmação para usar a data selecionada ---
         confirmBtn.addEventListener("click", async function () {
