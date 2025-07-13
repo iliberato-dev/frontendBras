@@ -471,10 +471,16 @@ function populateSummaryMemberSelect() {
 async function updateDetailedSummaryChart() {
     showGlobalLoading(true, "Carregando resumo detalhado...");
 
+    // Seletores para os novos contêineres de lista
+    const absentDatesList = document.getElementById('absentDatesList');
+    const presentDatesList = document.getElementById('presentDatesList');
+
+    // Limpa o estado anterior
     if (myChart) myChart.destroy();
     if (myBarChart) myBarChart.destroy();
     detailedSummaryText.innerHTML = '';
-    absentMembersList.innerHTML = '';
+    absentDatesList.innerHTML = '';
+    presentDatesList.innerHTML = '';
 
     try {
         const startDateStr = summaryStartDateInput.value;
@@ -485,116 +491,85 @@ async function updateDetailedSummaryChart() {
         if (startDateStr) queryParams.append('dataInicio', startDateStr);
         if (endDateStr) queryParams.append('dataFim', endDateStr);
 
-        // Define as opções do gráfico que serão usadas em ambos os cenários
-        const chartOptions = {
-            responsive: true,
-            plugins: {
-                title: { display: true, text: 'Proporção de Presenças vs Faltas' },
-                datalabels: {
-                    formatter: (value, context) => {
-                        const total = context.chart.data.datasets[0].data.reduce((a, b) => a + b, 0);
-                        if (total === 0 || value === 0) return '';
-                        const percentage = (value / total * 100).toFixed(1) + '%';
-                        return percentage;
-                    },
-                    color: '#fff',
-                    font: { weight: 'bold', size: 14 }
-                }
-            }
-        };
+        let title = '';
+        let membersToAnalyze = [];
 
+        // Define os filtros da busca
         if (selectedMemberName) {
-            // --- CENÁRIO 1: VISÃO INDIVIDUAL ---
+            title = `Estatísticas para ${selectedMemberName}`;
+            membersToAnalyze = allMembersData.filter(m => m.Nome === selectedMemberName);
             queryParams.append('nome', selectedMemberName);
-            
-            const [presencesRes, absencesRes] = await Promise.all([
-                fetch(`${BACKEND_URL}/get-presencas-total?${queryParams.toString()}`),
-                fetch(`${BACKEND_URL}/get-faltas?${queryParams.toString()}`)
-            ]);
-            if (!presencesRes.ok || !absencesRes.ok) throw new Error("Falha ao buscar dados do membro.");
-            
-            const presencesResponse = await presencesRes.json();
-            const absencesResponse = await absencesRes.json();
-            
-            const totalPresencesInPeriod = presencesResponse.data?.[selectedMemberName] || 0;
-            const totalAbsencesInPeriod = absencesResponse.data?.[selectedMemberName]?.totalFaltas || 0;
-            const totalMeetingDays = absencesResponse.totalMeetingDays || (totalPresencesInPeriod + totalAbsencesInPeriod);
-            
-            detailedSummaryText.innerHTML = `
-                <h3 class="text-lg font-semibold text-gray-800 mb-2">Estatísticas para ${selectedMemberName}</h3>
-                <ul class="list-disc list-inside text-gray-700 space-y-1">
-                    <li>Total de Reuniões no Período: <span class="font-bold">${totalMeetingDays}</span></li>
-                    <li>Presenças Registradas: <span class="font-bold text-green-600">${totalPresencesInPeriod}</span></li>
-                    <li>Faltas Calculadas: <span class="font-bold text-red-600">${totalAbsencesInPeriod}</span></li>
-                </ul>`;
-
-            const pieCtx = summaryChartCanvas.getContext('2d');
-            myChart = new Chart(pieCtx, {
-                type: 'pie',
-                data: {
-                    labels: ['Presenças', 'Faltas'],
-                    datasets: [{
-                        data: [totalPresencesInPeriod, totalAbsencesInPeriod],
-                        backgroundColor: ['rgba(75, 192, 192, 0.8)', 'rgba(255, 99, 132, 0.8)'],
-                    }]
-                },
-                options: chartOptions, // Usa as opções padronizadas
-                plugins: [ChartDataLabels] // Registra o plugin
-            });
-
         } else {
-            // --- CENÁRIO 2: VISÃO DE GRUPO ---
-            const membersToAnalyze = filteredMembers;
+            title = 'Estatísticas do Grupo Filtrado';
+            membersToAnalyze = filteredMembers;
             if (filterLiderInput.value) queryParams.append('lider', filterLiderInput.value);
             if (filterGapeInput.value) queryParams.append('gape', filterGapeInput.value);
             if (filterPeriodoSelect.value) queryParams.append('periodo', filterPeriodoSelect.value);
-
-            const [presencesRes, absencesRes] = await Promise.all([
-                fetch(`${BACKEND_URL}/get-presencas-total?${queryParams.toString()}`),
-                fetch(`${BACKEND_URL}/get-faltas?${queryParams.toString()}`)
-            ]);
-
-            if (!presencesRes.ok || !absencesRes.ok) throw new Error("Falha ao buscar dados do grupo.");
-
-            const presencesResponse = await presencesRes.json();
-            const absencesResponse = await absencesRes.json();
-            const presencesData = presencesResponse.data || {};
-            const absencesData = absencesResponse.data || {};
-            
-            const membersWithPresence = Object.keys(presencesData).length;
-            const membersWithoutPresence = membersToAnalyze.length - membersWithPresence;
-            const totalAbsencesInPeriod = Object.values(absencesData).reduce((sum, data) => sum + data.totalFaltas, 0);
-
-            detailedSummaryText.innerHTML = `
-                <h3 class="text-lg font-semibold text-gray-800 mb-2">Estatísticas do Grupo Filtrado</h3>
-                <ul class="list-disc list-inside text-gray-700 space-y-1">
-                    <li>Total de Membros Analisados: <span class="font-bold">${membersToAnalyze.length}</span></li>
-                    <li>Membros com Presença no Período: <span class="font-bold text-green-600">${membersWithPresence}</span></li>
-                    <li>Membros Sem Presença no Período: <span class="font-bold text-red-600">${membersWithoutPresence}</span></li>
-                    <li>Total de Faltas Registradas no Grupo: <span class="font-bold">${totalAbsencesInPeriod}</span></li>
-                </ul>`;
-
-            const absentMembersHtml = Object.entries(absencesData)
-                .map(([name, data]) => `<li><strong>${name}</strong>: ${data.totalFaltas} falta(s)</li>`)
-                .join('');
-            absentMembersList.innerHTML = absentMembersHtml || '<li>Nenhuma falta registrada para o grupo no período.</li>';
-
-            const pieCtx = summaryChartCanvas.getContext('2d');
-            // Altera o título do gráfico para o contexto de grupo
-            chartOptions.plugins.title.text = 'Proporção de Membros com/sem Presença';
-            myChart = new Chart(pieCtx, {
-                type: 'pie',
-                data: {
-                    labels: ['Membros com Presença', 'Membros Sem Presença'],
-                    datasets: [{
-                        data: [membersWithPresence, membersWithoutPresence],
-                        backgroundColor: ['rgba(75, 192, 192, 0.8)', 'rgba(255, 99, 132, 0.8)'],
-                    }]
-                },
-                 options: chartOptions, // Usa as mesmas opções padronizadas
-                 plugins: [ChartDataLabels] // Registra o plugin
-            });
         }
+
+        if (membersToAnalyze.length === 0) {
+            detailedSummaryText.innerHTML = `<p>Nenhum membro para analisar.</p>`;
+            return;
+        }
+
+        // Busca os dados detalhados
+        const [presencesRes, absencesRes] = await Promise.all([
+            fetch(`${BACKEND_URL}/get-presencas-total?${queryParams.toString()}`),
+            fetch(`${BACKEND_URL}/get-faltas?${queryParams.toString()}`)
+        ]);
+        if (!presencesRes.ok || !absencesRes.ok) throw new Error("Falha ao buscar dados detalhados.");
+        
+        const presencesResponse = await presencesRes.json();
+        const absencesResponse = await absencesRes.json();
+        
+        const presencesDetails = presencesResponse.data || {};
+        const absencesDetails = absencesResponse.data || {};
+
+        // Processa os dados para exibição
+        let totalPresences = 0;
+        let totalAbsences = 0;
+        let membersWithPresence = Object.keys(presencesDetails).length;
+        
+        let presencesHtml = '';
+        Object.entries(presencesDetails).forEach(([name, data]) => {
+            totalPresences += data.totalPresencas;
+            if(!selectedMemberName) presencesHtml += `<h5 class="font-semibold mt-2">${name}</h5>`;
+            presencesHtml += data.presencas.map(date => `<li class="text-sm text-gray-800">${date}</li>`).join('');
+        });
+
+        let absencesHtml = '';
+        Object.entries(absencesDetails).forEach(([name, data]) => {
+            totalAbsences += data.totalFaltas;
+            if(!selectedMemberName) absencesHtml += `<h5 class="font-semibold mt-2">${name}</h5>`;
+            absencesHtml += data.faltas.map(date => `<li class="text-sm text-gray-800">${date}</li>`).join('');
+        });
+
+        presentDatesList.innerHTML = presencesHtml || '<li>Nenhuma presença no período.</li>';
+        absentDatesList.innerHTML = absencesHtml || '<li>Nenhuma falta no período.</li>';
+
+        // Atualiza o texto de resumo
+        detailedSummaryText.innerHTML = `
+            <h3 class="text-lg font-semibold text-gray-800 mb-2">${title}</h3>
+            <ul class="list-disc list-inside text-gray-700 space-y-1">
+                <li>Total de Membros Analisados: <span class="font-bold">${membersToAnalyze.length}</span></li>
+                <li>Total de Presenças Registradas: <span class="font-bold text-green-600">${totalPresences}</span></li>
+                <li>Total de Faltas Calculadas: <span class="font-bold text-red-600">${totalAbsences}</span></li>
+            </ul>`;
+
+        // Lógica para desenhar o gráfico (agora com dados corretos)
+        const pieCtx = summaryChartCanvas.getContext('2d');
+        myChart = new Chart(pieCtx, {
+            type: 'pie',
+            data: {
+                labels: ['Presenças', 'Faltas'],
+                datasets: [{
+                    data: [totalPresences, totalAbsences],
+                    backgroundColor: ['rgba(75, 192, 192, 0.8)', 'rgba(255, 99, 132, 0.8)'],
+                }]
+            },
+            options: { /* ... suas opções de gráfico ... */ }
+        });
+
     } catch (error) {
         showMessage(`Erro ao atualizar resumo: ${error.message}`, 'error');
         detailedSummaryText.innerHTML = `<p class="text-red-500">Falha ao carregar dados: ${error.message}</p>`;
@@ -602,6 +577,7 @@ async function updateDetailedSummaryChart() {
         showGlobalLoading(false);
     }
 }
+
 async function handleDownloadPdf() {
      // A lógica desta função foi mantida das versões anteriores, focada em usar jspdf e html2canvas.
 }
