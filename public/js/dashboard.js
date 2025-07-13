@@ -1,187 +1,193 @@
-// ------------------------------------------------------
-// Frontend (js/dashboard.js) - VERSÃO COMPLETA E FINAL
-// ------------------------------------------------------
 let allMembersData = [];
 let filteredMembers = [];
 let lastPresencesData = {};
-let allAbsencesData = {};
 let myChart = null;
 let myBarChart = null;
-
-// --- Seletores de Elementos Globais ---
-const filterNameInput = document.getElementById("filterName");
-const filterPeriodoSelect = document.getElementById("filterPeriodo");
-const filterLiderInput = document.getElementById("filterLider");
-const filterGapeInput = document.getElementById("filterGape");
-const applyFiltersBtn = document.getElementById("applyFiltersBtn");
-const clearFiltersBtn = document.getElementById("clearFiltersBtn");
-const membersCardsContainer = document.getElementById("membersCardsContainer");
-const messageArea = document.getElementById("messageArea");
-const globalLoadingIndicator = document.getElementById("globalLoadingIndicator");
-const loadingMessageSpan = document.getElementById("loadingMessage");
-
-// Elementos do Dashboard Principal
-const toggleDashboardBtn = document.getElementById("toggleDashboardBtn");
-const dashboardContainer = document.getElementById("dashboardContainer");
-const dashboardOpenIcon = document.getElementById("dashboardOpenIcon");
-const dashboardCloseIcon = document.getElementById("dashboardCloseIcon");
-const dashboardOpenText = document.getElementById("dashboardOpenText");
-const dashboardCloseText = document.getElementById("dashboardCloseText");
-const dashboardPresencasMes = document.getElementById("dashboardPresencasMes");
-const dashboardPeriodo = document.getElementById("dashboardPeriodo");
-const dashboardLider = document.getElementById("dashboardLider");
-const dashboardGape = document.getElementById("dashboardGape");
-const totalCountsList = document.getElementById("totalCountsList");
-const dashboardFaltasMes = document.getElementById("dashboardFaltasMes");
-
-// Elementos de Login e Usuário
-const loggedInLeaderNameElement = document.getElementById("loggedInLeaderName");
-
-// Elementos do Modal de Resumo Detalhado
-const detailedSummaryModal = document.getElementById("detailedSummaryModal");
-const closeModalBtn = document.getElementById("closeModalBtn");
-const summaryChartCanvas = document.getElementById("summaryChart");
-const summaryBarChartCanvas = document.getElementById("summaryBarChart");
-const detailedSummaryText = document.getElementById("detailedSummaryText");
-const showDetailedSummaryBtn = document.getElementById("showDetailedSummaryBtn");
-const detailedSummaryContent = document.getElementById("detailedSummaryContent");
-const detailedAbsencesList = document.getElementById("detailedAbsencesList");
-const absentMembersList = document.getElementById("absentMembersList");
-const summaryStartDateInput = document.getElementById("summaryStartDate");
-const summaryEndDateInput = document.getElementById("summaryEndDate");
-const summaryMemberSelect = document.getElementById("summaryMemberSelect");
-const applySummaryFiltersBtn = document.getElementById("applySummaryFiltersBtn");
-const downloadPdfBtn = document.getElementById("downloadPdfBtn");
-const reportInfo = document.getElementById("reportInfo");
-const summaryFilterSection = document.getElementById("summaryFilterSection");
-
-// Elementos do Modal de Histórico de Presenças
-const historyModal = document.getElementById("historyModal");
-const closeHistoryModalBtn = document.getElementById("closeHistoryModalBtn");
-const historyModalTitle = document.getElementById("historyModalTitle");
-const historyListContainer = document.getElementById("presenceHistoryListContainer");
-
-// --- Configurações ---
-const BACKEND_URL = 'https://backendbras.onrender.com';
 let isDashboardOpen = false;
 
-// --- Funções Utilitárias ---
+const BACKEND_URL = 'https://backendbras.onrender.com';
 
-function showGlobalLoading(show, message = "Carregando...") {
-    if (globalLoadingIndicator && loadingMessageSpan) {
-        loadingMessageSpan.textContent = message;
-        globalLoadingIndicator.style.display = show ? "flex" : "none";
-        if (show) {
-            setTimeout(() => globalLoadingIndicator.classList.add("show"), 10);
-        } else {
-            globalLoadingIndicator.classList.remove("show");
-        }
-    }
-}
+// Seletores de Elementos
+const globalLoadingIndicator = document.getElementById('globalLoadingIndicator');
+const loadingMessage = document.getElementById('loadingMessage');
+const messageArea = document.getElementById('messageArea');
+const loggedInLeaderNameEl = document.getElementById('loggedInLeaderName');
+const logoutBtn = document.getElementById('logoutBtn');
+const filterNameInput = document.getElementById('filterName');
+const filterPeriodoSelect = document.getElementById('filterPeriodo');
+const filterLiderSelect = document.getElementById('filterLider');
+const filterGapeSelect = document.getElementById('filterGape');
+const toggleDashboardBtn = document.getElementById('toggleDashboardBtn');
+const showDetailedSummaryBtn = document.getElementById('showDetailedSummaryBtn');
+const membersCardsContainer = document.getElementById('membersCardsContainer');
+const dashboardContainer = document.getElementById('dashboardContainer');
+const dashboardPresencasMes = document.getElementById('dashboardPresencasMes');
+const dashboardFaltasMes = document.getElementById('dashboardFaltasMes');
+const dashboardPeriodo = document.getElementById('dashboardPeriodo');
+const dashboardLider = document.getElementById('dashboardLider');
+const dashboardGape = document.getElementById('dashboardGape');
+const totalCountsList = document.getElementById('totalCountsList');
+const totalAbsencesList = document.getElementById('totalAbsencesList');
 
-function showMessage(message, type = "info") {
-    if (!messageArea) return;
-    if (message.includes("Carregando") || !message.trim()) return;
+// Modal de Resumo Detalhado
+const detailedSummaryModal = document.getElementById('detailedSummaryModal');
+const closeModalBtn = document.getElementById('closeModalBtn');
+const summaryStartDateInput = document.getElementById('summaryStartDate');
+const summaryEndDateInput = document.getElementById('summaryEndDate');
+const summaryMemberSelect = document.getElementById('summaryMemberSelect');
+const detailedSummaryText = document.getElementById('detailedSummaryText');
+const summaryChartCanvas = document.getElementById('summaryChart');
+const summaryBarChartCanvas = document.getElementById('summaryBarChart');
+const absentDatesList = document.getElementById('absentDatesList');
+const presentDatesList = document.getElementById('presentDatesList');
 
-    messageArea.textContent = message;
-    messageArea.className = "message-box show";
-    messageArea.classList.remove("message-success", "message-error", "bg-green-100", "text-green-800", "bg-red-100", "text-red-800", "bg-yellow-100", "text-yellow-800", "bg-blue-100", "text-blue-800");
+// Modal de Histórico
+const historyModal = document.getElementById('historyModal');
+const closeHistoryModalBtn = document.getElementById('closeHistoryModalBtn');
+const historyModalTitle = document.getElementById('historyModalTitle');
+const presenceHistoryListContainer = document.getElementById('presenceHistoryListContainer');
 
-    switch (type) {
-        case "success":
-            messageArea.classList.add("message-success", "bg-green-100", "text-green-800");
-            break;
-        case "error":
-            messageArea.classList.add("message-error", "bg-red-100", "text-red-800");
-            break;
-        case "warning":
-            messageArea.classList.add("bg-yellow-100", "text-yellow-800");
-            break;
-        default:
-            messageArea.classList.add("bg-blue-100", "text-blue-800");
-    }
 
-    setTimeout(() => {
-        messageArea.classList.remove("show");
-    }, 4000);
-}
-
-// --- Funções Principais de Dados e UI ---
-
-async function fetchMembers() {
-    showGlobalLoading(true, "Carregando dados dos membros...");
-    if (!membersCardsContainer) {
-        showMessage("Erro crítico: Contêiner de membros não encontrado.", "error");
-        showGlobalLoading(false);
+document.addEventListener('DOMContentLoaded', () => {
+    if (!sessionStorage.getItem('leaderName')) {
+        window.location.href = 'index.html';
         return;
     }
+    fetchMembers();
+    displayLoggedInLeaderName();
+    setupEventListeners();
+    Chart.register(ChartDataLabels);
+});
 
+function setupEventListeners() {
+    logoutBtn.addEventListener('click', () => {
+        sessionStorage.clear();
+        window.location.href = 'index.html';
+    });
+
+    [filterNameInput, filterPeriodoSelect, filterLiderSelect, filterGapeSelect].forEach(el => {
+        el.addEventListener('input', applyFilters);
+    });
+
+    toggleDashboardBtn.addEventListener('click', toggleDashboardVisibility);
+    showDetailedSummaryBtn.addEventListener('click', showDetailedSummary);
+    closeModalBtn.addEventListener('click', () => detailedSummaryModal.classList.add('hidden'));
+    closeHistoryModalBtn.addEventListener('click', () => historyModal.classList.add('hidden'));
+
+    [summaryStartDateInput, summaryEndDateInput, summaryMemberSelect].forEach(el => {
+        el.addEventListener('change', updateDetailedSummaryChart);
+    });
+
+    // Event delegation for dynamically created buttons
+    document.body.addEventListener('click', e => {
+        if (e.target.closest('.btn-history')) {
+            const memberName = e.target.closest('.btn-history').dataset.memberName;
+            showPresenceHistory(memberName);
+        }
+        if (e.target.closest('.btn-remove-presence')) {
+            const button = e.target.closest('.btn-remove-presence');
+            const nome = button.dataset.nome;
+            const data = button.dataset.data;
+            if (confirm(`Tem certeza que deseja remover a presença de ${nome} na data ${data}?`)) {
+                removePresence(nome, data);
+            }
+        }
+    });
+}
+
+function showGlobalLoading(show, message = 'Carregando...') {
+    loadingMessage.textContent = message;
+    globalLoadingIndicator.style.display = show ? 'flex' : 'none';
+}
+
+function showMessage(message, type = 'info') {
+    messageArea.textContent = message;
+    messageArea.className = `message-box text-center py-2 px-4 rounded-lg shadow-md mb-4 transition-all duration-500 ease-in-out ${
+        type === 'error' ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'
+    }`;
+    messageArea.classList.remove('hidden');
+    setTimeout(() => messageArea.classList.add('hidden'), 5000);
+}
+
+async function fetchMembers() {
+    showGlobalLoading(true, 'Buscando dados dos membros...');
     try {
-        const [membersResponse, presencesResponse] = await Promise.all([
+        const [membrosRes, presencesRes] = await Promise.all([
             fetch(`${BACKEND_URL}/get-membros`),
             fetch(`${BACKEND_URL}/get-all-last-presences`)
         ]);
+        if (!membrosRes.ok || !presencesRes.ok) throw new Error('Falha ao comunicar com o servidor.');
 
-        if (!membersResponse.ok || !presencesResponse.ok) {
-            const errorData = await membersResponse.json();
-            throw new Error(errorData.message || 'Falha ao carregar dados do servidor.');
-        }
+        const membrosData = await membrosRes.json();
+        const presencesData = await presencesRes.json();
 
-        const membersData = await membersResponse.json();
-        allMembersData = membersData.membros || [];
-        const lastPresencesRawData = await presencesResponse.json();
-        lastPresencesData = lastPresencesRawData.data || {};
+        if (!membrosData.success) throw new Error(membrosData.message);
+        if (!presencesData.success) throw new Error(presencesData.message);
 
+        allMembersData = membrosData.membros;
+        lastPresencesData = presencesData.data;
+        
+        setupLeaderView();
         fillSelectOptions();
         applyFilters();
+
     } catch (error) {
-        showMessage(`Erro ao carregar dados: ${error.message}`, "error");
+        showMessage(`Erro Crítico: ${error.message}`, 'error');
     } finally {
         showGlobalLoading(false);
-        setupLeaderView();
     }
 }
 
 function applyFilters() {
-    const filters = {
-        name: (filterNameInput?.value || "").toLowerCase().trim(),
-        periodo: (filterPeriodoSelect?.value || "").toLowerCase().trim(),
-        lider: (filterLiderInput?.value || "").toLowerCase().trim(),
-        gape: (filterGapeInput?.value || "").toLowerCase().trim()
-    };
+    const nameFilter = filterNameInput.value.toLowerCase();
+    const periodoFilter = filterPeriodoSelect.value;
+    const liderFilter = filterLiderSelect.value;
+    const gapeFilter = filterGapeSelect.value;
 
     filteredMembers = allMembersData.filter(member => {
-        const memberName = (member.Nome || "").toLowerCase();
-        return (!filters.name || memberName.includes(filters.name)) &&
-               (!filters.periodo || (member.Periodo || "").toLowerCase().includes(filters.periodo)) &&
-               (!filters.lider || (member.Lider || "").toLowerCase().includes(filters.lider)) &&
-               (!filters.gape || (member.GAPE || "").toLowerCase().includes(filters.gape));
+        const nameMatch = member.Nome.toLowerCase().includes(nameFilter);
+        const periodoMatch = !periodoFilter || member.Periodo === periodoFilter;
+        const liderMatch = !liderFilter || member.Lider.includes(liderFilter);
+        const gapeMatch = !gapeFilter || member.GAPE === gapeFilter;
+        return nameMatch && periodoMatch && liderMatch && gapeMatch;
     });
 
     displayMembers(filteredMembers);
+    if (isDashboardOpen) {
+        fetchAndDisplaySummary();
+    }
 }
 
 function displayMembers(members) {
-    const container = document.getElementById("membersCardsContainer");
-    if (!container) return;
-    container.innerHTML = "";
-
+    membersCardsContainer.innerHTML = "";
     if (members.length === 0) {
-        container.innerHTML = `<div class="col-span-full text-center py-4 text-gray-500">Nenhum membro encontrado.</div>`;
+        membersCardsContainer.innerHTML = `<div class="col-span-full text-center py-4 text-gray-500">Nenhum membro encontrado com os filtros atuais.</div>`;
         return;
     }
 
-    members.forEach((member) => {
+    members.forEach(member => {
         const card = document.createElement("div");
         card.className = "fade-in-row bg-white rounded-xl shadow-md p-4 flex flex-col gap-2 relative";
         
+        const lastPresence = lastPresencesData[member.Nome];
+        let presenceInfoHtml = `<div class="text-xs text-gray-500 mt-1 presence-info">Nenhuma presença registrada.</div>`;
+        if (lastPresence && lastPresence.data !== 'N/A') {
+            let displayText = `Últ. presença: ${lastPresence.data}`;
+            if (lastPresence.hora && lastPresence.hora !== '00:00:00' && lastPresence.hora !== 'N/A') {
+                displayText += ` às ${lastPresence.hora}`;
+            }
+            if (lastPresence.diaSemana) {
+                const diaFormatado = lastPresence.diaSemana.charAt(0).toUpperCase() + lastPresence.diaSemana.slice(1);
+                displayText += ` (${diaFormatado})`;
+            }
+            presenceInfoHtml = `<div class="text-xs text-green-700 mt-1 presence-info">${displayText}</div>`;
+        }
+
         card.innerHTML = `
             <div class="flex justify-between items-start">
                 <div class="flex items-center gap-3">
                     <div class="relative w-16 h-16 rounded-full overflow-hidden border-2 border-indigo-400 flex-shrink-0 group">
                         <img src="${member.FotoURL || 'https://png.pngtree.com/png-vector/20191208/ourmid/pngtree-beautiful-create-user-glyph-vector-icon-png-image_2084391.jpg'}" alt="Foto de ${member.Nome}" class="member-photo w-full h-full object-cover">
-                        <input type="file" class="photo-upload-input absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" accept="image/*" data-member-name="${member.Nome}">
-                        <div class="absolute inset-0 bg-black bg-opacity-40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 text-white text-xs text-center p-1 z-0">Trocar Foto</div>
                     </div>
                     <div class="font-bold text-lg text-gray-800">${member.Nome || "N/A"}</div>
                 </div>
@@ -194,78 +200,40 @@ function displayMembers(members) {
             <div class="text-sm text-gray-600"><b>GAPE:</b> ${member.GAPE || "N/A"}</div>
             <label class="flex items-center gap-2 mt-2">
                 <input type="checkbox" class="h-5 w-5 text-blue-600 rounded focus:ring-blue-500 presence-checkbox">
-                <span class="text-sm text-gray-700">Presente</span>
+                <span class="text-sm text-gray-700">Registrar Presença</span>
             </label>
             <div class="presence-date-container mt-2 hidden">
-                <label class="text-sm text-gray-600 font-semibold">Escolha a data da presença (opcional):</label>
+                <label class="text-sm text-gray-600 font-semibold">Data da presença (opcional):</label>
                 <input type="date" class="presence-date-input mt-1 block w-full rounded-md border-gray-300 shadow-sm">
             </div>
-            <button class="btn-confirm-presence w-full mt-2 hidden bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg">Confirmar Presença</button>
-            <div class="text-xs text-gray-500 mt-1 presence-info"></div>
+            <button class="btn-confirm-presence w-full mt-2 hidden bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg">Confirmar</button>
+            ${presenceInfoHtml}
         `;
-        container.appendChild(card);
+        membersCardsContainer.appendChild(card);
 
         const checkbox = card.querySelector(".presence-checkbox");
-        const infoDiv = card.querySelector(".presence-info");
         const confirmBtn = card.querySelector(".btn-confirm-presence");
         const dateContainer = card.querySelector(".presence-date-container");
-        const dateInput = card.querySelector(".presence-date-input");
-        const historyBtn = card.querySelector(".btn-history");
-
-        const updatePresenceStatus = () => {
-            if (!infoDiv) return;
-            const presence = lastPresencesData[member.Nome];
-            if (presence && presence.data && presence.data !== 'N/A') {
-                let displayText = `Últ. presença: ${presence.data}`;
-                
-                // Adiciona a hora se ela existir e for válida
-                if (presence.hora && presence.hora !== '00:00:00' && presence.hora !== 'N/A') {
-                    displayText += ` às ${presence.hora}`;
-                }
-                
-                // Adiciona o dia da semana se ele existir
-                if (presence.diaSemana) {
-                    const diaFormatado = presence.diaSemana.charAt(0).toUpperCase() + presence.diaSemana.slice(1);
-                    displayText += ` (${diaFormatado})`;
-                }
-
-                infoDiv.textContent = displayText;
-                infoDiv.className = "text-xs text-green-700 mt-1 presence-info";
-            } else {
-                infoDiv.textContent = `Nenhuma presença registrada.`;
-                infoDiv.className = "text-xs text-gray-500 mt-1 presence-info";
-            }
-        };
-
-        updatePresenceStatus();
-
-        historyBtn.addEventListener("click", () => showPresenceHistory(member.Nome));
         
         checkbox.addEventListener("change", function() {
             dateContainer.classList.toggle("hidden", !this.checked);
             confirmBtn.classList.toggle("hidden", !this.checked);
-            if (this.checked) {
-                infoDiv.textContent = "Clique em confirmar para registrar.";
-                infoDiv.className = "text-xs text-gray-500 mt-1 presence-info";
-            } else {
-                updatePresenceStatus();
-            }
         });
 
         confirmBtn.addEventListener("click", async () => {
-            confirmBtn.disabled = true;
-            infoDiv.textContent = `Registrando...`;
-            infoDiv.className = "text-xs text-blue-700 mt-1 presence-info animate-pulse";
-            
+            showGlobalLoading(true, 'Registrando...');
+            const dateInput = card.querySelector(".presence-date-input");
             const selectedDate = dateInput.value;
             let presenceDate, presenceTime;
+
             if (selectedDate) {
-                presenceDate = selectedDate.split('-').reverse().join('/');
+                const [year, month, day] = selectedDate.split('-');
+                presenceDate = `${day}/${month}/${year}`;
                 presenceTime = "00:00:00";
             } else {
                 const now = new Date();
                 presenceDate = now.toLocaleDateString('pt-BR');
-                presenceTime = now.toLocaleTimeString('pt-BR');
+                presenceTime = now.toLocaleTimeString('pt-BR', { hour12: false });
             }
 
             try {
@@ -281,25 +249,16 @@ function displayMembers(members) {
                 fetchMembers(); 
             } catch (error) {
                 showMessage(`Erro: ${error.message}`, 'error');
-                updatePresenceStatus();
             } finally {
-                checkbox.checked = false;
-                confirmBtn.classList.add("hidden");
-                dateContainer.classList.add("hidden");
-                confirmBtn.disabled = false;
-                infoDiv.classList.remove("animate-pulse");
+                showGlobalLoading(false);
             }
         });
     });
 }
 
-// --- Funções de Histórico de Presença ---
-
 async function showPresenceHistory(memberName) {
-    if (!historyModal || !historyModalTitle || !historyListContainer) return;
-
     historyModalTitle.textContent = `Histórico de Presenças de ${memberName}`;
-    historyListContainer.innerHTML = `<p class="text-center text-gray-500">Carregando...</p>`;
+    presenceHistoryListContainer.innerHTML = `<p class="text-center text-gray-500">Carregando...</p>`;
     historyModal.classList.remove("hidden");
 
     try {
@@ -309,16 +268,13 @@ async function showPresenceHistory(memberName) {
 
         const presences = data.presences || [];
         if (presences.length === 0) {
-            historyListContainer.innerHTML = `<p class="text-center text-gray-500">Nenhuma presença registrada.</p>`;
+            presenceHistoryListContainer.innerHTML = `<p class="text-center text-gray-500">Nenhuma presença registrada.</p>`;
             return;
         }
 
-        // --- ALTERAÇÃO AQUI ---
-        // Modificamos o HTML para incluir o dia da semana
-        historyListContainer.innerHTML = `<ul class="space-y-2" id="history-ul">${presences.map(p => {
+        presenceHistoryListContainer.innerHTML = `<ul class="space-y-2">${presences.map(p => {
             const diaSemanaFormatado = p.diaSemana ? `(${p.diaSemana})` : '';
             const horaFormatada = (p.hora && p.hora !== '00:00:00') ? `às ${p.hora}` : '';
-
             return `
             <li class="flex justify-between items-center bg-gray-100 p-2 rounded-md">
                 <span>
@@ -327,16 +283,16 @@ async function showPresenceHistory(memberName) {
                     <span class="text-gray-600 text-sm ml-2">${diaSemanaFormatado}</span>
                     <span class="text-gray-500 text-xs ml-2">${horaFormatada}</span>
                 </span>
-                <button class="btn-remove-presence text-red-500 hover:text-red-700 font-bold" data-nome="${memberName}" data-data="${p.data}" title="Remover">&times;</button>
+                <button class="btn-remove-presence text-red-500 hover:text-red-700 font-bold text-xl" data-nome="${memberName}" data-data="${p.data}" title="Remover">&times;</button>
             </li>`;
         }).join('')}</ul>`;
     } catch (error) {
-        historyListContainer.innerHTML = `<p class="text-center text-red-500">${error.message}</p>`;
+        presenceHistoryListContainer.innerHTML = `<p class="text-center text-red-500">${error.message}</p>`;
     }
 }
 
 async function removePresence(nome, data) {
-    showGlobalLoading(true, "Removendo presença...");
+    showGlobalLoading(true, 'Removendo presença...');
     try {
         const response = await fetch(`${BACKEND_URL}/presenca`, {
             method: 'POST',
@@ -345,46 +301,47 @@ async function removePresence(nome, data) {
         });
         const result = await response.json();
         if (!result.success) throw new Error(result.message);
-        
         showMessage('Presença removida com sucesso!', 'success');
-        showPresenceHistory(nome);
-        fetchMembers(); 
+        showPresenceHistory(nome); // Refresh the history list
     } catch (error) {
-        showMessage(`Erro ao remover: ${error.message}`, 'error');
+        showMessage(`Erro ao remover presença: ${error.message}`, 'error');
     } finally {
         showGlobalLoading(false);
     }
 }
 
-// --- Funções do Dashboard e Relatórios ---
-
 function toggleDashboardVisibility() {
     isDashboardOpen = !isDashboardOpen;
-    if (!dashboardContainer) return;
-    
-    dashboardContainer.classList.toggle('max-h-0', !isDashboardOpen);
-    dashboardContainer.classList.toggle('opacity-0', !isDashboardOpen);
-    dashboardContainer.classList.toggle('overflow-hidden', !isDashboardOpen);
-    dashboardContainer.classList.toggle('max-h-screen', isDashboardOpen);
+    const iconOpen = document.getElementById('dashboardOpenIcon');
+    const textOpen = document.getElementById('dashboardOpenText');
+    const iconClose = document.getElementById('dashboardCloseIcon');
+    const textClose = document.getElementById('dashboardCloseText');
 
     if (isDashboardOpen) {
+        dashboardContainer.classList.remove('max-h-0', 'opacity-0');
+        dashboardContainer.classList.add('max-h-screen', 'opacity-100');
+        iconOpen.classList.add('hidden');
+        textOpen.classList.add('hidden');
+        iconClose.classList.remove('hidden');
+        textClose.classList.remove('hidden');
         fetchAndDisplaySummary();
+    } else {
+        dashboardContainer.classList.add('max-h-0', 'opacity-0');
+        dashboardContainer.classList.remove('max-h-screen');
+        iconOpen.classList.remove('hidden');
+        textOpen.classList.remove('hidden');
+        iconClose.classList.add('hidden');
+        textClose.classList.add('hidden');
     }
 }
 
 async function fetchAndDisplaySummary() {
-    // Adiciona o seletor para a nova lista de faltas
-    const totalAbsencesList = document.getElementById("totalAbsencesList");
-    if (!totalAbsencesList) {
-        console.error("Elemento 'totalAbsencesList' não encontrado no HTML.");
-    }
-
     showGlobalLoading(true, "Carregando resumo...");
     try {
         const queryParams = new URLSearchParams({
             periodo: filterPeriodoSelect.value,
-            lider: filterLiderInput.value,
-            gape: filterGapeInput.value
+            lider: filterLiderSelect.value,
+            gape: filterGapeSelect.value
         });
         
         const [presencesRes, absencesRes] = await Promise.all([
@@ -392,93 +349,69 @@ async function fetchAndDisplaySummary() {
             fetch(`${BACKEND_URL}/get-faltas?${queryParams.toString()}`)
         ]);
 
-        if (!presencesRes.ok) {
-            const errorData = await presencesRes.json();
-            throw new Error(`Erro ao buscar presenças: ${errorData.message || presencesRes.statusText}`);
-        }
-        if (!absencesRes.ok) {
-            const errorData = await absencesRes.json();
-            throw new Error(`Erro ao buscar faltas: ${errorData.message || absencesRes.statusText}`);
-        }
+        if (!presencesRes.ok || !absencesRes.ok) throw new Error('Falha ao buscar dados para o resumo.');
 
         const presencesResponse = await presencesRes.json();
         const absencesResponse = await absencesRes.json();
 
         const presencesData = presencesResponse.data || {};
-        allAbsencesData = absencesResponse.data || {};
+        const absencesData = absencesResponse.data || {};
 
-        const totalPresences = Object.values(presencesData).reduce((sum, count) => sum + (count || 0), 0);
-        const totalAbsences = Object.values(allAbsencesData).reduce((sum, member) => sum + (member.totalFaltas || 0), 0);
+        const totalPresences = Object.values(presencesData).reduce((sum, data) => sum + (data.totalPresencas || 0), 0);
+        const totalAbsences = Object.values(absencesData).reduce((sum, data) => sum + (data.totalFaltas || 0), 0);
         
         dashboardPresencasMes.textContent = totalPresences;
         dashboardFaltasMes.textContent = totalAbsences;
-        dashboardPeriodo.textContent = filterPeriodoSelect.value || "Todos";
-        dashboardLider.textContent = filterLiderInput.value || "Todos";
-        dashboardGape.textContent = filterGapeInput.value || "Todos";
+        dashboardPeriodo.textContent = filterPeriodoSelect.options[filterPeriodoSelect.selectedIndex].text;
+        dashboardLider.textContent = filterLiderSelect.options[filterLiderSelect.selectedIndex].text;
+        dashboardGape.textContent = filterGapeSelect.options[filterGapeSelect.selectedIndex].text;
 
-        // --- LÓGICA ATUALIZADA ---
-
-        // 1. Preenche o Ranking de Presenças (em verde)
-        const sortedPresences = Object.entries(presencesData).sort(([, a], [, b]) => b - a);
+        const sortedPresences = Object.entries(presencesData).sort(([, a], [, b]) => b.totalPresencas - a.totalPresencas);
         totalCountsList.innerHTML = sortedPresences.length > 0 
-            ? sortedPresences.map(([name, count]) => 
-                `<li class="text-sm text-green-300"><span class="font-semibold text-green-100">${name}:</span> ${count} presenças</li>`
-              ).join('')
-            : '<li class="text-sm text-gray-400 text-center">Nenhuma presença para os filtros.</li>';
+            ? sortedPresences.map(([name, data]) => `<li class="text-sm text-green-300"><span class="font-semibold text-green-100">${name}:</span> ${data.totalPresencas} presenças</li>`).join('')
+            : '<li class="text-sm text-gray-400 text-center">Nenhuma presença.</li>';
 
-        // 2. Preenche o NOVO Ranking de Faltas (em vermelho)
-        const sortedAbsences = Object.entries(allAbsencesData)
-            .filter(([, memberData]) => memberData.totalFaltas > 0) // Mostra apenas quem tem faltas
-            .sort(([, a], [, b]) => b.totalFaltas - a.totalFaltas); // Ordena por quem tem mais faltas
-
-        if (totalAbsencesList) {
-            totalAbsencesList.innerHTML = sortedAbsences.length > 0
-                ? sortedAbsences.map(([name, memberData]) => 
-                    `<li class="text-sm text-red-300"><span class="font-semibold text-red-100">${name}:</span> ${memberData.totalFaltas} faltas</li>`
-                  ).join('')
-                : '<li class="text-sm text-gray-400 text-center">Nenhuma falta para os filtros.</li>';
-        }
+        const sortedAbsences = Object.entries(absencesData).sort(([, a], [, b]) => b.totalFaltas - a.totalFaltas);
+        totalAbsencesList.innerHTML = sortedAbsences.length > 0
+            ? sortedAbsences.map(([name, data]) => `<li class="text-sm text-red-300"><span class="font-semibold text-red-100">${name}:</span> ${data.totalFaltas} faltas</li>`).join('')
+            : '<li class="text-sm text-gray-400 text-center">Nenhuma falta.</li>';
 
     } catch (error) {
         showMessage(`Erro ao carregar resumo: ${error.message}`, "error");
-        dashboardPresencasMes.textContent = '-';
-        dashboardFaltasMes.textContent = '-';
     } finally {
         showGlobalLoading(false);
     }
 }
 
 function showDetailedSummary() {
-    if (!detailedSummaryModal) return;
-    populateSummaryMemberSelect();
     const today = new Date();
-    summaryStartDateInput.value = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split('T')[0];
-    summaryEndDateInput.value = new Date(today.getFullYear(), today.getMonth() + 1, 0).toISOString().split('T')[0];
+    const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split('T')[0];
+    const lastDayOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).toISOString().split('T')[0];
+    summaryStartDateInput.value = firstDayOfMonth;
+    summaryEndDateInput.value = lastDayOfMonth;
+    
+    populateSummaryMemberSelect();
+    detailedSummaryModal.classList.remove('hidden');
     updateDetailedSummaryChart();
-    detailedSummaryModal.classList.remove("hidden");
-    detailedSummaryModal.classList.add("flex");
 }
 
 function populateSummaryMemberSelect() {
-    if (!summaryMemberSelect) return;
     summaryMemberSelect.innerHTML = '<option value="">Todos os Membros Filtrados</option>';
-    const membersForSelect = [...new Set(filteredMembers.map(m => m.Nome).filter(Boolean))].sort();
-    membersForSelect.forEach(name => {
-        summaryMemberSelect.innerHTML += `<option value="${name}">${name}</option>`;
+    filteredMembers.sort((a, b) => a.Nome.localeCompare(b.Nome)).forEach(member => {
+        const option = document.createElement('option');
+        option.value = member.Nome;
+        option.textContent = member.Nome;
+        summaryMemberSelect.appendChild(option);
     });
 }
 
 async function updateDetailedSummaryChart() {
     showGlobalLoading(true, "Carregando resumo detalhado...");
-
-    // Limpa o estado anterior
     if (myChart) myChart.destroy();
     if (myBarChart) myBarChart.destroy();
     detailedSummaryText.innerHTML = '';
-    // Acessa a lista de faltas dentro do modal de resumo detalhado (pode ser diferente da do dashboard)
-    const detailedAbsentList = document.getElementById('absentDatesList') || document.getElementById('absentMembersList');
-    if(detailedAbsentList) detailedAbsentList.innerHTML = '';
-
+    absentDatesList.innerHTML = '';
+    presentDatesList.innerHTML = '';
 
     try {
         const startDateStr = summaryStartDateInput.value;
@@ -492,70 +425,44 @@ async function updateDetailedSummaryChart() {
         let title = '';
         let membersToAnalyze = [];
 
-        // Define os filtros da busca
         if (selectedMemberName) {
             title = `Estatísticas para ${selectedMemberName}`;
-            membersToAnalyze = allMembersData.filter(m => m.Nome === selectedMemberName);
+            membersToAnalyze = [allMembersData.find(m => m.Nome === selectedMemberName)];
             queryParams.append('nome', selectedMemberName);
         } else {
             title = 'Estatísticas do Grupo Filtrado';
             membersToAnalyze = filteredMembers;
-            if (filterLiderInput.value) queryParams.append('lider', filterLiderInput.value);
-            if (filterGapeInput.value) queryParams.append('gape', filterGapeInput.value);
+            if (filterLiderSelect.value) queryParams.append('lider', filterLiderSelect.value);
+            if (filterGapeSelect.value) queryParams.append('gape', filterGapeSelect.value);
             if (filterPeriodoSelect.value) queryParams.append('periodo', filterPeriodoSelect.value);
         }
 
-        if (membersToAnalyze.length === 0) {
-            detailedSummaryText.innerHTML = `<p class="text-lg font-semibold">Nenhum membro para analisar com os filtros atuais.</p>`;
+        if (!membersToAnalyze || membersToAnalyze.length === 0) {
+            detailedSummaryText.innerHTML = `<p>Nenhum membro para analisar.</p>`;
             return;
         }
 
-        // Busca os dados detalhados
         const [presencesRes, absencesRes] = await Promise.all([
             fetch(`${BACKEND_URL}/get-presencas-total?${queryParams.toString()}`),
             fetch(`${BACKEND_URL}/get-faltas?${queryParams.toString()}`)
         ]);
-
-        if (!presencesRes.ok || !absencesRes.ok) throw new Error("Falha ao buscar dados detalhados do servidor.");
+        if (!presencesRes.ok || !absencesRes.ok) throw new Error("Falha ao buscar dados detalhados.");
         
         const presencesResponse = await presencesRes.json();
         const absencesResponse = await absencesRes.json();
         
         const presencesDetails = presencesResponse.data || {};
         const absencesDetails = absencesResponse.data || {};
-        
-        // --- Atualiza a UI ---
-        
-        const totalAbsencesInPeriod = Object.values(absencesDetails).reduce((sum, data) => sum + data.totalFaltas, 0);
-        const totalPresencesInPeriod = Object.values(presencesDetails).reduce((sum, data) => sum + data.totalPresencas, 0);
 
-        if (selectedMemberName) {
-            // Visão Individual
-            const totalMeetingDays = absencesResponse.totalMeetingDays || (totalPresencesInPeriod + totalAbsencesInPeriod);
-             detailedSummaryText.innerHTML = `
-                <h3 class="text-lg font-semibold text-gray-800 mb-2">${title}</h3>
-                <ul class="list-disc list-inside text-gray-700 space-y-1">
-                    <li>Total de Reuniões no Período: <span class="font-bold">${totalMeetingDays}</span></li>
-                    <li>Presenças Registradas: <span class="font-bold text-green-600">${totalPresencesInPeriod}</span></li>
-                    <li>Faltas Calculadas: <span class="font-bold text-red-600">${totalAbsencesInPeriod}</span></li>
-                </ul>`;
-        } else {
-            // Visão de Grupo
-            const membersWithPresence = Object.keys(presencesDetails).length;
-            const membersWithoutPresence = membersToAnalyze.length - membersWithPresence;
-             detailedSummaryText.innerHTML = `
-                <h3 class="text-lg font-semibold text-gray-800 mb-2">${title}</h3>
-                <ul class="list-disc list-inside text-gray-700 space-y-1">
-                    <li>Total de Membros Analisados: <span class="font-bold">${membersToAnalyze.length}</span></li>
-                    <li>Membros com Presença no Período: <span class="font-bold text-green-600">${membersWithPresence}</span></li>
-                    <li>Membros Sem Presença no Período: <span class="font-bold text-red-600">${membersWithoutPresence}</span></li>
-                    <li>Total de Faltas Registradas no Grupo: <span class="font-bold">${totalAbsencesInPeriod}</span></li>
-                </ul>`;
-        }
-
-        // Preenche as listas de datas de faltas e presenças
-        const presentDatesList = document.getElementById('presentDatesList');
-        const absentDatesList = document.getElementById('absentDatesList');
+        let totalPresences = Object.values(presencesDetails).reduce((sum, data) => sum + data.totalPresencas, 0);
+        let totalAbsences = Object.values(absencesDetails).reduce((sum, data) => sum + data.totalFaltas, 0);
+        
+        detailedSummaryText.innerHTML = `<h3 class="text-lg font-semibold text-gray-800 mb-2">${title}</h3>
+            <ul class="list-disc list-inside text-gray-700 space-y-1">
+                <li>Total de Membros Analisados: <span class="font-bold">${membersToAnalyze.length}</span></li>
+                <li>Total de Presenças Registradas: <span class="font-bold text-green-600">${totalPresences}</span></li>
+                <li>Total de Faltas Calculadas: <span class="font-bold text-red-600">${totalAbsences}</span></li>
+            </ul>`;
 
         let presencesHtml = Object.entries(presencesDetails).map(([name, data]) => 
             (selectedMemberName ? '' : `<h5 class="font-semibold mt-2 text-gray-700">${name}</h5>`) + 
@@ -567,49 +474,36 @@ async function updateDetailedSummaryChart() {
             data.faltas.map(date => `<li class="text-sm text-gray-800">${date}</li>`).join('')
         ).join('');
 
-        if (presentDatesList) presentDatesList.innerHTML = presencesHtml || '<li>Nenhuma presença no período.</li>';
-        if (absentDatesList) absentDatesList.innerHTML = absencesHtml || '<li>Nenhuma falta no período.</li>';
+        presentDatesList.innerHTML = presencesHtml || '<li>Nenhuma presença no período.</li>';
+        absentDatesList.innerHTML = absencesHtml || '<li>Nenhuma falta no período.</li>';
         
-
-        // --- Lógica para desenhar o gráfico ---
-        const chartData = selectedMemberName 
-            ? [totalPresencesInPeriod, totalAbsencesInPeriod] 
-            : [Object.keys(presencesDetails).length, membersToAnalyze.length - Object.keys(presencesDetails).length];
-        
-        const chartLabels = selectedMemberName
-            ? ['Presenças', 'Faltas']
-            : ['Membros com Presença', 'Membros Sem Presença'];
-
-        const chartTitle = selectedMemberName
-            ? 'Proporção Presenças vs Faltas'
-            : 'Proporção de Membros com/sem Presença';
+        const chartOptions = {
+            responsive: true,
+            plugins: {
+                title: { display: true, text: 'Proporção Presenças vs Faltas' },
+                datalabels: {
+                    formatter: (value, context) => {
+                        const total = context.chart.data.datasets[0].data.reduce((a, b) => a + b, 0);
+                        if (total === 0 || value === 0) return '';
+                        const percentage = (value / total * 100).toFixed(1) + '%';
+                        return percentage;
+                    },
+                    color: '#fff', font: { weight: 'bold', size: 14 }
+                }
+            }
+        };
 
         const pieCtx = summaryChartCanvas.getContext('2d');
         myChart = new Chart(pieCtx, {
             type: 'pie',
             data: {
-                labels: chartLabels,
+                labels: ['Presenças', 'Faltas'],
                 datasets: [{
-                    data: chartData,
+                    data: [totalPresences, totalAbsences],
                     backgroundColor: ['rgba(75, 192, 192, 0.8)', 'rgba(255, 99, 132, 0.8)'],
                 }]
             },
-            options: {
-                responsive: true,
-                plugins: {
-                    title: { display: true, text: chartTitle },
-                    datalabels: {
-                        formatter: (value, context) => {
-                            const total = context.chart.data.datasets[0].data.reduce((a, b) => a + b, 0);
-                            if (total === 0 || value === 0) return '';
-                            const percentage = (value / total * 100).toFixed(1) + '%';
-                            return percentage;
-                        },
-                        color: '#fff',
-                        font: { weight: 'bold', size: 14 }
-                    }
-                }
-            },
+            options: chartOptions,
             plugins: [ChartDataLabels]
         });
 
@@ -621,94 +515,44 @@ async function updateDetailedSummaryChart() {
     }
 }
 
-async function handleDownloadPdf() {
-     // A lógica desta função foi mantida das versões anteriores, focada em usar jspdf e html2canvas.
-}
-
 function fillSelectOptions() {
-    const lideres = [...new Set(allMembersData.map(m => m.Lider).filter(Boolean))].sort();
-    const gapes = [...new Set(allMembersData.map(m => m.GAPE).filter(Boolean))].sort();
+    const lideres = new Set();
+    const gapes = new Set();
+    allMembersData.forEach(member => {
+        if (member.Lider) lideres.add(member.Lider);
+        if (member.GAPE) gapes.add(member.GAPE);
+    });
 
-    if (filterLiderInput) {
-        filterLiderInput.innerHTML = '<option value="">Todos</option>' + lideres.map(l => `<option value="${l}">${l}</option>`).join('');
-    }
-    if (filterGapeInput) {
-        filterGapeInput.innerHTML = '<option value="">Todos</option>' + gapes.map(g => `<option value="${g}">${g}</option>`).join('');
-    }
+    filterLiderSelect.innerHTML = '<option value="">Todos</option>';
+    [...lideres].sort().forEach(lider => {
+        const option = document.createElement('option');
+        option.value = lider;
+        option.textContent = lider;
+        filterLiderSelect.appendChild(option);
+    });
+
+    filterGapeSelect.innerHTML = '<option value="">Todos</option>';
+    [...gapes].sort().forEach(gape => {
+        const option = document.createElement('option');
+        option.value = gape;
+        option.textContent = gape;
+        filterGapeSelect.appendChild(option);
+    });
 }
-
-// --- Funções de Autenticação e Visão de Líder ---
 
 function displayLoggedInLeaderName() {
-    const leaderName = localStorage.getItem('loggedInLeaderName');
-    if (loggedInLeaderNameElement) {
-        loggedInLeaderNameElement.innerHTML = leaderName 
-            ? `Logado como: <span class="text-blue-600 font-bold">${leaderName}</span>`
-            : `Logado como: Não identificado`;
+    const leaderName = sessionStorage.getItem('leaderName');
+    if (leaderName) {
+        loggedInLeaderNameEl.textContent = `Logado como: ${leaderName === 'admin' ? 'Administrador' : leaderName}`;
     }
 }
 
 function setupLeaderView() {
-    const leaderName = localStorage.getItem('loggedInLeaderName');
+    const leaderName = sessionStorage.getItem('leaderName');
     if (leaderName && leaderName !== 'admin') {
-        const loggedInMember = allMembersData.find(member => 
-            (member.Nome || '').toLowerCase().trim() === leaderName.toLowerCase().trim()
-        );
-        if (loggedInMember) {
-            if (filterLiderInput) filterLiderInput.value = loggedInMember.Lider;
-            if (filterGapeInput) filterGapeInput.value = loggedInMember.GAPE;
-        }
-        if (filterLiderInput) filterLiderInput.disabled = true;
-        if (filterGapeInput) filterGapeInput.disabled = true;
-        applyFilters();
-        if (isDashboardOpen) fetchAndDisplaySummary();
+        filterLiderSelect.value = leaderName;
+        filterLiderSelect.disabled = true;
+    } else {
+        filterLiderSelect.disabled = false;
     }
 }
-
-// --- Event Listeners ---
-document.addEventListener("DOMContentLoaded", () => {
-    fetchMembers();
-    displayLoggedInLeaderName();
-
-    const logoutBtn = document.getElementById('logoutBtn');
-    if (logoutBtn) {
-        logoutBtn.addEventListener('click', () => {
-            localStorage.removeItem('loggedInLeaderName');
-            window.location.href = 'index.html';
-        });
-    }
-
-    if (applyFiltersBtn) applyFiltersBtn.addEventListener("click", () => { applyFilters(); if(isDashboardOpen) fetchAndDisplaySummary(); });
-    if (clearFiltersBtn) clearFiltersBtn.addEventListener("click", () => {
-        if(filterNameInput) filterNameInput.value = "";
-        if(filterPeriodoSelect) filterPeriodoSelect.value = "";
-        if(!filterLiderInput?.disabled) filterLiderInput.value = "";
-        if(!filterGapeInput?.disabled) filterGapeInput.value = "";
-        applyFilters();
-        if(isDashboardOpen) fetchAndDisplaySummary();
-    });
-
-    if (toggleDashboardBtn) toggleDashboardBtn.addEventListener("click", toggleDashboardVisibility);
-    if (showDetailedSummaryBtn) showDetailedSummaryBtn.addEventListener("click", showDetailedSummary);
-    if (closeModalBtn) closeModalBtn.addEventListener("click", () => detailedSummaryModal.classList.add("hidden"));
-    if (closeHistoryModalBtn) closeHistoryModalBtn.addEventListener("click", () => historyModal.classList.add("hidden"));
-    
-    if (historyListContainer) {
-        historyListContainer.addEventListener("click", (e) => {
-            const button = e.target.closest('.btn-remove-presence');
-            if (button) {
-                const { nome, data } = button.dataset;
-                if (confirm(`Tem certeza que deseja remover a presença de ${nome} do dia ${data}?`)) {
-                    removePresence(nome, data);
-                }
-            }
-        });
-    }
-
-    // Listeners para filtros do modal de resumo
-    if(applySummaryFiltersBtn) applySummaryFiltersBtn.addEventListener("click", updateDetailedSummaryChart);
-    if(summaryStartDateInput) summaryStartDateInput.addEventListener("change", updateDetailedSummaryChart);
-    if(summaryEndDateInput) summaryEndDateInput.addEventListener("change", updateDetailedSummaryChart);
-    if(summaryMemberSelect) summaryMemberSelect.addEventListener("change", updateDetailedSummaryChart);
-    if(downloadPdfBtn) downloadPdfBtn.addEventListener("click", handleDownloadPdf);
-});
