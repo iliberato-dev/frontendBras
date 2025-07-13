@@ -175,36 +175,24 @@ function displayMembers(members) {
         const card = document.createElement("div");
         card.className = "fade-in-row bg-white rounded-xl shadow-md p-4 flex flex-col gap-2 relative";
         
-        // --- LÓGICA PARA ESCOLHER O ÍCONE ---
-        let periodoIcon = '<i class="fas fa-question-circle text-gray-400"></i>'; // Ícone padrão
+        // --- LÓGICA ADICIONADA PARA ESCOLHER O ÍCONE DO PERÍODO ---
+        let periodoIcon = '<i class="fas fa-question-circle text-gray-400 fa-fw"></i>'; // Ícone padrão
         if (member.Periodo) {
             const periodoLower = member.Periodo.toLowerCase();
             if (periodoLower.includes("manhã") || periodoLower.includes("tarde")) {
-                periodoIcon = '<i class="fas fa-sun text-yellow-500 fa-fw"></i>'; // Sol amarelo
+                periodoIcon = '<i class="fas fa-sun text-yellow-500 fa-fw"></i>'; // Ícone de sol
             } else if (periodoLower.includes("noite")) {
-                periodoIcon = '<i class="fas fa-moon text-blue-500 fa-fw"></i>'; // Lua azul
+                periodoIcon = '<i class="fas fa-moon text-blue-500 fa-fw"></i>'; // Ícone de lua
             }
         }
-
-        const lastPresence = lastPresencesData[member.Nome];
-        let presenceInfoHtml = `<div class="text-xs text-gray-500 mt-1 presence-info">Nenhuma presença registrada.</div>`;
-        if (lastPresence && lastPresence.data && lastPresence.data !== 'N/A') {
-            let displayText = `Últ. presença: ${lastPresence.data}`;
-            if (lastPresence.hora && lastPresence.hora !== '00:00:00' && lastPresence.hora !== 'N/A') {
-                displayText += ` às ${lastPresence.hora}`;
-            }
-            if (lastPresence.diaSemana) {
-                const diaFormatado = lastPresence.diaSemana.charAt(0).toUpperCase() + lastPresence.diaSemana.slice(1);
-                displayText += ` (${diaFormatado})`;
-            }
-            presenceInfoHtml = `<div class="text-xs text-green-700 mt-1 presence-info">${displayText}</div>`;
-        }
-
+        
         card.innerHTML = `
             <div class="flex justify-between items-start">
                 <div class="flex items-center gap-3">
                     <div class="relative w-16 h-16 rounded-full overflow-hidden border-2 border-indigo-400 flex-shrink-0 group">
                         <img src="${member.FotoURL || 'https://png.pngtree.com/png-vector/20191208/ourmid/pngtree-beautiful-create-user-glyph-vector-icon-png-image_2084391.jpg'}" alt="Foto de ${member.Nome}" class="member-photo w-full h-full object-cover">
+                        <input type="file" class="photo-upload-input absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" accept="image/*" data-member-name="${member.Nome}">
+                        <div class="absolute inset-0 bg-black bg-opacity-40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 text-white text-xs text-center p-1 z-0">Trocar Foto</div>
                     </div>
                     <div class="font-bold text-lg text-gray-800">${member.Nome || "N/A"}</div>
                 </div>
@@ -226,21 +214,48 @@ function displayMembers(members) {
             </div>
             <label class="flex items-center gap-2 mt-2">
                 <input type="checkbox" class="h-5 w-5 text-blue-600 rounded focus:ring-blue-500 presence-checkbox">
-                <span class="text-sm text-gray-700">Registrar Presença</span>
+                <span class="text-sm text-gray-700">Presente</span>
             </label>
             <div class="presence-date-container mt-2 hidden">
-                <label class="text-sm text-gray-600 font-semibold">Data da presença (opcional):</label>
+                <label class="text-sm text-gray-600 font-semibold">Escolha a data da presença (opcional):</label>
                 <input type="date" class="presence-date-input mt-1 block w-full rounded-md border-gray-300 shadow-sm">
             </div>
-            <button class="btn-confirm-presence w-full mt-2 hidden bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg">Confirmar</button>
-            ${presenceInfoHtml}
+            <button class="btn-confirm-presence w-full mt-2 hidden bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg">Confirmar Presença</button>
+            <div class="text-xs text-gray-500 mt-1 presence-info"></div>
         `;
         container.appendChild(card);
 
+        // O restante da sua função (event listeners, etc.) permanece exatamente o mesmo
         const checkbox = card.querySelector(".presence-checkbox");
+        const infoDiv = card.querySelector(".presence-info");
         const confirmBtn = card.querySelector(".btn-confirm-presence");
         const dateContainer = card.querySelector(".presence-date-container");
-        const infoDiv = card.querySelector(".presence-info");
+        const dateInput = card.querySelector(".presence-date-input");
+        const historyBtn = card.querySelector(".btn-history");
+
+        const updatePresenceStatus = () => {
+            if (!infoDiv) return;
+            const presence = lastPresencesData[member.Nome];
+            if (presence && presence.data && presence.data !== 'N/A') {
+                let displayText = `Últ. presença: ${presence.data}`;
+                if (presence.hora && presence.hora !== '00:00:00' && presence.hora !== 'N/A') {
+                    displayText += ` às ${presence.hora}`;
+                }
+                if (presence.diaSemana) {
+                    const diaFormatado = presence.diaSemana.charAt(0).toUpperCase() + presence.diaSemana.slice(1);
+                    displayText += ` (${diaFormatado})`;
+                }
+                infoDiv.textContent = displayText;
+                infoDiv.className = "text-xs text-green-700 mt-1 presence-info";
+            } else {
+                infoDiv.textContent = `Nenhuma presença registrada.`;
+                infoDiv.className = "text-xs text-gray-500 mt-1 presence-info";
+            }
+        };
+
+        updatePresenceStatus();
+
+        historyBtn.addEventListener("click", () => showPresenceHistory(member.Nome));
         
         checkbox.addEventListener("change", function() {
             dateContainer.classList.toggle("hidden", !this.checked);
@@ -254,19 +269,19 @@ function displayMembers(members) {
         });
 
         confirmBtn.addEventListener("click", async () => {
-            showGlobalLoading(true, 'Registrando...');
-            const dateInput = card.querySelector(".presence-date-input");
+            confirmBtn.disabled = true;
+            infoDiv.textContent = `Registrando...`;
+            infoDiv.className = "text-xs text-blue-700 mt-1 presence-info animate-pulse";
+            
             const selectedDate = dateInput.value;
             let presenceDate, presenceTime;
-
             if (selectedDate) {
-                const [year, month, day] = selectedDate.split('-');
-                presenceDate = `${day}/${month}/${year}`;
+                presenceDate = selectedDate.split('-').reverse().join('/');
                 presenceTime = "00:00:00";
             } else {
                 const now = new Date();
                 presenceDate = now.toLocaleDateString('pt-BR');
-                presenceTime = now.toLocaleTimeString('pt-BR', { hour12: false });
+                presenceTime = now.toLocaleTimeString('pt-BR');
             }
 
             try {
@@ -282,8 +297,13 @@ function displayMembers(members) {
                 fetchMembers(); 
             } catch (error) {
                 showMessage(`Erro: ${error.message}`, 'error');
+                updatePresenceStatus();
             } finally {
-                showGlobalLoading(false);
+                checkbox.checked = false;
+                confirmBtn.classList.add("hidden");
+                dateContainer.classList.add("hidden");
+                confirmBtn.disabled = false;
+                infoDiv.classList.remove("animate-pulse");
             }
         });
     });
