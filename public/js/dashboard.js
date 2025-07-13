@@ -389,10 +389,10 @@ function toggleDashboardVisibility() {
 }
 
 async function fetchAndDisplaySummary() {
-    // Adiciona o seletor para a nova lista de faltas
     const totalAbsencesList = document.getElementById("totalAbsencesList");
-    if (!totalAbsencesList) {
-        console.error("Elemento 'totalAbsencesList' não encontrado no HTML.");
+    if (!totalCountsList || !totalAbsencesList) {
+        console.error("Elementos de lista do dashboard não encontrados no HTML.");
+        return;
     }
 
     showGlobalLoading(true, "Carregando resumo...");
@@ -403,60 +403,48 @@ async function fetchAndDisplaySummary() {
             gape: filterGapeInput.value
         });
         
-        const [presencesRes, absencesRes] = await Promise.all([
-            fetch(`${BACKEND_URL}/get-presencas-total?${queryParams.toString()}`),
-            fetch(`${BACKEND_URL}/get-faltas?${queryParams.toString()}`)
-        ]);
-
-        if (!presencesRes.ok) {
-            const errorData = await presencesRes.json();
-            throw new Error(`Erro ao buscar presenças: ${errorData.message || presencesRes.statusText}`);
-        }
-        if (!absencesRes.ok) {
-            const errorData = await absencesRes.json();
-            throw new Error(`Erro ao buscar faltas: ${errorData.message || absencesRes.statusText}`);
+        // --- CHAMADA ÚNICA E OTIMIZADA ---
+        // Usamos a mesma rota eficiente do modal detalhado
+        const response = await fetch(`${BACKEND_URL}/detailed-summary?${queryParams.toString()}`);
+        
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({ message: response.statusText }));
+            throw new Error(errorData.message || 'Falha ao carregar resumo do painel.');
         }
 
-        const presencesResponse = await presencesRes.json();
-        const absencesResponse = await absencesRes.json();
+        const summaryResponse = await response.json();
+        if (!summaryResponse.success) {
+            throw new Error(summaryResponse.message);
+        }
+        
+        const summaryData = summaryResponse.data;
+        const presencesDetails = summaryData.presences || {};
+        const absencesDetails = summaryData.absences || {};
 
-        const presencesData = presencesResponse.data || {};
-        allAbsencesData = absencesResponse.data || {};
-
-        const totalPresences = Object.values(presencesData).reduce((sum, count) => sum + (count || 0), 0);
-        const totalAbsences = Object.values(allAbsencesData).reduce((sum, member) => sum + (member.totalFaltas || 0), 0);
+        // Processa os dados recebidos para os cards principais
+        const totalPresences = Object.values(presencesDetails).reduce((sum, data) => sum + (data.totalPresencas || 0), 0);
+        const totalAbsences = Object.values(absencesDetails).reduce((sum, data) => sum + (data.totalFaltas || 0), 0);
         
         dashboardPresencasMes.textContent = totalPresences;
         dashboardFaltasMes.textContent = totalAbsences;
-        dashboardPeriodo.textContent = filterPeriodoSelect.value || "Todos";
-        dashboardLider.textContent = filterLiderInput.value || "Todos";
-        dashboardGape.textContent = filterGapeInput.value || "Todos";
+        dashboardPeriodo.textContent = filterPeriodoSelect.options[filterPeriodoSelect.selectedIndex].text;
+        dashboardLider.textContent = filterLiderInput.options[filterLiderInput.selectedIndex].text;
+        dashboardGape.textContent = filterGapeInput.options[filterGapeInput.selectedIndex].text;
 
-        // --- LÓGICA ATUALIZADA ---
-
-        // 1. Preenche o Ranking de Presenças (em verde)
-        const sortedPresences = Object.entries(presencesData).sort(([, a], [, b]) => b - a);
+        // Atualiza a lista de Ranking de Presenças (em verde)
+        const sortedPresences = Object.entries(presencesDetails).sort(([, a], [, b]) => b.totalPresencas - a.totalPresencas);
         totalCountsList.innerHTML = sortedPresences.length > 0 
-            ? sortedPresences.map(([name, count]) => 
-                `<li class="text-sm text-green-300"><span class="font-semibold text-green-100">${name}:</span> ${count} presenças</li>`
-              ).join('')
-            : '<li class="text-sm text-gray-400 text-center">Nenhuma presença para os filtros.</li>';
+            ? sortedPresences.map(([name, data]) => `<li class="text-sm text-green-300"><span class="font-semibold text-green-100">${name}:</span> ${data.totalPresencas} presenças</li>`).join('')
+            : '<li class="text-sm text-gray-400 text-center">Nenhuma presença.</li>';
 
-        // 2. Preenche o NOVO Ranking de Faltas (em vermelho)
-        const sortedAbsences = Object.entries(allAbsencesData)
-            .filter(([, memberData]) => memberData.totalFaltas > 0) // Mostra apenas quem tem faltas
-            .sort(([, a], [, b]) => b.totalFaltas - a.totalFaltas); // Ordena por quem tem mais faltas
-
-        if (totalAbsencesList) {
-            totalAbsencesList.innerHTML = sortedAbsences.length > 0
-                ? sortedAbsences.map(([name, memberData]) => 
-                    `<li class="text-sm text-red-300"><span class="font-semibold text-red-100">${name}:</span> ${memberData.totalFaltas} faltas</li>`
-                  ).join('')
-                : '<li class="text-sm text-gray-400 text-center">Nenhuma falta para os filtros.</li>';
-        }
+        // Atualiza a lista de Ranking de Faltas (em vermelho)
+        const sortedAbsences = Object.entries(absencesDetails).sort(([, a], [, b]) => b.totalFaltas - a.totalFaltas);
+        totalAbsencesList.innerHTML = sortedAbsences.length > 0
+            ? sortedAbsences.map(([name, data]) => `<li class="text-sm text-red-300"><span class="font-semibold text-red-100">${name}:</span> ${data.totalFaltas} faltas</li>`).join('')
+            : '<li class="text-sm text-gray-400 text-center">Nenhuma falta.</li>';
 
     } catch (error) {
-        showMessage(`Erro ao carregar resumo: ${error.message}`, "error");
+        showMessage(`Erro ao carregar resumo: ${error.message}`, 'error');
         dashboardPresencasMes.textContent = '-';
         dashboardFaltasMes.textContent = '-';
     } finally {
