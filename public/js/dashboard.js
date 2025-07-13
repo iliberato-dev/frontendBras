@@ -601,7 +601,7 @@ function displayMembers(members) {
             }
         });
     });
-}
+
 
 /**
  * Preenche as opções dos selects de filtro de Líder e GAPE.
