@@ -215,11 +215,20 @@ function displayMembers(members) {
         const updatePresenceStatus = () => {
             if (!infoDiv) return;
             const presence = lastPresencesData[member.Nome];
-            if (presence && presence.data) {
+            if (presence && presence.data && presence.data !== 'N/A') {
                 let displayText = `Últ. presença: ${presence.data}`;
-                if (presence.hora && presence.hora !== '00:00:00') {
+                
+                // Adiciona a hora se ela existir e for válida
+                if (presence.hora && presence.hora !== '00:00:00' && presence.hora !== 'N/A') {
                     displayText += ` às ${presence.hora}`;
                 }
+                
+                // Adiciona o dia da semana se ele existir
+                if (presence.diaSemana) {
+                    const diaFormatado = presence.diaSemana.charAt(0).toUpperCase() + presence.diaSemana.slice(1);
+                    displayText += ` (${diaFormatado})`;
+                }
+
                 infoDiv.textContent = displayText;
                 infoDiv.className = "text-xs text-green-700 mt-1 presence-info";
             } else {
@@ -269,7 +278,7 @@ function displayMembers(members) {
                 if (!result.success) throw new Error(result.message);
                 
                 showMessage('Presença registrada com sucesso!', 'success');
-                fetchMembers(); // Recarrega todos os dados para garantir consistência
+                fetchMembers(); 
             } catch (error) {
                 showMessage(`Erro: ${error.message}`, 'error');
                 updatePresenceStatus();
