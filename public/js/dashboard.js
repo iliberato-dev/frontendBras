@@ -363,13 +363,25 @@ async function fetchAndDisplaySummary() {
             fetch(`${BACKEND_URL}/get-faltas?${queryParams.toString()}`)
         ]);
 
-        if (!presencesRes.ok || !absencesRes.ok) throw new Error('Falha ao carregar resumo.');
+        // Verificação de erro melhorada
+        if (!presencesRes.ok) {
+            const errorData = await presencesRes.json();
+            throw new Error(`Erro ao buscar presenças: ${errorData.message || presencesRes.statusText}`);
+        }
+        if (!absencesRes.ok) {
+            const errorData = await absencesRes.json();
+            throw new Error(`Erro ao buscar faltas: ${errorData.message || absencesRes.statusText}`);
+        }
 
-        const presencesData = await presencesRes.json();
-        const absencesData = await absencesRes.json();
-        allAbsencesData = absencesData.data || {};
+        const presencesResponse = await presencesRes.json();
+        const absencesResponse = await absencesRes.json();
 
-        const totalPresences = Object.values(presencesData.data || {}).reduce((sum, count) => sum + count, 0);
+        // --- CORREÇÃO APLICADA AQUI ---
+        // Acessamos a propriedade 'data' do objeto de resposta antes de processar.
+        const presencesData = presencesResponse.data || {};
+        allAbsencesData = absencesResponse.data || {};
+
+        const totalPresences = Object.values(presencesData).reduce((sum, count) => sum + (count || 0), 0);
         const totalAbsences = Object.values(allAbsencesData).reduce((sum, member) => sum + (member.totalFaltas || 0), 0);
         
         dashboardPresencasMes.textContent = totalPresences;
@@ -378,13 +390,16 @@ async function fetchAndDisplaySummary() {
         dashboardLider.textContent = filterLiderInput.value || "Todos";
         dashboardGape.textContent = filterGapeInput.value || "Todos";
 
-        const sortedCounts = Object.entries(presencesData.data || {}).sort(([, a], [, b]) => b - a);
+        // --- CORREÇÃO APLICADA AQUI TAMBÉM ---
+        const sortedCounts = Object.entries(presencesData).sort(([, a], [, b]) => b - a);
         totalCountsList.innerHTML = sortedCounts.length > 0 
             ? sortedCounts.map(([name, count]) => `<li class="text-sm text-gray-100"><span class="font-semibold">${name}:</span> ${count} presenças</li>`).join('')
             : '<li class="text-sm text-gray-200 text-center">Nenhuma presença para os filtros.</li>';
 
     } catch (error) {
         showMessage(`Erro ao carregar resumo: ${error.message}`, "error");
+        dashboardPresencasMes.textContent = '-';
+        dashboardFaltasMes.textContent = '-';
     } finally {
         showGlobalLoading(false);
     }
