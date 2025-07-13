@@ -1,5 +1,5 @@
 // ------------------------------------------------------
-// Frontend (js/dashboard.js) - Versão Final com Informações de Relatório no PDF e Faltas
+// Frontend (js/dashboard.js) - Versão Final com Data Escolhível e Faltas
 // ------------------------------------------------------
 let allMembersData = [];
 let filteredMembers = [];
@@ -140,7 +140,7 @@ function showMessage(message, type = "info") {
  */
 async function fetchMembers() {
     showGlobalLoading(true, "Carregando dados dos membros...");
-    
+
     // Adiciona verificação para garantir que membersCardsContainer não é nulo
     if (!membersCardsContainer) {
         console.error("Erro: Elemento 'membersCardsContainer' não encontrado no DOM. Verifique seu HTML.");
@@ -229,10 +229,6 @@ function applyFilters() {
     // ou pela função applyFiltersWithMessage/clearFilters. Evita chamadas duplicadas.
 }
 
-/**
- * Exibe os cards dos membros no contêiner.
- * @param {Array<Object>} members - A lista de membros a serem exibidos.
- */
 /**
  * Exibe os cards dos membros no contêiner.
  * @param {Array<Object>} members - A lista de membros a serem exibidos.
@@ -473,142 +469,13 @@ function displayMembers(members) {
     });
 }
 
-        const updatePresenceStatus = () => {
-            if (!infoDiv) return; // Add null check for infoDiv
-            infoDiv.classList.remove("text-green-700", "text-red-600", "text-yellow-700", "text-blue-700", "text-gray-500");
-            infoDiv.classList.add("block");
-
-            const presence = lastPresencesData[member.Nome];
-
-            if (presence && presence.data && presence.hora) {
-                infoDiv.textContent = `Últ. presença: ${presence.data} às ${presence.hora}`;
-                infoDiv.classList.add("text-green-700");
-            } else {
-                infoDiv.textContent = `Nenhuma presença registrada ainda.`;
-                infoDiv.classList.add("text-gray-500");
-            }
-            infoDiv.classList.remove("hidden");
-        };
-
-        updatePresenceStatus();
-
-        checkbox.addEventListener("change", function () {
-            if (!confirmBtn || !infoDiv) return; // Add null checks
-            if (this.checked) {
-                confirmBtn.classList.remove("hidden");
-                infoDiv.textContent = "Clique em confirmar para registrar.";
-                infoDiv.classList.remove("hidden", "text-green-700", "text-red-600", "text-yellow-700");
-                infoDiv.classList.add("text-gray-500");
-            } else {
-                confirmBtn.classList.add("hidden");
-                updatePresenceStatus();
-
-                confirmBtn.disabled = false;
-                checkbox.disabled = false;
-                if (card) card.classList.remove('animate-pulse-green', 'animate-shake-red');
-            }
-        });
-
-        confirmBtn.addEventListener("click", async function () {
-            if (!infoDiv || !confirmBtn || !checkbox || !card) return; // Add null checks
-
-            const now = new Date();
-            const dia = String(now.getDate()).padStart(2, "0");
-            const mes = String(now.getMonth() + 1).padStart(2, "0");
-            const ano = now.getFullYear();
-            const hora = String(now.getHours()).padStart(2, "0");
-            const min = String(now.getMinutes()).padStart(2, "0");
-            const seg = String(now.getSeconds()).padStart(2, "0");
-
-            infoDiv.textContent = `Registrando presença para ${member.Nome}...`;
-            infoDiv.classList.remove("hidden", "text-green-700", "text-red-600", "text-yellow-700", "text-gray-500");
-            infoDiv.classList.add("text-blue-700");
-
-            confirmBtn.disabled = true;
-            checkbox.disabled = true;
-
-            card.classList.remove('animate-pulse-green', 'animate-shake-red');
-
-            try {
-                const response = await fetch(`${BACKEND_URL}/presenca`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        nome: member.Nome,
-                        data: `${dia}/${mes}/${ano}`,
-                        hora: `${hora}:${min}:${seg}`, // Corrigido para min:seg
-                        sheet: "PRESENCAS",
-                    }),
-                });
-
-                const responseData = await response.json();
-
-                if (response.ok && responseData.success === true) {
-                    infoDiv.textContent = `Presença de ${member.Nome} registrada com sucesso em ${responseData.lastPresence?.data || `${dia}/${mes}/${ano}`} às ${responseData.lastPresence?.hora || `${hora}:${min}:${seg}`}.`;
-                    infoDiv.classList.remove("text-blue-700", "text-yellow-700");
-                    infoDiv.classList.add("text-green-700");
-                    showMessage("Presença registrada com sucesso!", "success");
-
-                    card.classList.add('animate-pulse-green');
-                    setTimeout(() => card.classList.remove('animate-pulse-green'), 1000);
-
-                    lastPresencesData[member.Nome] = responseData.lastPresence || { data: `${dia}/${mes}/${ano}`, hora: `${hora}:${min}:${seg}` };
-                    updatePresenceStatus();
-                    if (isDashboardOpen) { // Atualiza o dashboard após registrar uma presença
-                        fetchAndDisplaySummary();
-                    }
-
-                } else if (responseData.success === false && responseData.message && responseData.message.includes("já foi registrada")) {
-                    infoDiv.textContent = `Presença de ${member.Nome} já registrada hoje.`;
-                    infoDiv.classList.remove("text-blue-700", "text-green-700");
-                    infoDiv.classList.add("text-yellow-700");
-                    showMessage(`Presença de ${member.Nome} já foi registrada hoje.`, "warning");
-
-                    card.classList.add('animate-shake-red');
-                    setTimeout(() => card.classList.remove('animate-shake-red'), 1000);
-
-                    if (responseData.lastPresence) {
-                        lastPresencesData[member.Nome] = responseData.lastPresence;
-                    }
-                    updatePresenceStatus();
-                } else {
-                    infoDiv.textContent = `Erro: ${responseData.message || "Falha ao registrar"}`;
-                    infoDiv.classList.remove("text-blue-700", "text-green-700", "text-yellow-700");
-                    infoDiv.classList.add("text-red-600");
-                    showMessage(`Erro ao registrar presença: ${responseData.message || "Erro desconhecido"}`, "error");
-
-                    card.classList.add('animate-shake-red');
-                    setTimeout(() => card.classList.remove('animate-shake-red'), 1000);
-
-                    confirmBtn.disabled = false;
-                    checkbox.disabled = false;
-                }
-            } catch (e) {
-                console.error("Erro na requisição POST do frontend:", e);
-                infoDiv.textContent = "Falha de conexão com o servidor.";
-                infoDiv.classList.remove("text-blue-700", "text-green-700", "text-yellow-700");
-                infoDiv.classList.add("text-red-600");
-                showMessage("Falha ao enviar presença para o servidor. Verifique sua conexão.", "error");
-
-                card.classList.add('animate-shake-red');
-                setTimeout(() => card.classList.remove('animate-shake-red'), 1000);
-
-                confirmBtn.disabled = false;
-                checkbox.disabled = false;
-            } finally {
-                confirmBtn.classList.add("hidden");
-                checkbox.checked = false;
-            }
-        });
-    });
-
 
 /**
  * Preenche as opções dos selects de filtro de Líder e GAPE.
  */
 function fillSelectOptions() {
-    const lideres = [...new Set(allMembersData.map((m) => m.Lider).filter(Boolean)),].sort();
-    const gapes = [...new Set(allMembersData.map((m) => m.GAPE).filter(Boolean)),].sort();
+    const lideres = [...new Set(allMembersData.map((m) => m.Lider).filter(Boolean)), ].sort();
+    const gapes = [...new Set(allMembersData.map((m) => m.GAPE).filter(Boolean)), ].sort();
 
     // Adiciona verificação para garantir que filterLiderInput e filterGapeInput não são nulos
     if (filterLiderInput) {
@@ -616,7 +483,7 @@ function fillSelectOptions() {
     } else {
         console.warn("Elemento 'filterLiderInput' não encontrado no DOM.");
     }
-    
+
     if (filterGapeInput) {
         filterGapeInput.innerHTML = '<option value="">Todos</option>' + gapes.map((g) => `<option value="${g}">${g}</option>`).join("");
     } else {
@@ -774,8 +641,6 @@ async function fetchAndDisplaySummary() {
 
         // Os campos do dashboard (Periodo, Lider, GAPE) devem refletir os filtros ATUAIS
         // do formulário, e não serem derivados dos membros filtrados da lista.
-        // Isso porque a lista de membros já está filtrada por TODOS os campos,
-        // mas o resumo de presenças totais só será filtrado por Periodo, Lider, GAPE (se o backend aceitar).
         if (dashboardPeriodo) dashboardPeriodo.textContent = periodoFilter || "Todos";
         if (dashboardLider) dashboardLider.textContent = liderFilter || "Todos";
         if (dashboardGape) dashboardGape.textContent = gapeFilter || "Todos";
@@ -878,7 +743,7 @@ async function updateDetailedSummaryChart() { // Tornada async para buscar falta
         // Para o caso de "Todos os Membros Filtrados"
         const currentLiderFilter = filterLiderInput ? filterLiderInput.value.trim() : 'Todos';
         const currentGapeFilter = filterGapeInput ? filterGapeInput.value.trim() : 'Todos';
-        
+
         reportLeader = currentLiderFilter !== "" ? currentLiderFilter : "Todos";
         reportGape = currentGapeFilter !== "" ? currentGapeFilter : "Todos";
 
@@ -1075,7 +940,7 @@ async function updateDetailedSummaryChart() { // Tornada async para buscar falta
                     data: [presencePercentage.toFixed(1), absencePercentage.toFixed(1)],
                     backgroundColor: [
                         'rgba(75, 192, 192, 0.8)', // Verde para presença
-                        'rgba(255, 99, 132, 0.8)'  // Vermelho para ausência
+                        'rgba(255, 99, 132, 0.8)' // Vermelho para ausência
                     ],
                     borderColor: [
                         'rgba(75, 192, 192, 1)',
@@ -1126,7 +991,7 @@ async function updateDetailedSummaryChart() { // Tornada async para buscar falta
                         color: '#fff', // Cor do texto dos labels
                         formatter: (value, context) => {
                             // Exibe o valor da porcentagem no slice
-                            return value + '%';
+                            return value > 0 ? value + '%' : ''; // Não exibe se for 0
                         },
                         font: {
                             weight: 'bold',
@@ -1158,7 +1023,7 @@ async function updateDetailedSummaryChart() { // Tornada async para buscar falta
                     data: [membersWithPresenceCount, membersWithZeroPresenceCount],
                     backgroundColor: [
                         'rgba(75, 192, 192, 0.8)', // Verde para presença
-                        'rgba(255, 99, 132, 0.8)'  // Vermelho para ausência
+                        'rgba(255, 99, 132, 0.8)' // Vermelho para ausência
                     ],
                     borderColor: [
                         'rgba(75, 192, 192, 1)',
@@ -1193,6 +1058,7 @@ async function updateDetailedSummaryChart() { // Tornada async para buscar falta
                         formatter: (value, context) => {
                             // Exibe o valor absoluto e a porcentagem
                             const total = membersWithPresenceCount + membersWithZeroPresenceCount;
+                            if (total === 0) return '0';
                             const percentage = (value / total * 100).toFixed(1);
                             return `${value} (${percentage}%)`;
                         },
@@ -1251,21 +1117,16 @@ async function handleDownloadPdf() {
     const originalDetailedSummaryContentOverflowY = detailedSummaryContent.style.overflowY;
     const originalDetailedSummaryContentPadding = detailedSummaryContent.style.padding;
     const originalDetailedSummaryContentWidth = detailedSummaryContent.style.width;
-
     const originalDetailedSummaryModalMaxHeight = detailedSummaryModal.style.maxHeight;
-
     const originalDownloadPdfBtnDisplay = downloadPdfBtn.style.display;
     const originalSummaryFilterSectionDisplay = summaryFilterSection.style.display;
-
 
     // Aplica estilos para a captura do PDF: remove restrições de altura/overflow
     detailedSummaryContent.style.maxHeight = 'none';
     detailedSummaryContent.style.overflowY = 'visible';
     detailedSummaryContent.style.padding = '8mm'; // Ajusta o padding para a impressão
     detailedSummaryContent.style.width = '100%'; // Garante que ocupe 100% da largura para captura
-
     detailedSummaryModal.style.maxHeight = 'none'; // Garante que o modal também não restrinja a altura
-
 
     // Oculta o botão de download de PDF e a seção de filtros antes de capturar
     downloadPdfBtn.style.display = 'none';
@@ -1308,7 +1169,6 @@ async function handleDownloadPdf() {
         detailedSummaryContent.style.overflowY = originalDetailedSummaryContentOverflowY;
         detailedSummaryContent.style.padding = originalDetailedSummaryContentPadding;
         detailedSummaryContent.style.width = originalDetailedSummaryContentWidth;
-
         detailedSummaryModal.style.maxHeight = originalDetailedSummaryModalMaxHeight;
 
         // Reexibe o botão de download de PDF e a seção de filtros
@@ -1329,19 +1189,18 @@ if (applyFiltersBtn) applyFiltersBtn.addEventListener("click", applyFiltersWithM
 if (clearFiltersBtn) clearFiltersBtn.addEventListener("click", clearFilters);
 
 // Adicionado event listeners para inputs de filtro para que o dashboard se atualize dinamicamente
-// É importante chamar fetchAndDisplaySummary APENAS se o dashboard estiver aberto
-if (filterNameInput) filterNameInput.addEventListener("input", applyFilters); // Apenas aplica o filtro nos cards
+if (filterNameInput) filterNameInput.addEventListener("input", applyFilters);
 if (filterPeriodoSelect) filterPeriodoSelect.addEventListener("change", () => {
-    applyFilters(); // Aplica o filtro nos cards
-    if (isDashboardOpen) fetchAndDisplaySummary(); // Se dashboard aberto, atualiza o resumo
+    applyFilters();
+    if (isDashboardOpen) fetchAndDisplaySummary();
 });
 if (filterLiderInput) filterLiderInput.addEventListener("change", () => {
-    applyFilters(); // Aplica o filtro nos cards
-    if (isDashboardOpen) fetchAndDisplaySummary(); // Se dashboard aberto, atualiza o resumo
+    applyFilters();
+    if (isDashboardOpen) fetchAndDisplaySummary();
 });
 if (filterGapeInput) filterGapeInput.addEventListener("change", () => {
-    applyFilters(); // Aplica o filtro nos cards
-    if (isDashboardOpen) fetchAndDisplaySummary(); // Se dashboard aberto, atualiza o resumo
+    applyFilters();
+    if (isDashboardOpen) fetchAndDisplaySummary();
 });
 
 if (toggleDashboardBtn) {
@@ -1393,7 +1252,7 @@ function displayLoggedInLeaderName() {
     const leaderName = localStorage.getItem('loggedInLeaderName');
     if (loggedInLeaderNameElement) {
         if (leaderName) {
-            loggedInLeaderNameElement.innerHTML = `Logado como: <span class="text-blue-600 font-bold">${leaderName}</span>`; // Adicionado span para destaque
+            loggedInLeaderNameElement.innerHTML = `Logado como: <span class="text-blue-600 font-bold">${leaderName}</span>`;
         } else {
             loggedInLeaderNameElement.textContent = `Logado como: Não identificado`;
             // Redirecionar para a tela de login se não houver líder logado
@@ -1409,7 +1268,7 @@ function setupLeaderView() {
     const leaderName = localStorage.getItem('loggedInLeaderName');
     if (leaderName && leaderName !== 'admin') { // Aplica restrições apenas se for um líder e não o admin
         // Encontra o objeto do membro logado para obter o valor exato da coluna 'Lider' e 'GAPE'
-        const loggedInMember = allMembersData.find(member => 
+        const loggedInMember = allMembersData.find(member =>
             String(member.Nome || '').toLowerCase().trim() === leaderName.toLowerCase().trim()
         );
 
@@ -1436,17 +1295,16 @@ function setupLeaderView() {
         // Desativa os campos de filtro de líder e GAPE
         if (filterLiderInput) filterLiderInput.disabled = true;
         if (filterGapeInput) filterGapeInput.disabled = true;
-        
+
         // Aplica os filtros imediatamente para mostrar apenas os membros do líder
-        applyFilters(); 
-        
+        applyFilters();
+
         // Se o dashboard estiver aberto, atualiza o resumo com os filtros aplicados
         if (isDashboardOpen) {
             fetchAndDisplaySummary();
         }
-        
-        // Opcional: Você pode querer desativar o botão de limpar filtros também,
-        // ou ajustar sua funcionalidade para apenas limpar o filtro de nome.
+
+        // Opcional: Você pode querer desativar o botão de limpar filtros também.
         // if (clearFiltersBtn) clearFiltersBtn.disabled = true; 
     }
 }
@@ -1455,15 +1313,13 @@ function setupLeaderView() {
 // Chama a função para exibir o nome do líder quando o DOM estiver completamente carregado
 document.addEventListener("DOMContentLoaded", displayLoggedInLeaderName);
 
-// Chama a função para configurar a visualização do líder após o carregamento dos membros
-// Isso garante que as opções de filtro já estejam populadas
-// A chamada foi movida para o bloco 'finally' de fetchMembers
 // Adiciona um listener para o botão de logout
 document.addEventListener('DOMContentLoaded', () => {
     const logoutBtn = document.getElementById('logoutBtn');
     if (logoutBtn) {
         logoutBtn.addEventListener('click', () => {
-            // Redireciona o usuário para a página index.html
+            // Limpa o localStorage e redireciona o usuário para a página de login
+            localStorage.removeItem('loggedInLeaderName');
             window.location.href = 'index.html';
         });
     }
