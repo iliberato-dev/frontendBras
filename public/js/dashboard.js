@@ -1,10 +1,10 @@
 // ------------------------------------------------------
-// Frontend (js/dashboard.js) - Versão Final com Data Escolhível e Faltas
+// Frontend (js/dashboard.js) - Versão Final com Correção de Data e Depuração
 // ------------------------------------------------------
 let allMembersData = [];
 let filteredMembers = [];
 let lastPresencesData = {}; // Variável para armazenar todas as últimas presenças
-let allAbsencesData = {}; // NOVO: Variável para armazenar todas as faltas detalhadas
+let allAbsencesData = {}; // Variável para armazenar todas as faltas detalhadas
 let myChart = null; // Variável para armazenar a instância do Chart.js (Pizza)
 let myBarChart = null; // Variável para armazenar a instância do Chart.js (Barras)
 
@@ -31,7 +31,7 @@ const dashboardPeriodo = document.getElementById("dashboardPeriodo");
 const dashboardLider = document.getElementById("dashboardLider");
 const dashboardGape = document.getElementById("dashboardGape");
 const totalCountsList = document.getElementById("totalCountsList");
-const dashboardFaltasMes = document.getElementById("dashboardFaltasMes"); // NOVO: Elemento para total de faltas
+const dashboardFaltasMes = document.getElementById("dashboardFaltasMes");
 
 // Referência ao elemento onde o nome do líder será exibido
 const loggedInLeaderNameElement = document.getElementById("loggedInLeaderName");
@@ -39,13 +39,13 @@ const loggedInLeaderNameElement = document.getElementById("loggedInLeaderName");
 // Elementos do novo modal de resumo detalhado
 const detailedSummaryModal = document.getElementById("detailedSummaryModal");
 const closeModalBtn = document.getElementById("closeModalBtn");
-const summaryChartCanvas = document.getElementById("summaryChart"); // Canvas para o gráfico de Pizza
-const summaryBarChartCanvas = document.getElementById("summaryBarChart"); // Canvas para o gráfico de Barras
+const summaryChartCanvas = document.getElementById("summaryChart");
+const summaryBarChartCanvas = document.getElementById("summaryBarChart");
 const detailedSummaryText = document.getElementById("detailedSummaryText");
 const showDetailedSummaryBtn = document.getElementById("showDetailedSummaryBtn");
-const detailedSummaryContent = document.getElementById("detailedSummaryContent"); // Referência ao conteúdo do modal para PDF
-const detailedAbsencesList = document.getElementById("detailedAbsencesList"); // NOVO: Contêiner para a lista de faltas
-const absentMembersList = document.getElementById("absentMembersList"); // NOVO: Lista UL para membros ausentes
+const detailedSummaryContent = document.getElementById("detailedSummaryContent");
+const detailedAbsencesList = document.getElementById("detailedAbsencesList");
+const absentMembersList = document.getElementById("absentMembersList");
 
 // Novos elementos de filtro dentro do modal
 const summaryStartDateInput = document.getElementById("summaryStartDate");
@@ -64,7 +64,6 @@ const summaryFilterSection = document.getElementById("summaryFilterSection");
 
 
 // !!! IMPORTANTE: Substitua pela URL PÚBLICA do seu backend no Render !!!
-// Deve ser a mesma URL definida na variável de ambiente FRONTEND_URL no seu backend Render
 const BACKEND_URL = 'https://backendbras.onrender.com';
 
 // --- NOVA VARIÁVEL DE CONTROLE DE ESTADO DO DASHBOARD ---
@@ -98,24 +97,21 @@ function showGlobalLoading(show, message = "Carregando...") {
  * @param {string} type - O tipo da mensagem ('info', 'success', 'warning', 'error').
  */
 function showMessage(message, type = "info") {
-    // Adiciona verificação para garantir que messageArea não é nulo
     if (!messageArea) {
         console.error("Erro: Elemento 'messageArea' não encontrado no DOM. Não foi possível exibir a mensagem:", message);
-        return; // Sai da função para evitar o TypeError
+        return;
     }
 
-    // Evita mostrar mensagens de "Carregando..." na área de mensagem principal
     if (message.includes("Carregando dados dos membros...") ||
         message.includes("Carregando resumo do dashboard...") ||
-        message.includes("Registrando presença para ") || // Adicionado para evitar poluição durante o registro
-        !message.trim()) { // Adicionado para não mostrar mensagens vazias
+        message.includes("Registrando presença para ") ||
+        !message.trim()) {
         return;
     }
 
     messageArea.textContent = message;
     messageArea.className = "message-box show";
 
-    // Remove todas as classes de tipo antes de adicionar a nova
     messageArea.classList.remove("message-success", "message-error", "bg-blue-100", "text-blue-800", "bg-yellow-100", "text-yellow-800", "bg-red-100", "text-red-800", "bg-green-100", "text-green-800");
 
     if (type === "success") {
@@ -130,7 +126,6 @@ function showMessage(message, type = "info") {
 
     setTimeout(() => {
         messageArea.classList.remove("show");
-        // Dá um pequeno atraso para a transição de fade-out antes de ocultar totalmente
         setTimeout(() => messageArea.classList.add("hidden"), 500);
     }, 4000);
 }
@@ -141,12 +136,11 @@ function showMessage(message, type = "info") {
 async function fetchMembers() {
     showGlobalLoading(true, "Carregando dados dos membros...");
 
-    // Adiciona verificação para garantir que membersCardsContainer não é nulo
     if (!membersCardsContainer) {
         console.error("Erro: Elemento 'membersCardsContainer' não encontrado no DOM. Verifique seu HTML.");
         showMessage("Erro: Contêiner de membros não encontrado. Verifique a estrutura da página.", "error");
         showGlobalLoading(false);
-        return; // Sai da função para evitar o TypeError
+        return;
     }
 
     membersCardsContainer.innerHTML = `
@@ -160,7 +154,6 @@ async function fetchMembers() {
     `;
 
     try {
-        // Busca membros e últimas presenças em paralelo para maior eficiência
         const [membersResponse, presencesResponse] = await Promise.all([
             fetch(`${BACKEND_URL}/get-membros`),
             fetch(`${BACKEND_URL}/get-all-last-presences`)
@@ -177,27 +170,26 @@ async function fetchMembers() {
         allMembersData = membersData.membros || membersData.data || [];
 
         const lastPresencesRawData = await presencesResponse.json();
-        lastPresencesData = lastPresencesRawData.data || lastPresencesRawData || {}; // Ajustado para pegar dados diretamente
+        lastPresencesData = lastPresencesRawData.data || lastPresencesRawData || {};
 
         if (allMembersData.length === 0) {
             showMessage("Nenhum membro encontrado ou dados vazios.", "info");
         }
 
         fillSelectOptions();
-        applyFilters(); // Aplica os filtros e exibe os cards
+        applyFilters();
         if (isDashboardOpen) {
-            fetchAndDisplaySummary(); // Atualiza o dashboard se estiver aberto
+            fetchAndDisplaySummary();
         }
     } catch (error) {
         console.error("Erro ao carregar membros ou presenças:", error);
         showMessage(`Erro ao carregar dados: ${error.message}`, "error");
-        // Verifica novamente antes de tentar definir innerHTML em caso de erro
         if (membersCardsContainer) {
             membersCardsContainer.innerHTML = `<div class="col-span-full text-center py-4 text-red-600">Falha ao carregar dados. Verifique o console.</div>`;
         }
     } finally {
         showGlobalLoading(false);
-        setupLeaderView(); // NOVO: Chama a função para configurar a visualização do líder
+        setupLeaderView();
     }
 }
 
@@ -225,8 +217,6 @@ function applyFilters() {
     });
 
     displayMembers(filteredMembers);
-    // IMPORTANTE: Não chame fetchAndDisplaySummary aqui, ele já será chamado pelos event listeners
-    // ou pela função applyFiltersWithMessage/clearFilters. Evita chamadas duplicadas.
 }
 
 /**
@@ -303,12 +293,11 @@ function displayMembers(members) {
         `;
         container.appendChild(card);
 
-        // --- DECLARAÇÃO DE VARIÁVEIS DO CARD ---
         const checkbox = card.querySelector(".presence-checkbox");
         const infoDiv = card.querySelector(".presence-info");
         const confirmBtn = card.querySelector(".btn-confirm-presence");
         const dateContainer = card.querySelector(".presence-date-container");
-        const dateInput = card.querySelector(".presence-date-input"); // CORREÇÃO: Declarar a referência ao input aqui.
+        const dateInput = card.querySelector(".presence-date-input");
         const photoUploadInput = card.querySelector(".photo-upload-input");
         const memberPhoto = card.querySelector(".member-photo");
 
@@ -358,23 +347,20 @@ function displayMembers(members) {
                 if (card) card.classList.remove('animate-pulse-green', 'animate-shake-red');
             }
         });
-        
-        // --- LÓGICA DE CONFIRMAÇÃO TOTALMENTE REVISADA ---
+
         confirmBtn.addEventListener("click", async function() {
             if (!infoDiv || !confirmBtn || !checkbox || !card || !dateInput) return;
 
             const selectedDate = dateInput.value;
-            
-            // Para depuração: Verifique o valor no console do navegador (pressione F12)
+
             console.log(`[DEBUG] Tentando registrar para ${member.Nome}. Valor do campo de data: '${selectedDate}'`);
 
             let presenceDate;
             let presenceTime;
 
-            // Condição explícita para garantir que a string não está vazia
             if (selectedDate && selectedDate !== "") {
                 console.log("[DEBUG] Condição: Data selecionada. Usando a data do campo.");
-                presenceDate = selectedDate.split('-').reverse().join('/'); // Converte AAAA-MM-DD para DD/MM/AAAA
+                presenceDate = selectedDate.split('-').reverse().join('/');
                 presenceTime = "00:00:00";
             } else {
                 console.log("[DEBUG] Condição: Nenhuma data selecionada. Usando data e hora atuais.");
@@ -461,104 +447,6 @@ function displayMembers(members) {
                 if (dateContainer) dateContainer.classList.add("hidden");
                 checkbox.checked = false;
             }
-
-        // --- ALTERADO: Lógica do botão de confirmação para usar a data selecionada ---
-        confirmBtn.addEventListener("click", async function () {
-            if (!infoDiv || !confirmBtn || !checkbox || !card) return;
-
-            const dateInput = card.querySelector(".presence-date-input");
-            const selectedDate = dateInput.value; // Formato AAAA-MM-DD
-
-            let presenceDate;
-            let presenceTime;
-
-            if (selectedDate) {
-                // Se uma data foi escolhida, usa ela e uma hora padrão
-                presenceDate = selectedDate.split('-').reverse().join('/'); // Converte AAAA-MM-DD para DD/MM/AAAA
-                presenceTime = "00:00:00";
-            } else {
-                // Se não, usa a data e hora atuais (comportamento original)
-                const now = new Date();
-                const dia = String(now.getDate()).padStart(2, "0");
-                const mes = String(now.getMonth() + 1).padStart(2, "0");
-                const ano = now.getFullYear();
-                const hora = String(now.getHours()).padStart(2, "0");
-                const min = String(now.getMinutes()).padStart(2, "0");
-                const seg = String(now.getSeconds()).padStart(2, "0");
-                presenceDate = `${dia}/${mes}/${ano}`;
-                presenceTime = `${hora}:${min}:${seg}`;
-            }
-
-            infoDiv.textContent = `Registrando presença para ${member.Nome}...`;
-            infoDiv.classList.remove("hidden", "text-green-700", "text-red-600", "text-yellow-700", "text-gray-500");
-            infoDiv.classList.add("text-blue-700");
-
-            confirmBtn.disabled = true;
-            checkbox.disabled = true;
-            card.classList.remove('animate-pulse-green', 'animate-shake-red');
-
-            try {
-                const response = await fetch(`${BACKEND_URL}/presenca`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        nome: member.Nome,
-                        data: presenceDate, // ALTERADO: Usa a variável da data
-                        hora: presenceTime, // ALTERADO: Usa a variável da hora
-                        sheet: "PRESENCAS",
-                    }),
-                });
-
-                const responseData = await response.json();
-
-                if (response.ok && responseData.success === true) {
-                    infoDiv.textContent = `Presença de ${member.Nome} registrada com sucesso em ${responseData.lastPresence?.data || presenceDate} às ${responseData.lastPresence?.hora || presenceTime}.`;
-                    infoDiv.classList.remove("text-blue-700", "text-yellow-700");
-                    infoDiv.classList.add("text-green-700");
-                    showMessage("Presença registrada com sucesso!", "success");
-                    card.classList.add('animate-pulse-green');
-                    setTimeout(() => card.classList.remove('animate-pulse-green'), 1000);
-                    lastPresencesData[member.Nome] = responseData.lastPresence || { data: presenceDate, hora: presenceTime };
-                    updatePresenceStatus();
-                    if (isDashboardOpen) {
-                        fetchAndDisplaySummary();
-                    }
-                } else if (responseData.success === false && responseData.message && responseData.message.includes("já foi registrada")) {
-                    infoDiv.textContent = `Presença de ${member.Nome} já registrada nesta data.`; // ALTERADO
-                    infoDiv.classList.remove("text-blue-700", "text-green-700");
-                    infoDiv.classList.add("text-yellow-700");
-                    showMessage(`Presença de ${member.Nome} já foi registrada nesta data.`, "warning"); // ALTERADO
-                    card.classList.add('animate-shake-red');
-                    setTimeout(() => card.classList.remove('animate-shake-red'), 1000);
-                    if (responseData.lastPresence) {
-                        lastPresencesData[member.Nome] = responseData.lastPresence;
-                    }
-                    updatePresenceStatus();
-                } else {
-                    infoDiv.textContent = `Erro: ${responseData.message || "Falha ao registrar"}`;
-                    infoDiv.classList.remove("text-blue-700", "text-green-700", "text-yellow-700");
-                    infoDiv.classList.add("text-red-600");
-                    showMessage(`Erro ao registrar presença: ${responseData.message || "Erro desconhecido"}`, "error");
-                    card.classList.add('animate-shake-red');
-                    setTimeout(() => card.classList.remove('animate-shake-red'), 1000);
-                    confirmBtn.disabled = false;
-                    checkbox.disabled = false;
-                }
-            } catch (e) {
-                console.error("Erro na requisição POST do frontend:", e);
-                infoDiv.textContent = "Falha de conexão com o servidor.";
-                infoDiv.classList.remove("text-blue-700", "text-green-700", "text-yellow-700");
-                infoDiv.classList.add("text-red-600");
-                showMessage("Falha ao enviar presença para o servidor. Verifique sua conexão.", "error");
-                card.classList.add('animate-shake-red');
-                setTimeout(() => card.classList.remove('animate-shake-red'), 1000);
-                confirmBtn.disabled = false;
-                checkbox.disabled = false;
-            } finally {
-                confirmBtn.classList.add("hidden");
-                if (dateContainer) dateContainer.classList.add("hidden"); // NOVO: Oculta o contêiner da data no final
-                checkbox.checked = false;
-            }
         });
     });
 }
@@ -571,7 +459,6 @@ function fillSelectOptions() {
     const lideres = [...new Set(allMembersData.map((m) => m.Lider).filter(Boolean)), ].sort();
     const gapes = [...new Set(allMembersData.map((m) => m.GAPE).filter(Boolean)), ].sort();
 
-    // Adiciona verificação para garantir que filterLiderInput e filterGapeInput não são nulos
     if (filterLiderInput) {
         filterLiderInput.innerHTML = '<option value="">Todos</option>' + lideres.map((l) => `<option value="${l}">${l}</option>`).join("");
     } else {
@@ -595,7 +482,6 @@ function clearFilters() {
     if (filterLiderInput) filterLiderInput.value = "";
     if (filterGapeInput) filterGapeInput.value = "";
     applyFilters();
-    // Atualiza o resumo do dashboard após limpar os filtros
     if (isDashboardOpen) {
         fetchAndDisplaySummary();
     }
@@ -607,7 +493,6 @@ function clearFilters() {
 function applyFiltersWithMessage() {
     showMessage("Aplicando filtros...", "info");
     applyFilters();
-    // Atualiza o resumo do dashboard após aplicar os filtros
     if (isDashboardOpen) {
         fetchAndDisplaySummary();
     }
@@ -657,28 +542,23 @@ async function fetchAndDisplaySummary() {
         const liderFilter = filterLiderInput ? filterLiderInput.value.trim() : '';
         const gapeFilter = filterGapeInput ? filterGapeInput.value.trim() : '';
 
-        // Constrói a URL com os parâmetros de consulta (query parameters)
-        // Apenas inclui o parâmetro se o valor do filtro não for vazio
         const queryParams = new URLSearchParams();
         if (periodoFilter) queryParams.append('periodo', periodoFilter);
         if (liderFilter) queryParams.append('lider', liderFilter);
         if (gapeFilter) queryParams.append('gape', gapeFilter);
 
         const urlPresencas = `${BACKEND_URL}/get-presencas-total?${queryParams.toString()}`;
-        const urlFaltas = `${BACKEND_URL}/get-faltas?${queryParams.toString()}`; // NOVO: URL para faltas
-
-        console.log("URL da API para resumo de presenças:", urlPresencas);
-        console.log("URL da API para resumo de faltas:", urlFaltas); // NOVO log
+        const urlFaltas = `${BACKEND_URL}/get-faltas?${queryParams.toString()}`;
 
         const [responseTotalPresences, responseTotalAbsences] = await Promise.all([
             fetch(urlPresencas),
-            fetch(urlFaltas) // NOVO: Faz a requisição para faltas
+            fetch(urlFaltas)
         ]);
 
         if (!responseTotalPresences.ok) {
             throw new Error(`Erro ao buscar presenças totais: ${responseTotalPresences.statusText}`);
         }
-        if (!responseTotalAbsences.ok) { // NOVO: Verifica erro na resposta de faltas
+        if (!responseTotalAbsences.ok) {
             throw new Error(`Erro ao buscar faltas totais: ${responseTotalAbsences.statusText}`);
         }
 
@@ -686,31 +566,21 @@ async function fetchAndDisplaySummary() {
         const dataTotalPresences = rawDataTotalPresences;
         let totalFilteredPresences = Object.values(dataTotalPresences).reduce((sum, count) => sum + count, 0);
 
-        // NOVO: Processa os dados de faltas
         const rawDataTotalAbsences = await responseTotalAbsences.json();
-        allAbsencesData = rawDataTotalAbsences.data || {}; // Armazena os dados detalhados de faltas
+        allAbsencesData = rawDataTotalAbsences.data || {};
         let totalFilteredAbsences = 0;
-        // Calcula o total de faltas somando 'totalFaltas' de cada membro
         for (const memberName in allAbsencesData) {
             if (allAbsencesData[memberName] && typeof allAbsencesData[memberName].totalFaltas === 'number') {
                 totalFilteredAbsences += allAbsencesData[memberName].totalFaltas;
             }
         }
-        console.log("DEBUG: totalFilteredAbsences calculado:", totalFilteredAbsences);
 
         if (dashboardPresencasMes) {
             dashboardPresencasMes.textContent = totalFilteredPresences;
-        } else {
-            console.warn("Elemento 'dashboardPresencasMes' não encontrado.");
         }
-
-        // NOVO: Atualiza o elemento de faltas no dashboard
         if (dashboardFaltasMes) {
             dashboardFaltasMes.textContent = totalFilteredAbsences;
-        } else {
-            console.warn("Elemento 'dashboardFaltasMes' não encontrado.");
         }
-
 
         if (totalCountsList) {
             totalCountsList.innerHTML = '';
@@ -729,23 +599,17 @@ async function fetchAndDisplaySummary() {
                 listItem.textContent = 'Nenhuma presença total registrada para os filtros aplicados.';
                 totalCountsList.appendChild(listItem);
             }
-        } else {
-            console.warn("Elemento 'totalCountsList' não encontrado.");
         }
 
-        // Os campos do dashboard (Periodo, Lider, GAPE) devem refletir os filtros ATUAIS
-        // do formulário, e não serem derivados dos membros filtrados da lista.
         if (dashboardPeriodo) dashboardPeriodo.textContent = periodoFilter || "Todos";
         if (dashboardLider) dashboardLider.textContent = liderFilter || "Todos";
         if (dashboardGape) dashboardGape.textContent = gapeFilter || "Todos";
 
-
     } catch (error) {
         console.error("Erro ao carregar o resumo:", error);
         showMessage(`Erro ao carregar o resumo: ${error.message}`, "error");
-        // Limpar os campos do dashboard em caso de erro
         if (dashboardPresencasMes) dashboardPresencasMes.textContent = "Erro";
-        if (dashboardFaltasMes) dashboardFaltasMes.textContent = "Erro"; // NOVO: Limpa faltas também
+        if (dashboardFaltasMes) dashboardFaltasMes.textContent = "Erro";
         if (dashboardPeriodo) dashboardPeriodo.textContent = "Erro";
         if (dashboardLider) dashboardLider.textContent = "Erro";
         if (dashboardGape) dashboardGape.textContent = "Erro";
@@ -756,7 +620,7 @@ async function fetchAndDisplaySummary() {
 }
 
 /**
- * Exibe o resumo detalhado em um modal, incluindo um gráfico de pizza.
+ * Exibe o resumo detalhado em um modal.
  */
 function showDetailedSummary() {
     if (!detailedSummaryModal) {
@@ -765,38 +629,31 @@ function showDetailedSummary() {
         return;
     }
 
-    // Popula o select de membros dentro do modal
     populateSummaryMemberSelect();
 
-    // Define o intervalo de datas padrão para o mês atual
     const today = new Date();
     const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
     const lastDayOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
 
-    // Formata as datas para AAAA-MM-DD para input type="date"
     if (summaryStartDateInput) summaryStartDateInput.value = firstDayOfMonth.toISOString().split('T')[0];
     if (summaryEndDateInput) summaryEndDateInput.value = lastDayOfMonth.toISOString().split('T')[0];
 
-    // Recalcula e renderiza o gráfico quando o modal é aberto ou filtros aplicados
     updateDetailedSummaryChart();
 
-    // Exibe o modal
     detailedSummaryModal.classList.remove("hidden");
-    detailedSummaryModal.classList.add("flex"); // Usa flex para centralizar
+    detailedSummaryModal.classList.add("flex");
 }
 
 /**
- * Popula o select de membros dentro do modal de resumo detalhado.
+ * Popula o select de membros no modal de resumo.
  */
 function populateSummaryMemberSelect() {
-    // Adiciona verificação para garantir que summaryMemberSelect não é nulo
     if (!summaryMemberSelect) {
         console.error("Erro: Elemento 'summaryMemberSelect' não encontrado no DOM.");
-        return; // Sai da função
+        return;
     }
 
     summaryMemberSelect.innerHTML = '<option value="">Todos os Membros Filtrados</option>';
-    // Usa filteredMembers como base para o select de membros do resumo
     const membersForSummarySelect = [...new Set(filteredMembers.map(m => m.Nome).filter(Boolean))].sort();
     membersForSummarySelect.forEach(memberName => {
         const option = document.createElement('option');
@@ -807,20 +664,18 @@ function populateSummaryMemberSelect() {
 }
 
 /**
- * Atualiza os gráficos e o texto do resumo detalhado com base nos filtros do modal.
+ * Atualiza os gráficos e texto do resumo detalhado.
  */
-async function updateDetailedSummaryChart() { // Tornada async para buscar faltas
+async function updateDetailedSummaryChart() {
     let membersToAnalyze = filteredMembers;
     const selectedMemberName = summaryMemberSelect ? summaryMemberSelect.value.trim() : '';
     let summaryTitle = "Estatísticas do Grupo Filtrado";
-    let reportEntityName = "o grupo filtrado";
     let reportLeader = "N/A";
     let reportGape = "N/A";
 
     if (selectedMemberName !== "") {
         membersToAnalyze = filteredMembers.filter(member => String(member.Nome || '').trim() === selectedMemberName);
         summaryTitle = `Estatísticas para o Membro: ${selectedMemberName}`;
-        reportEntityName = selectedMemberName;
         if (membersToAnalyze.length > 0) {
             reportLeader = membersToAnalyze[0].Lider || "N/A";
             reportGape = membersToAnalyze[0].GAPE || "N/A";
@@ -828,71 +683,52 @@ async function updateDetailedSummaryChart() { // Tornada async para buscar falta
         if (membersToAnalyze.length === 0) {
             if (detailedSummaryText) detailedSummaryText.innerHTML = `<p class="text-lg font-semibold text-gray-800 mb-2">Nenhum dado para o membro selecionado com os filtros atuais.</p>`;
             if (myChart) myChart.destroy();
-            if (myBarChart) myBarChart.destroy(); // Destrói o gráfico de barras também
+            if (myBarChart) myBarChart.destroy();
             if (reportInfo) reportInfo.innerHTML = `<p class="text-red-600">Nenhum dado de membro encontrado para o relatório.</p>`;
-            if (absentMembersList) absentMembersList.innerHTML = `<li>Nenhuma falta registrada para os membros filtrados no período.</li>`; // Limpa a lista de faltas
+            if (absentMembersList) absentMembersList.innerHTML = `<li>Nenhuma falta registrada.</li>`;
             return;
         }
     } else {
-        // Para o caso de "Todos os Membros Filtrados"
         const currentLiderFilter = filterLiderInput ? filterLiderInput.value.trim() : 'Todos';
         const currentGapeFilter = filterGapeInput ? filterGapeInput.value.trim() : 'Todos';
-
         reportLeader = currentLiderFilter !== "" ? currentLiderFilter : "Todos";
         reportGape = currentGapeFilter !== "" ? currentGapeFilter : "Todos";
-
-        if (reportLeader !== "Todos" && reportGape !== "Todos") {
-            reportEntityName = `o grupo do líder ${reportLeader} e GAPE ${reportGape}`;
-        } else if (reportLeader !== "Todos") {
-            reportEntityName = `o grupo do líder ${reportLeader}`;
-        } else if (reportGape !== "Todos") {
-            reportEntityName = `o grupo GAPE ${reportGape}`;
-        } else {
-            reportEntityName = `o grupo filtrado`;
-        }
     }
 
-
-    // Obtém os filtros de intervalo de datas
     const startDateStr = summaryStartDateInput ? summaryStartDateInput.value : '';
     const endDateStr = summaryEndDateInput ? summaryEndDateInput.value : '';
 
     let startDate = null;
     let endDate = null;
-
     if (startDateStr) {
         startDate = new Date(startDateStr);
-        startDate.setHours(0, 0, 0, 0); // Início do dia
+        startDate.setHours(0, 0, 0, 0);
     }
     if (endDateStr) {
         endDate = new Date(endDateStr);
-        endDate.setHours(23, 59, 59, 999); // Fim do dia
+        endDate.setHours(23, 59, 59, 999);
     }
 
     let membersWithPresenceCount = 0;
-    let totalMembersInAnalysis = membersToAnalyze.length; // Este será o denominador para as porcentagens
+    const totalMembersInAnalysis = membersToAnalyze.length;
 
     if (totalMembersInAnalysis === 0) {
-        if (detailedSummaryText) detailedSummaryText.innerHTML = `<p class="text-lg font-semibold text-gray-800 mb-2">Nenhum membro para analisar com os filtros aplicados.</p>`;
+        if (detailedSummaryText) detailedSummaryText.innerHTML = `<p class="text-lg font-semibold text-gray-800 mb-2">Nenhum membro para analisar.</p>`;
         if (myChart) myChart.destroy();
         if (myBarChart) myBarChart.destroy();
-        if (reportInfo) reportInfo.innerHTML = `<p class="text-red-600">Nenhum dado de membro encontrado para o relatório.</p>`;
-        if (absentMembersList) absentMembersList.innerHTML = `<li>Nenhuma falta registrada para os membros filtrados no período.</li>`; // Limpa a lista de faltas
+        if (reportInfo) reportInfo.innerHTML = `<p class="text-red-600">Nenhum dado para o relatório.</p>`;
+        if (absentMembersList) absentMembersList.innerHTML = `<li>Nenhuma falta registrada.</li>`;
         return;
     }
 
-    // Recalcula membersWithPresenceCount com base nos filtros de data do modal
     for (const member of membersToAnalyze) {
         const presence = lastPresencesData[member.Nome];
         if (presence && presence.data) {
             const [day, month, year] = presence.data.split('/').map(Number);
             const lastPresenceDate = new Date(year, month - 1, day);
-            lastPresenceDate.setHours(0, 0, 0, 0);
-
             let dateMatches = true;
             if (startDate && lastPresenceDate < startDate) dateMatches = false;
             if (endDate && lastPresenceDate > endDate) dateMatches = false;
-
             if (dateMatches) {
                 membersWithPresenceCount++;
             }
@@ -900,23 +736,15 @@ async function updateDetailedSummaryChart() { // Tornada async para buscar falta
     }
 
     const membersWithZeroPresenceCount = totalMembersInAnalysis - membersWithPresenceCount;
+    const presencePercentage = totalMembersInAnalysis > 0 ? (membersWithPresenceCount / totalMembersInAnalysis) * 100 : 0;
+    const absencePercentage = totalMembersInAnalysis > 0 ? (membersWithZeroPresenceCount / totalMembersInAnalysis) * 100 : 0;
 
-    let presencePercentage = 0;
-    let absencePercentage = 0;
-
-    if (totalMembersInAnalysis > 0) {
-        presencePercentage = (membersWithPresenceCount / totalMembersInAnalysis) * 100;
-        absencePercentage = (membersWithZeroPresenceCount / totalMembersInAnalysis) * 100;
-    }
-
-    // --- NOVO: Lógica para buscar e exibir faltas detalhadas no modal ---
     let membersWithRecordedAbsences = [];
     let totalRecordedAbsencesInPeriod = 0;
-
-    // Constrói os queryParams para a requisição de faltas no modal
     const queryParamsFaltasModal = new URLSearchParams();
-    if (selectedMemberName) queryParamsFaltasModal.append('nome', selectedMemberName); // Se um membro específico foi selecionado
-    else { // Se "Todos os Membros Filtrados"
+    if (selectedMemberName) {
+        queryParamsFaltasModal.append('nome', selectedMemberName);
+    } else {
         const currentLiderFilter = filterLiderInput ? filterLiderInput.value.trim() : '';
         const currentGapeFilter = filterGapeInput ? filterGapeInput.value.trim() : '';
         if (currentLiderFilter) queryParamsFaltasModal.append('lider', currentLiderFilter);
@@ -927,72 +755,48 @@ async function updateDetailedSummaryChart() { // Tornada async para buscar falta
 
     try {
         const responseFaltas = await fetch(`${BACKEND_URL}/get-faltas?${queryParamsFaltasModal.toString()}`);
-        if (!responseFaltas.ok) {
-            throw new Error(`Erro ao buscar faltas para o resumo detalhado: ${responseFaltas.statusText}`);
-        }
-        const faltasDataRaw = await responseFaltas.json();
-        const faltasData = faltasDataRaw.data || {}; // Dados detalhados de faltas
+        if (!responseFaltas.ok) throw new Error(`Erro ao buscar faltas: ${responseFaltas.statusText}`);
+        const faltasData = (await responseFaltas.json()).data || {};
 
-        // Filtra os membros com faltas e calcula o total de faltas no período
         for (const member of membersToAnalyze) {
             const memberAbsence = faltasData[member.Nome];
             if (memberAbsence && memberAbsence.totalFaltas > 0) {
                 membersWithRecordedAbsences.push({
                     name: member.Nome,
                     totalFaltas: memberAbsence.totalFaltas,
-                    details: memberAbsence.faltas || [] // Detalhes das datas/períodos das faltas
+                    details: memberAbsence.faltas || []
                 });
                 totalRecordedAbsencesInPeriod += memberAbsence.totalFaltas;
             }
         }
 
-        // Atualiza a lista de membros com faltas no modal
         if (absentMembersList) {
-            absentMembersList.innerHTML = ''; // Limpa a lista existente
+            absentMembersList.innerHTML = '';
             if (membersWithRecordedAbsences.length > 0) {
-                membersWithRecordedAbsences.sort((a, b) => b.totalFaltas - a.totalFaltas); // Ordena por mais faltas
+                membersWithRecordedAbsences.sort((a, b) => b.totalFaltas - a.totalFaltas);
                 membersWithRecordedAbsences.forEach(member => {
                     const listItem = document.createElement('li');
-                    let detailsHtml = '';
-                    if (member.details.length > 0) {
-                        detailsHtml = ` (${member.details.map(d => `${d.data} - ${d.periodo}`).join(', ')})`;
-                    }
+                    let detailsHtml = member.details.length > 0 ? ` (${member.details.map(d => `${d.data} - ${d.periodo}`).join(', ')})` : '';
                     listItem.innerHTML = `<strong>${member.name}</strong>: ${member.totalFaltas} falta(s)${detailsHtml}`;
                     absentMembersList.appendChild(listItem);
                 });
             } else {
-                const listItem = document.createElement('li');
-                listItem.textContent = 'Nenhuma falta registrada para os membros filtrados no período.';
-                absentMembersList.appendChild(listItem);
+                absentMembersList.innerHTML = '<li>Nenhuma falta registrada para os membros filtrados no período.</li>';
             }
         }
-        if (detailedAbsencesList) {
-            detailedAbsencesList.classList.remove('hidden'); // Garante que a seção de faltas esteja visível
-        }
-
-    } catch (error) {
-        console.error("Erro ao carregar faltas para o resumo detalhado:", error);
-        if (absentMembersList) absentMembersList.innerHTML = `<li>Erro ao carregar faltas: ${error.message}</li>`;
         if (detailedAbsencesList) detailedAbsencesList.classList.remove('hidden');
+    } catch (error) {
+        console.error("Erro ao carregar faltas para o resumo:", error);
+        if (absentMembersList) absentMembersList.innerHTML = `<li>Erro ao carregar faltas: ${error.message}</li>`;
     }
-    // --- FIM: Lógica para buscar e exibir faltas detalhadas no modal ---
 
-
-    // Formata o intervalo de datas para exibição
     let dateRangeDisplay = "Todo o período disponível";
     if (startDateStr && endDateStr) {
-        const formattedStartDate = new Date(startDateStr + 'T00:00:00').toLocaleDateString('pt-BR'); // Adiciona T00:00:00 para evitar problemas de fuso horário
+        const formattedStartDate = new Date(startDateStr + 'T00:00:00').toLocaleDateString('pt-BR');
         const formattedEndDate = new Date(endDateStr + 'T00:00:00').toLocaleDateString('pt-BR');
         dateRangeDisplay = `Período: ${formattedStartDate} a ${formattedEndDate}`;
-    } else if (startDateStr) {
-        const formattedStartDate = new Date(startDateStr + 'T00:00:00').toLocaleDateString('pt-BR');
-        dateRangeDisplay = `A partir de: ${formattedStartDate}`;
-    } else if (endDateStr) {
-        const formattedEndDate = new Date(endDateStr + 'T00:00:00').toLocaleDateString('pt-BR');
-        dateRangeDisplay = `Até: ${formattedEndDate}`;
     }
 
-    // Atualiza o contêiner de informações do relatório
     if (reportInfo) {
         const todayFormatted = new Date().toLocaleDateString('pt-BR');
         reportInfo.innerHTML = `
@@ -1004,7 +808,6 @@ async function updateDetailedSummaryChart() { // Tornada async para buscar falta
         `;
     }
 
-    // Atualiza o texto do resumo detalhado
     if (detailedSummaryText) {
         detailedSummaryText.innerHTML = `
             <h3 class="text-lg font-semibold text-gray-800 mb-2">${summaryTitle}</h3>
@@ -1014,16 +817,11 @@ async function updateDetailedSummaryChart() { // Tornada async para buscar falta
                 <li>Membros Sem Presença (no período): <span class="font-bold">${membersWithZeroPresenceCount} (${absencePercentage.toFixed(1)}%)</span></li>
                 <li>Total de Faltas Registradas (no período): <span class="font-bold">${totalRecordedAbsencesInPeriod}</span></li>
             </ul>
-            <p class="text-sm text-gray-600 mt-4">As estatísticas e gráficos abaixo ilustram a proporção de membros com e sem presenças registradas no período selecionado. "Presença" significa ter ao menos um registro no período. A seção de "Membros com Faltas Registradas" detalha as faltas específicas.</p>
+            <p class="text-sm text-gray-600 mt-4">"Presença" significa ter ao menos um registro no período. A seção de "Faltas" detalha as ausências específicas.</p>
         `;
     }
 
-    // Destrói a instância anterior do gráfico de pizza se existir
-    if (myChart) {
-        myChart.destroy();
-    }
-
-    // Renderiza o gráfico de pizza
+    if (myChart) myChart.destroy();
     if (summaryChartCanvas) {
         const ctx = summaryChartCanvas.getContext('2d');
         myChart = new Chart(ctx, {
@@ -1031,81 +829,30 @@ async function updateDetailedSummaryChart() { // Tornada async para buscar falta
             data: {
                 labels: ['Membros com Presença', 'Membros Sem Presença'],
                 datasets: [{
-                    data: [presencePercentage.toFixed(1), absencePercentage.toFixed(1)],
-                    backgroundColor: [
-                        'rgba(75, 192, 192, 0.8)', // Verde para presença
-                        'rgba(255, 99, 132, 0.8)' // Vermelho para ausência
-                    ],
-                    borderColor: [
-                        'rgba(75, 192, 192, 1)',
-                        'rgba(255, 99, 132, 1)'
-                    ],
+                    data: [presencePercentage, absencePercentage],
+                    backgroundColor: ['rgba(75, 192, 192, 0.8)', 'rgba(255, 99, 132, 0.8)'],
+                    borderColor: ['rgba(75, 192, 192, 1)', 'rgba(255, 99, 132, 1)'],
                     borderWidth: 1
                 }]
             },
             options: {
                 responsive: true,
-                animation: { // Adicionado animação para o gráfico de pizza
-                    duration: 1000, // 1 segundo
-                    easing: 'easeOutQuart' // Função de easing suave
-                },
                 plugins: {
-                    legend: {
-                        position: 'top',
-                        labels: {
-                            color: '#333', // Cor do texto da legenda
-                            font: {
-                                size: 14
-                            }
-                        }
-                    },
-                    tooltip: {
-                        callbacks: {
-                            label: function(context) {
-                                let label = context.label || '';
-                                if (label) {
-                                    label += ': ';
-                                }
-                                if (context.parsed !== null) {
-                                    label += context.parsed + '%';
-                                }
-                                return label;
-                            }
-                        }
-                    },
-                    title: {
-                        display: true,
-                        text: 'Proporção de Presenças vs. Ausências',
-                        color: '#333',
-                        font: {
-                            size: 16
-                        }
-                    },
-                    datalabels: { // Configuração do plugin datalabels
-                        color: '#fff', // Cor do texto dos labels
-                        formatter: (value, context) => {
-                            // Exibe o valor da porcentagem no slice
-                            return value > 0 ? value + '%' : ''; // Não exibe se for 0
-                        },
-                        font: {
-                            weight: 'bold',
-                            size: 14
-                        }
+                    legend: { position: 'top' },
+                    title: { display: true, text: 'Proporção de Presenças vs. Ausências' },
+                    tooltip: { callbacks: { label: (c) => `${c.label}: ${c.parsed.toFixed(1)}%` } },
+                    datalabels: {
+                        color: '#fff',
+                        formatter: (value) => (value > 0 ? `${value.toFixed(1)}%` : ''),
+                        font: { weight: 'bold', size: 14 }
                     }
                 }
             },
-            plugins: [ChartDataLabels] // Habilita o plugin para este gráfico
+            plugins: [ChartDataLabels]
         });
-    } else {
-        console.error("Elemento 'summaryChartCanvas' não encontrado no DOM.");
     }
 
-    // Destrói a instância anterior do gráfico de barras se existir
-    if (myBarChart) {
-        myBarChart.destroy();
-    }
-
-    // Renderiza o novo gráfico de barras horizontais
+    if (myBarChart) myBarChart.destroy();
     if (summaryBarChartCanvas) {
         const ctxBar = summaryBarChartCanvas.getContext('2d');
         myBarChart = new Chart(ctxBar, {
@@ -1115,82 +862,33 @@ async function updateDetailedSummaryChart() { // Tornada async para buscar falta
                 datasets: [{
                     label: 'Número de Membros',
                     data: [membersWithPresenceCount, membersWithZeroPresenceCount],
-                    backgroundColor: [
-                        'rgba(75, 192, 192, 0.8)', // Verde para presença
-                        'rgba(255, 99, 132, 0.8)' // Vermelho para ausência
-                    ],
-                    borderColor: [
-                        'rgba(75, 192, 192, 1)',
-                        'rgba(255, 99, 132, 1)'
-                    ],
+                    backgroundColor: ['rgba(75, 192, 192, 0.8)', 'rgba(255, 99, 132, 0.8)'],
+                    borderColor: ['rgba(75, 192, 192, 1)', 'rgba(255, 99, 132, 1)'],
                     borderWidth: 1
                 }]
             },
             options: {
-                indexAxis: 'y', // Define o eixo Y como o eixo de categorias (barras horizontais)
+                indexAxis: 'y',
                 responsive: true,
-                animation: { // Adicionado animação para o gráfico de barras
-                    duration: 1000, // 1 segundo
-                    easing: 'easeOutQuart' // Função de easing suave
-                },
                 plugins: {
-                    legend: {
-                        display: false // Não exibe a legenda para este gráfico
-                    },
-                    title: {
-                        display: true,
-                        text: 'Contagem de Membros (Valores Absolutos)',
-                        color: '#333',
-                        font: {
-                            size: 16
-                        }
-                    },
-                    datalabels: { // Configuração do plugin datalabels para o gráfico de barras
-                        color: '#333', // Cor do texto dos labels
-                        anchor: 'end', // Posição do label (no final da barra)
-                        align: 'end', // Alinhamento do label
-                        formatter: (value, context) => {
-                            // Exibe o valor absoluto e a porcentagem
-                            const total = membersWithPresenceCount + membersWithZeroPresenceCount;
+                    legend: { display: false },
+                    title: { display: true, text: 'Contagem Absoluta de Membros' },
+                    datalabels: {
+                        anchor: 'end',
+                        align: 'end',
+                        formatter: (value) => {
+                            const total = totalMembersInAnalysis;
                             if (total === 0) return '0';
                             const percentage = (value / total * 100).toFixed(1);
                             return `${value} (${percentage}%)`;
                         },
-                        font: {
-                            weight: 'bold',
-                            size: 12
-                        }
+                        font: { weight: 'bold' }
                     }
                 },
-                scales: {
-                    x: {
-                        beginAtZero: true,
-                        title: {
-                            display: true,
-                            text: 'Número de Membros',
-                            color: '#333'
-                        },
-                        ticks: {
-                            color: '#333'
-                        },
-                        grid: {
-                            color: 'rgba(0, 0, 0, 0.1)'
-                        }
-                    },
-                    y: {
-                        ticks: {
-                            color: '#333'
-                        },
-                        grid: {
-                            color: 'rgba(0, 0, 0, 0.1)'
-                        }
-                    }
-                }
+                scales: { x: { beginAtZero: true } }
             },
-            plugins: [ChartDataLabels] // Habilita o plugin para este gráfico
+            plugins: [ChartDataLabels]
         });
-    } else {
-        console.error("Elemento 'summaryBarChartCanvas' não encontrado no DOM.");
     }
 }
 
@@ -1199,44 +897,36 @@ async function updateDetailedSummaryChart() { // Tornada async para buscar falta
  */
 async function handleDownloadPdf() {
     if (!detailedSummaryContent || !downloadPdfBtn || !summaryFilterSection || !detailedSummaryModal) {
-        showMessage("Erro: Elementos necessários para PDF não encontrados.", "error");
-        console.error("Elementos necessários para PDF não encontrados.");
+        showMessage("Erro: Elementos para PDF não encontrados.", "error");
         return;
     }
 
     showGlobalLoading(true, "Gerando PDF...");
 
-    // Armazena os estilos originais dos elementos
-    const originalDetailedSummaryContentMaxHeight = detailedSummaryContent.style.maxHeight;
-    const originalDetailedSummaryContentOverflowY = detailedSummaryContent.style.overflowY;
-    const originalDetailedSummaryContentPadding = detailedSummaryContent.style.padding;
-    const originalDetailedSummaryContentWidth = detailedSummaryContent.style.width;
-    const originalDetailedSummaryModalMaxHeight = detailedSummaryModal.style.maxHeight;
-    const originalDownloadPdfBtnDisplay = downloadPdfBtn.style.display;
-    const originalSummaryFilterSectionDisplay = summaryFilterSection.style.display;
+    const originalStyles = {
+        maxHeight: detailedSummaryContent.style.maxHeight,
+        overflowY: detailedSummaryContent.style.overflowY,
+        padding: detailedSummaryContent.style.padding,
+        width: detailedSummaryContent.style.width,
+        modalMaxHeight: detailedSummaryModal.style.maxHeight,
+        btnDisplay: downloadPdfBtn.style.display,
+        filterDisplay: summaryFilterSection.style.display
+    };
 
-    // Aplica estilos para a captura do PDF: remove restrições de altura/overflow
     detailedSummaryContent.style.maxHeight = 'none';
     detailedSummaryContent.style.overflowY = 'visible';
-    detailedSummaryContent.style.padding = '8mm'; // Ajusta o padding para a impressão
-    detailedSummaryContent.style.width = '100%'; // Garante que ocupe 100% da largura para captura
-    detailedSummaryModal.style.maxHeight = 'none'; // Garante que o modal também não restrinja a altura
-
-    // Oculta o botão de download de PDF e a seção de filtros antes de capturar
+    detailedSummaryContent.style.padding = '8mm';
+    detailedSummaryContent.style.width = '100%';
+    detailedSummaryModal.style.maxHeight = 'none';
     downloadPdfBtn.style.display = 'none';
     summaryFilterSection.style.display = 'none';
 
     try {
-        const canvas = await html2canvas(detailedSummaryContent, {
-            scale: 2, // Aumenta a escala para melhor qualidade no PDF
-            useCORS: true, // Importante se houver imagens de outras origens
-            logging: true, // Ativa o log para depuração
-        });
-
+        const canvas = await html2canvas(detailedSummaryContent, { scale: 2, useCORS: true });
         const imgData = canvas.toDataURL('image/png');
-        const pdf = new window.jspdf.jsPDF('p', 'mm', 'a4'); // 'p' (portrait), 'mm' (unidade), 'a4' (tamanho)
-        const imgWidth = 210; // Largura A4 em mm
-        const pageHeight = 297; // Altura A4 em mm
+        const pdf = new window.jspdf.jsPDF('p', 'mm', 'a4');
+        const imgWidth = 210;
+        const pageHeight = 297;
         const imgHeight = canvas.height * imgWidth / canvas.width;
         let heightLeft = imgHeight;
         let position = 0;
@@ -1250,39 +940,28 @@ async function handleDownloadPdf() {
             pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
             heightLeft -= pageHeight;
         }
-
         pdf.save('resumo_presencas.pdf');
         showMessage("PDF gerado com sucesso!", "success");
-
     } catch (error) {
         console.error("Erro ao gerar PDF:", error);
         showMessage(`Erro ao gerar PDF: ${error.message}`, "error");
     } finally {
-        // Restaura os estilos originais
-        detailedSummaryContent.style.maxHeight = originalDetailedSummaryContentMaxHeight;
-        detailedSummaryContent.style.overflowY = originalDetailedSummaryContentOverflowY;
-        detailedSummaryContent.style.padding = originalDetailedSummaryContentPadding;
-        detailedSummaryContent.style.width = originalDetailedSummaryContentWidth;
-        detailedSummaryModal.style.maxHeight = originalDetailedSummaryModalMaxHeight;
-
-        // Reexibe o botão de download de PDF e a seção de filtros
-        if (downloadPdfBtn) {
-            downloadPdfBtn.style.display = originalDownloadPdfBtnDisplay;
-        }
-        if (summaryFilterSection) {
-            summaryFilterSection.style.display = originalSummaryFilterSectionDisplay;
-        }
+        detailedSummaryContent.style.maxHeight = originalStyles.maxHeight;
+        detailedSummaryContent.style.overflowY = originalStyles.overflowY;
+        detailedSummaryContent.style.padding = originalStyles.padding;
+        detailedSummaryContent.style.width = originalStyles.width;
+        detailedSummaryModal.style.maxHeight = originalStyles.modalMaxHeight;
+        if (downloadPdfBtn) downloadPdfBtn.style.display = originalStyles.btnDisplay;
+        if (summaryFilterSection) summaryFilterSection.style.display = originalStyles.filterDisplay;
         showGlobalLoading(false);
     }
 }
 
 
 // --- Event Listeners ---
-// Adiciona verificação de existência antes de adicionar event listeners
 if (applyFiltersBtn) applyFiltersBtn.addEventListener("click", applyFiltersWithMessage);
 if (clearFiltersBtn) clearFiltersBtn.addEventListener("click", clearFilters);
 
-// Adicionado event listeners para inputs de filtro para que o dashboard se atualize dinamicamente
 if (filterNameInput) filterNameInput.addEventListener("input", applyFilters);
 if (filterPeriodoSelect) filterPeriodoSelect.addEventListener("change", () => {
     applyFilters();
@@ -1297,50 +976,25 @@ if (filterGapeInput) filterGapeInput.addEventListener("change", () => {
     if (isDashboardOpen) fetchAndDisplaySummary();
 });
 
-if (toggleDashboardBtn) {
-    toggleDashboardBtn.addEventListener("click", toggleDashboardVisibility);
-}
+if (toggleDashboardBtn) toggleDashboardBtn.addEventListener("click", toggleDashboardVisibility);
+if (showDetailedSummaryBtn) showDetailedSummaryBtn.addEventListener("click", showDetailedSummary);
+if (closeModalBtn) closeModalBtn.addEventListener("click", () => {
+    if (detailedSummaryModal) {
+        detailedSummaryModal.classList.add("hidden");
+        detailedSummaryModal.classList.remove("flex");
+    }
+});
 
-// Event listener para abrir o modal de resumo detalhado
-if (showDetailedSummaryBtn) {
-    showDetailedSummaryBtn.addEventListener("click", showDetailedSummary);
-}
+if (applySummaryFiltersBtn) applySummaryFiltersBtn.addEventListener("click", updateDetailedSummaryChart);
+if (summaryStartDateInput) summaryStartDateInput.addEventListener("change", updateDetailedSummaryChart);
+if (summaryEndDateInput) summaryEndDateInput.addEventListener("change", updateDetailedSummaryChart);
+if (summaryMemberSelect) summaryMemberSelect.addEventListener("change", updateDetailedSummaryChart);
+if (downloadPdfBtn) downloadPdfBtn.addEventListener("click", handleDownloadPdf);
 
-// Event listener para fechar o modal
-if (closeModalBtn) {
-    closeModalBtn.addEventListener("click", () => {
-        if (detailedSummaryModal) {
-            detailedSummaryModal.classList.add("hidden");
-            detailedSummaryModal.classList.remove("flex");
-        }
-    });
-}
-
-// Event listeners para os novos filtros dentro do modal
-if (applySummaryFiltersBtn) {
-    applySummaryFiltersBtn.addEventListener("click", updateDetailedSummaryChart);
-}
-if (summaryStartDateInput) {
-    summaryStartDateInput.addEventListener("change", updateDetailedSummaryChart);
-}
-if (summaryEndDateInput) {
-    summaryEndDateInput.addEventListener("change", updateDetailedSummaryChart);
-}
-if (summaryMemberSelect) {
-    summaryMemberSelect.addEventListener("change", updateDetailedSummaryChart);
-}
-
-// Event listener para o botão de Download PDF
-if (downloadPdfBtn) {
-    downloadPdfBtn.addEventListener("click", handleDownloadPdf);
-}
-
-
-// Carrega os membros ao carregar a página
 window.addEventListener("load", fetchMembers);
 
 /**
- * Exibe o nome do líder logado no elemento designado.
+ * Exibe o nome do líder logado.
  */
 function displayLoggedInLeaderName() {
     const leaderName = localStorage.getItem('loggedInLeaderName');
@@ -1349,70 +1003,48 @@ function displayLoggedInLeaderName() {
             loggedInLeaderNameElement.innerHTML = `Logado como: <span class="text-blue-600 font-bold">${leaderName}</span>`;
         } else {
             loggedInLeaderNameElement.textContent = `Logado como: Não identificado`;
-            // Redirecionar para a tela de login se não houver líder logado
-            // window.location.href = "/index.html"; // Descomente se quiser forçar o login
+            // window.location.href = "/index.html";
         }
     }
 }
 
 /**
- * Configura a visualização para líderes, pré-selecionando e desativando filtros.
+ * Configura a visualização para líderes.
  */
 function setupLeaderView() {
     const leaderName = localStorage.getItem('loggedInLeaderName');
-    if (leaderName && leaderName !== 'admin') { // Aplica restrições apenas se for um líder e não o admin
-        // Encontra o objeto do membro logado para obter o valor exato da coluna 'Lider' e 'GAPE'
+    if (leaderName && leaderName !== 'admin') {
         const loggedInMember = allMembersData.find(member =>
             String(member.Nome || '').toLowerCase().trim() === leaderName.toLowerCase().trim()
         );
 
-        if (loggedInMember) { // Verifica se o membro logado foi encontrado
-            if (loggedInMember.Lider) {
-                // Pré-seleciona o filtro de líder com o valor exato da coluna 'Lider' do membro logado
-                if (filterLiderInput) filterLiderInput.value = loggedInMember.Lider;
-                console.log(`Filtro de Líder pré-selecionado para: ${loggedInMember.Lider}`);
-            } else {
-                console.warn(`O campo 'Lider' do membro logado '${leaderName}' está vazio.`);
+        if (loggedInMember) {
+            if (loggedInMember.Lider && filterLiderInput) {
+                filterLiderInput.value = loggedInMember.Lider;
             }
-
-            if (loggedInMember.GAPE) {
-                // Pré-seleciona o filtro de GAPE com o valor exato da coluna 'GAPE' do membro logado
-                if (filterGapeInput) filterGapeInput.value = loggedInMember.GAPE;
-                console.log(`Filtro de GAPE pré-selecionado para: ${loggedInMember.GAPE}`);
-            } else {
-                console.warn(`O campo 'GAPE' do membro logado '${leaderName}' está vazio.`);
+            if (loggedInMember.GAPE && filterGapeInput) {
+                filterGapeInput.value = loggedInMember.GAPE;
             }
         } else {
-            console.warn(`Não foi possível encontrar o membro logado '${leaderName}' para pré-selecionar os filtros.`);
+            console.warn(`Membro logado '${leaderName}' não encontrado para pré-selecionar filtros.`);
         }
 
-        // Desativa os campos de filtro de líder e GAPE
         if (filterLiderInput) filterLiderInput.disabled = true;
         if (filterGapeInput) filterGapeInput.disabled = true;
 
-        // Aplica os filtros imediatamente para mostrar apenas os membros do líder
         applyFilters();
 
-        // Se o dashboard estiver aberto, atualiza o resumo com os filtros aplicados
         if (isDashboardOpen) {
             fetchAndDisplaySummary();
         }
-
-        // Opcional: Você pode querer desativar o botão de limpar filtros também.
-        // if (clearFiltersBtn) clearFiltersBtn.disabled = true; 
     }
 }
 
-
-// Chama a função para exibir o nome do líder quando o DOM estiver completamente carregado
-document.addEventListener("DOMContentLoaded", displayLoggedInLeaderName);
-
-// Adiciona um listener para o botão de logout
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener("DOMContentLoaded", () => {
+    displayLoggedInLeaderName();
     const logoutBtn = document.getElementById('logoutBtn');
     if (logoutBtn) {
         logoutBtn.addEventListener('click', () => {
-            // Limpa o localStorage e redireciona o usuário para a página de login
             localStorage.removeItem('loggedInLeaderName');
             window.location.href = 'index.html';
         });
