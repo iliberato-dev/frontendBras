@@ -484,6 +484,8 @@ function populateSummaryMemberSelect() {
     });
 }
 
+// dashboard.js - Substitua sua função por esta versão
+
 async function updateDetailedSummaryChart() {
     showGlobalLoading(true, "Carregando resumo detalhado...");
 
@@ -501,7 +503,6 @@ async function updateDetailedSummaryChart() {
         let title = '';
         let membersToAnalyze = [];
         
-        // Constrói a base dos parâmetros de busca (sempre usa as datas do modal)
         const queryParams = new URLSearchParams();
         if (startDateStr) queryParams.append('dataInicio', startDateStr);
         if (endDateStr) queryParams.append('dataFim', endDateStr);
@@ -513,7 +514,6 @@ async function updateDetailedSummaryChart() {
             title = `Estatísticas para ${selectedMemberName}`;
             membersToAnalyze = allMembersData.filter(m => m.Nome === selectedMemberName);
             
-            // Adiciona o nome do membro aos parâmetros para TODAS as buscas
             queryParams.append('nome', selectedMemberName);
 
             const [presencesRes, absencesRes] = await Promise.all([
@@ -548,15 +548,32 @@ async function updateDetailedSummaryChart() {
                         backgroundColor: ['rgba(75, 192, 192, 0.8)', 'rgba(255, 99, 132, 0.8)'],
                     }]
                 },
-                options: { /* ... suas opções de gráfico ... */ }
+                // --- CORREÇÃO APLICADA AQUI ---
+                // Adicionando as opções completas do gráfico, incluindo o plugin datalabels.
+                options: {
+                    responsive: true,
+                    plugins: {
+                        title: { display: true, text: 'Proporção Presenças vs Faltas' },
+                        datalabels: {
+                            formatter: (value, context) => {
+                                const total = context.chart.data.datasets[0].data.reduce((a, b) => a + b, 0);
+                                if (total === 0 || value === 0) return '';
+                                const percentage = (value / total * 100).toFixed(1) + '%';
+                                return percentage;
+                            },
+                            color: '#fff',
+                            font: { weight: 'bold', size: 14 }
+                        }
+                    }
+                },
+                plugins: [ChartDataLabels] // Ativa o plugin para este gráfico
             });
 
         } else {
-            // --- CENÁRIO 2: VISÃO DE GRUPO ---
+            // --- CENÁRIO 2: VISÃO DE GRUPO (Já estava correto) ---
             title = 'Estatísticas do Grupo Filtrado';
             membersToAnalyze = filteredMembers;
 
-            // Adiciona os filtros da página principal aos parâmetros
             if (filterLiderInput.value) queryParams.append('lider', filterLiderInput.value);
             if (filterGapeInput.value) queryParams.append('gape', filterGapeInput.value);
             if (filterPeriodoSelect.value) queryParams.append('periodo', filterPeriodoSelect.value);
@@ -570,7 +587,6 @@ async function updateDetailedSummaryChart() {
 
             const presencesResponse = await presencesRes.json();
             const absencesResponse = await absencesRes.json();
-
             const presencesData = presencesResponse.data || {};
             const absencesData = absencesResponse.data || {};
             
