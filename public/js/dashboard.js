@@ -479,6 +479,8 @@ if (typeof window.dashboardInitialized === "undefined") {
   }
 
   function initializePhotoUploadListeners() {
+    console.log("🔧 Inicializando listeners de foto...");
+
     document.addEventListener("change", function (e) {
       if (e.target.classList.contains("photo-upload-input")) {
         const memberName = e.target.getAttribute("data-member-name");
@@ -493,14 +495,75 @@ if (typeof window.dashboardInitialized === "undefined") {
       }
     });
 
+    // Adiciona listener para clique simples nas fotos (menu de opções)
+    document.addEventListener("click", function (e) {
+      console.log(
+        "🖱️ Clique detectado em:",
+        e.target.tagName,
+        e.target.className
+      );
+
+      // Verifica se é uma imagem de membro ou um elemento dentro da área da foto
+      let photoElement = null;
+      let memberName = null;
+
+      if (e.target.classList.contains("member-photo")) {
+        // Clique direto na imagem
+        photoElement = e.target;
+        memberName = e.target.alt.replace("Foto de ", "");
+      } else {
+        // Verifica se o clique foi em um elemento dentro da área da foto
+        const photoContainer = e.target.closest(
+          ".relative.w-16.h-16.rounded-full"
+        );
+        if (photoContainer) {
+          photoElement = photoContainer.querySelector(".member-photo");
+          if (photoElement) {
+            memberName = photoElement.alt.replace("Foto de ", "");
+          }
+        }
+      }
+
+      if (photoElement && memberName) {
+        console.log("📸 Clique em foto de membro detectado!");
+        e.preventDefault();
+        e.stopPropagation();
+
+        console.log("👤 Nome do membro:", memberName);
+
+        showPhotoOptionsMenu(e, memberName);
+      }
+    });
+
     // Adiciona listener para clique com botão direito (menu de contexto)
     document.addEventListener("contextmenu", function (e) {
+      let photoElement = null;
+      let memberName = null;
+
       if (e.target.classList.contains("member-photo")) {
+        // Clique direto na imagem
+        photoElement = e.target;
+        memberName = e.target.alt.replace("Foto de ", "");
+      } else {
+        // Verifica se o clique foi em um elemento dentro da área da foto
+        const photoContainer = e.target.closest(
+          ".relative.w-16.h-16.rounded-full"
+        );
+        if (photoContainer) {
+          photoElement = photoContainer.querySelector(".member-photo");
+          if (photoElement) {
+            memberName = photoElement.alt.replace("Foto de ", "");
+          }
+        }
+      }
+
+      if (photoElement && memberName) {
         e.preventDefault();
-        const memberName = e.target.alt.replace("Foto de ", "");
         showPhotoContextMenu(e, memberName);
       }
     });
+
+    console.log("✅ Listeners de foto inicializados!");
   }
 
   async function removeMemberPhoto(memberName) {
@@ -539,6 +602,287 @@ if (typeof window.dashboardInitialized === "undefined") {
     } finally {
       showGlobalLoading(false);
     }
+  }
+
+  // Função para capturar foto da câmera
+  async function capturePhotoFromCamera(memberName) {
+    console.log("📸 capturePhotoFromCamera chamada para:", memberName);
+    try {
+      // Verifica se o navegador suporta getUserMedia
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        console.error("❌ getUserMedia não suportado");
+        showMessage("Câmera não suportada neste navegador", "error");
+        return;
+      }
+
+      console.log("🎥 Solicitando acesso à câmera...");
+      showGlobalLoading(true, "Acessando câmera...");
+
+      // Solicita acesso à câmera
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: "user", // Câmera frontal por padrão
+          width: { ideal: 640 },
+          height: { ideal: 480 },
+        },
+      });
+
+      // Cria elementos do modal de captura
+      const modal = document.createElement("div");
+      modal.className =
+        "fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50";
+      modal.innerHTML = `
+        <div class="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+          <h3 class="text-lg font-semibold mb-4 text-center">Capturar Foto - ${memberName}</h3>
+          <div class="relative">
+            <video id="cameraVideo" autoplay class="w-full rounded-lg bg-black"></video>
+            <canvas id="captureCanvas" class="hidden"></canvas>
+          </div>
+          <div class="flex gap-3 mt-4">
+            <button id="switchCamera" class="flex-1 bg-gray-500 text-white py-2 px-4 rounded-lg hover:bg-gray-600 transition-colors">
+              <i class="fas fa-sync-alt mr-2"></i>Trocar Câmera
+            </button>
+            <button id="capturePhoto" class="flex-1 bg-blue-500 text-white py-2 px-4 rounded-lg hover:bg-blue-600 transition-colors">
+              <i class="fas fa-camera mr-2"></i>Capturar
+            </button>
+            <button id="cancelCapture" class="flex-1 bg-red-500 text-white py-2 px-4 rounded-lg hover:bg-red-600 transition-colors">
+              <i class="fas fa-times mr-2"></i>Cancelar
+            </button>
+          </div>
+        </div>
+      `;
+
+      document.body.appendChild(modal);
+      const video = document.getElementById("cameraVideo");
+      const canvas = document.getElementById("captureCanvas");
+      const ctx = canvas.getContext("2d");
+
+      video.srcObject = stream;
+      showGlobalLoading(false);
+
+      let currentFacingMode = "user";
+
+      // Função para trocar câmera
+      document.getElementById("switchCamera").onclick = async () => {
+        try {
+          stream.getTracks().forEach((track) => track.stop());
+          currentFacingMode =
+            currentFacingMode === "user" ? "environment" : "user";
+
+          const newStream = await navigator.mediaDevices.getUserMedia({
+            video: {
+              facingMode: currentFacingMode,
+              width: { ideal: 640 },
+              height: { ideal: 480 },
+            },
+          });
+
+          video.srcObject = newStream;
+        } catch (error) {
+          console.warn("Não foi possível trocar a câmera:", error);
+          showMessage("Não foi possível trocar a câmera", "warning");
+        }
+      };
+
+      // Função para capturar foto
+      document.getElementById("capturePhoto").onclick = () => {
+        // Define tamanho do canvas igual ao vídeo
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+
+        // Desenha o frame atual do vídeo no canvas
+        ctx.drawImage(video, 0, 0);
+
+        // Converte para base64
+        const photoBase64 = canvas.toDataURL("image/jpeg", 0.8);
+
+        // Para o stream
+        stream.getTracks().forEach((track) => track.stop());
+        modal.remove();
+
+        // Processa e envia a foto
+        handleCapturedPhoto(photoBase64, memberName);
+      };
+
+      // Função para cancelar
+      document.getElementById("cancelCapture").onclick = () => {
+        stream.getTracks().forEach((track) => track.stop());
+        modal.remove();
+      };
+    } catch (error) {
+      showGlobalLoading(false);
+      console.error("Erro ao acessar câmera:", error);
+
+      if (error.name === "NotAllowedError") {
+        showMessage(
+          "Acesso à câmera foi negado. Verifique as permissões do navegador.",
+          "error"
+        );
+      } else if (error.name === "NotFoundError") {
+        showMessage("Nenhuma câmera encontrada no dispositivo.", "error");
+      } else {
+        showMessage("Erro ao acessar câmera: " + error.message, "error");
+      }
+    }
+  }
+
+  // Função para processar foto capturada da câmera
+  async function handleCapturedPhoto(photoBase64, memberName) {
+    try {
+      showGlobalLoading(true, "Processando foto capturada...");
+
+      // Cria uma imagem para redimensionar
+      const img = new Image();
+
+      img.onload = async function () {
+        // Cria canvas para redimensionar
+        const canvas = document.createElement("canvas");
+        const ctx = canvas.getContext("2d");
+
+        // Define tamanho máximo (200x200 pixels)
+        const maxSize = 200;
+        let { width, height } = img;
+
+        if (width > height) {
+          if (width > maxSize) {
+            height = (height * maxSize) / width;
+            width = maxSize;
+          }
+        } else {
+          if (height > maxSize) {
+            width = (width * maxSize) / height;
+            height = maxSize;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+
+        // Desenha a imagem redimensionada
+        ctx.drawImage(img, 0, 0, width, height);
+
+        // Converte para base64 comprimido
+        const compressedBase64 = canvas.toDataURL("image/jpeg", 0.8);
+
+        // Envia para o servidor
+        const photoUrl = await saveMemberPhoto(memberName, compressedBase64);
+
+        if (photoUrl) {
+          // Atualiza a foto no cartão imediatamente
+          const photoElements = document.querySelectorAll(
+            `img[alt="Foto de ${memberName}"]`
+          );
+          photoElements.forEach((img) => {
+            img.src = photoUrl;
+          });
+
+          showMessage(
+            `✅ Foto capturada e salva para ${memberName}!`,
+            "success"
+          );
+        }
+      };
+
+      img.src = photoBase64;
+    } catch (error) {
+      console.error("Erro ao processar foto capturada:", error);
+      showMessage("Erro ao processar foto capturada", "error");
+    } finally {
+      showGlobalLoading(false);
+    }
+  }
+
+  // Menu de opções para escolher arquivo ou câmera
+  async function showPhotoOptionsMenu(event, memberName) {
+    console.log("🎯 showPhotoOptionsMenu chamada para:", memberName);
+    event.stopPropagation();
+
+    // Remove menu anterior se existir
+    const existingMenu = document.getElementById("photoOptionsMenu");
+    if (existingMenu) {
+      existingMenu.remove();
+    }
+
+    const menu = document.createElement("div");
+    menu.id = "photoOptionsMenu";
+    menu.className =
+      "fixed bg-white border border-gray-300 rounded-lg shadow-lg py-2 z-50";
+
+    // Posiciona o menu próximo ao clique
+    const rect = event.target.getBoundingClientRect();
+    menu.style.left = rect.right + 10 + "px";
+    menu.style.top = rect.top + "px";
+
+    console.log("📍 Posicionando menu em:", {
+      left: rect.right + 10,
+      top: rect.top,
+    });
+
+    // Verifica se há foto personalizada
+    const savedPhoto = await getMemberPhoto(memberName);
+    const hasCustomPhoto =
+      savedPhoto && savedPhoto.includes("/uploads/member-photos/");
+
+    menu.innerHTML = `
+      <div class="px-3 py-2 text-sm font-semibold text-gray-700 border-b border-gray-200">
+        ${memberName}
+      </div>
+      <button id="selectFile" class="w-full px-4 py-2 text-left hover:bg-blue-50 text-blue-600 flex items-center gap-2">
+        <i class="fas fa-folder-open"></i>
+        Selecionar arquivo
+      </button>
+      <button id="useCamera" class="w-full px-4 py-2 text-left hover:bg-green-50 text-green-600 flex items-center gap-2">
+        <i class="fas fa-camera"></i>
+        Usar câmera
+      </button>
+      ${
+        hasCustomPhoto
+          ? `
+        <hr class="my-1 border-gray-200">
+        <button id="removePhoto" class="w-full px-4 py-2 text-left hover:bg-red-50 text-red-600 flex items-center gap-2">
+          <i class="fas fa-trash-alt"></i>
+          Remover foto personalizada
+        </button>
+      `
+          : ""
+      }
+    `;
+
+    document.body.appendChild(menu);
+
+    // Event listeners para as opções
+    document.getElementById("selectFile").onclick = () => {
+      menu.remove();
+      // Encontra o input de arquivo correspondente e clica nele
+      const photoInput = document.querySelector(
+        `input[data-member-name="${memberName}"]`
+      );
+      if (photoInput) {
+        photoInput.click();
+      }
+    };
+
+    document.getElementById("useCamera").onclick = () => {
+      menu.remove();
+      capturePhotoFromCamera(memberName);
+    };
+
+    if (hasCustomPhoto) {
+      document.getElementById("removePhoto").onclick = () => {
+        menu.remove();
+        removeMemberPhoto(memberName);
+      };
+    }
+
+    // Remove menu ao clicar fora
+    setTimeout(() => {
+      document.addEventListener("click", function removeMenu(e) {
+        if (!menu.contains(e.target)) {
+          menu.remove();
+          document.removeEventListener("click", removeMenu);
+        }
+      });
+    }, 100);
   }
 
   async function showPhotoContextMenu(event, memberName) {
@@ -730,10 +1074,10 @@ if (typeof window.dashboardInitialized === "undefined") {
                     <div class="relative w-16 h-16 rounded-full overflow-hidden border-2 border-indigo-400 flex-shrink-0 group cursor-pointer">
                         <img src="${photoUrl}" alt="Foto de ${
         member.Nome
-      }" class="member-photo w-full h-full object-cover transition-transform duration-200 group-hover:scale-105">
-                        <input type="file" class="photo-upload-input absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20" accept="image/*" data-member-name="${
+      }" class="member-photo w-full h-full object-cover transition-transform duration-200 group-hover:scale-105" title="Clique para trocar a foto">
+                        <input type="file" class="photo-upload-input hidden" accept="image/*" data-member-name="${
                           member.Nome
-                        }" title="Clique para trocar a foto">
+                        }">
                         <div class="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-200 text-white text-xs text-center z-10">
                           <div class="flex flex-col items-center">
                             <i class="fas fa-camera mb-1 text-lg"></i>
