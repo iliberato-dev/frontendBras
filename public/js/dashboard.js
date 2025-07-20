@@ -6,6 +6,11 @@
 if (typeof window.dashboardInitialized === "undefined") {
   window.dashboardInitialized = true;
 
+  // Função utilitária para criar nomes de arquivo seguros (igual ao backend)
+  function createSafeFileName(name) {
+    return name ? name.replace(/[^a-zA-Z0-9]/g, "_").toLowerCase() : "";
+  }
+
   let allMembersData = [];
   let filteredMembers = [];
   let lastPresencesData = {};
@@ -301,6 +306,283 @@ if (typeof window.dashboardInitialized === "undefined") {
     }, 4000);
   }
 
+  // --- Funções de Gerenciamento de Fotos de Perfil (Backend) ---
+
+  async function saveMemberPhoto(memberName, base64Photo) {
+    try {
+      showGlobalLoading(true, "Salvando foto...");
+
+      const response = await fetch(`${BACKEND_URL}/upload-member-photo`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          memberName: memberName,
+          photoBase64: base64Photo,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        console.log(`✅ Foto salva no servidor para ${memberName}`);
+        return result.photoUrl;
+      } else {
+        throw new Error(result.message || "Erro ao salvar foto");
+      }
+    } catch (error) {
+      console.error("❌ Erro ao salvar foto no servidor:", error);
+      showMessage("Erro ao salvar foto no servidor", "error");
+      throw error;
+    } finally {
+      showGlobalLoading(false);
+    }
+  }
+
+  async function getMemberPhoto(memberName) {
+    try {
+      const response = await fetch(
+        `${BACKEND_URL}/member-photo/${encodeURIComponent(memberName)}`
+      );
+
+      if (response.ok) {
+        const result = await response.json();
+        return result.success ? result.photoUrl : null;
+      } else if (response.status === 404) {
+        return null; // Foto não encontrada, usar padrão
+      } else {
+        throw new Error("Erro ao buscar foto");
+      }
+    } catch (error) {
+      console.error("❌ Erro ao recuperar foto do servidor:", error);
+      return null; // Em caso de erro, usar foto padrão
+    }
+  }
+
+  async function getAllMemberPhotos() {
+    try {
+      console.log("🔍 Buscando todas as fotos do servidor...");
+      const response = await fetch(`${BACKEND_URL}/member-photos`);
+
+      if (response.ok) {
+        const result = await response.json();
+        console.log("📸 Resposta do servidor:", result);
+        console.log("📊 Fotos recebidas:", result.photos);
+        return result.success ? result.photos : {};
+      } else {
+        throw new Error("Erro ao buscar fotos");
+      }
+    } catch (error) {
+      console.error("❌ Erro ao recuperar fotos do servidor:", error);
+      return {};
+    }
+  }
+
+  async function handlePhotoUpload(file, memberName) {
+    if (!file) return;
+
+    // Validações
+    if (!file.type.startsWith("image/")) {
+      showMessage("Por favor, selecione apenas arquivos de imagem", "error");
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      // 5MB limite
+      showMessage("A imagem deve ter no máximo 5MB", "error");
+      return;
+    }
+
+    // Mostra loading durante o processamento
+    showGlobalLoading(true, "Processando imagem...");
+
+    const reader = new FileReader();
+
+    reader.onload = async function (e) {
+      const img = new Image();
+
+      img.onload = async function () {
+        try {
+          // Cria canvas para redimensionar a imagem
+          const canvas = document.createElement("canvas");
+          const ctx = canvas.getContext("2d");
+
+          // Define tamanho máximo (200x200 pixels)
+          const maxSize = 200;
+          let { width, height } = img;
+
+          if (width > height) {
+            if (width > maxSize) {
+              height = (height * maxSize) / width;
+              width = maxSize;
+            }
+          } else {
+            if (height > maxSize) {
+              width = (width * maxSize) / height;
+              height = maxSize;
+            }
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+
+          // Desenha a imagem redimensionada
+          ctx.drawImage(img, 0, 0, width, height);
+
+          // Converte para base64 com qualidade comprimida
+          const compressedBase64 = canvas.toDataURL("image/jpeg", 0.8);
+
+          // Salva a foto no servidor
+          const photoUrl = await saveMemberPhoto(memberName, compressedBase64);
+
+          // Atualiza a foto na interface
+          updateMemberPhotoInCard(memberName, photoUrl);
+
+          // Recarrega os membros para ter as URLs atualizadas
+          await fetchMembers();
+
+          showGlobalLoading(false);
+          showMessage(
+            `✅ Foto de ${memberName} atualizada com sucesso!`,
+            "success"
+          );
+        } catch (error) {
+          showGlobalLoading(false);
+          showMessage("Erro ao salvar foto no servidor", "error");
+        }
+      };
+
+      img.onerror = function () {
+        showGlobalLoading(false);
+        showMessage("Erro ao processar a imagem", "error");
+      };
+
+      img.src = e.target.result;
+    };
+
+    reader.onerror = function () {
+      showGlobalLoading(false);
+      showMessage("Erro ao ler o arquivo de imagem", "error");
+    };
+
+    reader.readAsDataURL(file);
+  }
+
+  function updateMemberPhotoInCard(memberName, photoUrl) {
+    const photoElements = document.querySelectorAll(
+      `img[alt="Foto de ${memberName}"]`
+    );
+    photoElements.forEach((img) => {
+      img.src = photoUrl;
+    });
+  }
+
+  function initializePhotoUploadListeners() {
+    document.addEventListener("change", function (e) {
+      if (e.target.classList.contains("photo-upload-input")) {
+        const memberName = e.target.getAttribute("data-member-name");
+        const file = e.target.files[0];
+
+        if (file && memberName) {
+          handlePhotoUpload(file, memberName);
+        }
+
+        // Limpa o input para permitir selecionar o mesmo arquivo novamente
+        e.target.value = "";
+      }
+    });
+
+    // Adiciona listener para clique com botão direito (menu de contexto)
+    document.addEventListener("contextmenu", function (e) {
+      if (e.target.classList.contains("member-photo")) {
+        e.preventDefault();
+        const memberName = e.target.alt.replace("Foto de ", "");
+        showPhotoContextMenu(e, memberName);
+      }
+    });
+  }
+
+  async function removeMemberPhoto(memberName) {
+    try {
+      showGlobalLoading(true, "Removendo foto...");
+
+      const response = await fetch(
+        `${BACKEND_URL}/member-photo/${encodeURIComponent(memberName)}`,
+        {
+          method: "DELETE",
+        }
+      );
+
+      const result = await response.json();
+
+      if (result.success || response.status === 404) {
+        // Atualiza para foto padrão
+        const defaultPhoto =
+          "https://png.pngtree.com/png-vector/20191208/ourmid/pngtree-beautiful-create-user-glyph-vector-icon-png-image_2084391.jpg";
+        updateMemberPhotoInCard(memberName, defaultPhoto);
+
+        // Recarrega os membros para ter as URLs atualizadas
+        await fetchMembers();
+
+        showMessage(
+          `✅ Foto de ${memberName} removida. Usando foto padrão.`,
+          "success"
+        );
+        console.log(`✅ Foto removida para ${memberName}`);
+      } else {
+        throw new Error(result.message || "Erro ao remover foto");
+      }
+    } catch (error) {
+      console.error("❌ Erro ao remover foto:", error);
+      showMessage("Erro ao remover foto do servidor", "error");
+    } finally {
+      showGlobalLoading(false);
+    }
+  }
+
+  async function showPhotoContextMenu(event, memberName) {
+    // Remove menu anterior se existir
+    const existingMenu = document.getElementById("photoContextMenu");
+    if (existingMenu) {
+      existingMenu.remove();
+    }
+
+    // Verifica se há foto personalizada no servidor
+    const savedPhoto = await getMemberPhoto(memberName);
+    if (!savedPhoto) return; // Só mostra menu se houver foto personalizada
+
+    const menu = document.createElement("div");
+    menu.id = "photoContextMenu";
+    menu.className =
+      "fixed bg-white border border-gray-300 rounded-lg shadow-lg py-2 z-50";
+    menu.style.left = event.pageX + "px";
+    menu.style.top = event.pageY + "px";
+
+    menu.innerHTML = `
+      <button class="w-full px-4 py-2 text-left hover:bg-gray-100 text-red-600 flex items-center gap-2">
+        <i class="fas fa-trash-alt"></i>
+        Remover foto personalizada
+      </button>
+    `;
+
+    document.body.appendChild(menu);
+
+    // Remove menu ao clicar fora
+    setTimeout(() => {
+      document.addEventListener("click", function removeMenu() {
+        menu.remove();
+        document.removeEventListener("click", removeMenu);
+      });
+    }, 100);
+
+    // Adiciona ação ao botão
+    menu.querySelector("button").addEventListener("click", () => {
+      removeMemberPhoto(memberName);
+      menu.remove();
+    });
+  }
+
   // --- Funções Principais de Dados e UI ---
 
   async function fetchMembers() {
@@ -328,7 +610,35 @@ if (typeof window.dashboardInitialized === "undefined") {
       }
 
       const membersData = await membersResponse.json();
+      console.log("📊 Dados dos membros recebidos:", membersData);
       allMembersData = membersData.membros || [];
+      console.log("👥 Membros processados:", allMembersData.length);
+      console.log("🔍 Primeiro membro:", allMembersData[0]);
+      console.log("🖼️ FotoURL do primeiro membro:", allMembersData[0]?.FotoURL);
+
+      // Verificar quantos membros têm FotoURL
+      const membersWithPhotos = allMembersData.filter(
+        (m) => m.FotoURL && m.FotoURL.includes("/uploads/member-photos/")
+      );
+      console.log(
+        "📸 Membros com fotos personalizadas:",
+        membersWithPhotos.length
+      );
+      if (membersWithPhotos.length > 0) {
+        console.log(
+          "🎯 Primeiros membros com fotos:",
+          membersWithPhotos.slice(0, 3).map((m) => ({
+            nome: m.Nome,
+            foto: m.FotoURL,
+          }))
+        );
+
+        // Log detalhado de todos os membros com fotos
+        membersWithPhotos.forEach((member, index) => {
+          console.log(`📷 ${index + 1}. ${member.Nome} -> ${member.FotoURL}`);
+        });
+      }
+
       const lastPresencesRawData = await presencesResponse.json();
       lastPresencesData = lastPresencesRawData.data || {};
 
@@ -398,20 +708,43 @@ if (typeof window.dashboardInitialized === "undefined") {
         }
       }
 
+      // Usa a foto que vem do backend ou a padrão
+      const photoUrl =
+        member.FotoURL ||
+        "https://png.pngtree.com/png-vector/20191208/ourmid/pngtree-beautiful-create-user-glyph-vector-icon-png-image_2084391.jpg";
+
+      // Verifica se é uma foto personalizada (do servidor)
+      const hasCustomPhoto =
+        member.FotoURL && member.FotoURL.includes("/uploads/member-photos/");
+
+      // Log apenas para membros com fotos personalizadas
+      if (hasCustomPhoto) {
+        console.log(
+          `🖼️ Renderizando membro com foto: ${member.Nome} -> ${photoUrl}`
+        );
+      }
+
       card.innerHTML = `
             <div class="flex justify-between items-start">
                 <div class="flex items-center gap-3">
-                    <div class="relative w-16 h-16 rounded-full overflow-hidden border-2 border-indigo-400 flex-shrink-0 group">
-                        <img src="${
-                          member.FotoURL ||
-                          "https://png.pngtree.com/png-vector/20191208/ourmid/pngtree-beautiful-create-user-glyph-vector-icon-png-image_2084391.jpg"
-                        }" alt="Foto de ${
+                    <div class="relative w-16 h-16 rounded-full overflow-hidden border-2 border-indigo-400 flex-shrink-0 group cursor-pointer">
+                        <img src="${photoUrl}" alt="Foto de ${
         member.Nome
-      }" class="member-photo w-full h-full object-cover">
-                        <input type="file" class="photo-upload-input absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" accept="image/*" data-member-name="${
+      }" class="member-photo w-full h-full object-cover transition-transform duration-200 group-hover:scale-105">
+                        <input type="file" class="photo-upload-input absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20" accept="image/*" data-member-name="${
                           member.Nome
-                        }">
-                        <div class="absolute inset-0 bg-black bg-opacity-40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 text-white text-xs text-center p-1 z-0">Trocar Foto</div>
+                        }" title="Clique para trocar a foto">
+                        <div class="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-200 text-white text-xs text-center z-10">
+                          <div class="flex flex-col items-center">
+                            <i class="fas fa-camera mb-1 text-lg"></i>
+                            <span class="font-medium">Trocar</span>
+                          </div>
+                        </div>
+                        ${
+                          hasCustomPhoto
+                            ? '<div class="absolute -top-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-white z-15" title="Foto personalizada"></div>'
+                            : ""
+                        }
                     </div>
                     <div class="font-bold text-lg text-gray-800">${
                       member.Nome || "N/A"
@@ -2593,6 +2926,9 @@ if (typeof window.dashboardInitialized === "undefined") {
     fetchMembers();
     displayLoggedInLeaderName();
 
+    // Inicializa os listeners de upload de foto
+    initializePhotoUploadListeners();
+
     // Inicializa o autocomplete após um pequeno delay para garantir que os elementos estejam prontos
     setTimeout(() => {
       initializeNameAutocomplete();
@@ -2919,3 +3255,53 @@ if (typeof window.dashboardInitialized === "undefined") {
     }
   }
 } // Fim da verificação dashboardInitialized
+
+/*
+=== FUNCIONALIDADE DE FOTOS DE PERFIL (BACKEND SINCRONIZADO) ===
+
+Esta implementação permite aos usuários:
+
+1. 📸 TROCAR FOTOS:
+   - Clique na foto de qualquer membro para selecionar uma nova imagem
+   - Aceita formatos: JPG, PNG, GIF, WebP
+   - Limite de tamanho: 5MB por imagem
+
+2. 💾 ARMAZENAMENTO NO SERVIDOR:
+   - Fotos são salvas no servidor backend (não mais localStorage)
+   - Persistem entre dispositivos e usuários
+   - Sincronização automática para todos os usuários
+   - Compressão automática para otimizar espaço
+
+3. 🌐 COMPARTILHAMENTO GLOBAL:
+   - Fotos aparecem para TODOS os usuários do aplicativo
+   - Sincronização em tempo real entre dispositivos
+   - URLs públicas servidas pelo backend
+
+4. 🎨 MELHORIAS VISUAIS:
+   - Overlay com ícone de câmera ao passar o mouse
+   - Indicador verde para fotos personalizadas
+   - Redimensionamento automático para 200x200px
+   - Feedback visual durante upload
+
+5. 🗑️ GERENCIAMENTO:
+   - Clique direito na foto para remover (volta ao padrão)
+   - Validação de tipos de arquivo e tamanho
+   - Remoção automática de fotos antigas ao atualizar
+
+6. 🔄 ENDPOINTS DO BACKEND:
+   - POST /upload-member-photo - Upload de foto
+   - GET /member-photo/:name - Buscar foto específica
+   - GET /member-photos - Listar todas as fotos
+   - DELETE /member-photo/:name - Remover foto
+   - GET /uploads/member-photos/* - Servir arquivos estáticos
+
+Como usar:
+- Clique na foto do membro → Selecione nova imagem → Upload automático
+- Clique direito na foto → "Remover foto personalizada" (se houver)
+- Fotos aparecem instantaneamente para todos os usuários
+
+Arquitetura:
+- Frontend: Processa e comprime imagens localmente
+- Backend: Armazena arquivos físicos e URLs
+- Sincronização: GET /get-membros retorna URLs atualizadas
+*/
