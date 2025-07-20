@@ -289,11 +289,11 @@ if (typeof window.dashboardInitialized === "undefined") {
                 <input type="checkbox" class="h-5 w-5 text-blue-600 rounded focus:ring-blue-500 presence-checkbox">
                 <span class="text-sm text-gray-700">Presente</span>
             </label>
-            <div class="presence-date-container mt-2 hidden">
+            <div class="presence-date-container mt-2 hidden" style="display: none;">
                 <label class="text-sm text-gray-600 font-semibold">Escolha a data da presença (opcional):</label>
                 <input type="date" class="presence-date-input mt-1 block w-full rounded-md border-gray-300 shadow-sm">
             </div>
-            <button class="btn-confirm-presence w-full mt-2 hidden bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg">Confirmar Presença</button>
+            <button class="btn-confirm-presence w-full mt-2 hidden bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg" style="display: none;">Confirmar Presença</button>
             <div class="text-xs text-gray-500 mt-1 presence-info"></div>
         `;
       container.appendChild(card);
@@ -305,6 +305,12 @@ if (typeof window.dashboardInitialized === "undefined") {
       const dateContainer = card.querySelector(".presence-date-container");
       const dateInput = card.querySelector(".presence-date-input");
       const historyBtn = card.querySelector(".btn-history");
+
+      // Garantir que os elementos estejam escondidos inicialmente
+      confirmBtn.style.display = "none";
+      dateContainer.style.display = "none";
+      confirmBtn.classList.add("hidden");
+      dateContainer.classList.add("hidden");
 
       const updatePresenceStatus = () => {
         if (!infoDiv) return;
@@ -339,12 +345,19 @@ if (typeof window.dashboardInitialized === "undefined") {
       );
 
       checkbox.addEventListener("change", function () {
-        dateContainer.classList.toggle("hidden", !this.checked);
-        confirmBtn.classList.toggle("hidden", !this.checked);
+        // Usa tanto classes CSS quanto style.display para garantir compatibilidade
         if (this.checked) {
+          dateContainer.classList.remove("hidden");
+          dateContainer.style.display = "block";
+          confirmBtn.classList.remove("hidden");
+          confirmBtn.style.display = "block";
           infoDiv.textContent = "Clique em confirmar para registrar.";
           infoDiv.className = "text-xs text-gray-500 mt-1 presence-info";
         } else {
+          dateContainer.classList.add("hidden");
+          dateContainer.style.display = "none";
+          confirmBtn.classList.add("hidden");
+          confirmBtn.style.display = "none";
           updatePresenceStatus();
         }
       });
@@ -388,7 +401,9 @@ if (typeof window.dashboardInitialized === "undefined") {
         } finally {
           checkbox.checked = false;
           confirmBtn.classList.add("hidden");
+          confirmBtn.style.display = "none";
           dateContainer.classList.add("hidden");
+          dateContainer.style.display = "none";
           confirmBtn.disabled = false;
           infoDiv.classList.remove("animate-pulse");
         }
