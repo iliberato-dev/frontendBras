@@ -13,6 +13,11 @@ if (typeof window.dashboardInitialized === "undefined") {
   let myChart = null;
   let myBarChart = null;
 
+  // Cache para otimização de performance
+  let summaryCache = new Map();
+  let lastCacheKey = null;
+  const CACHE_EXPIRY_TIME = 5 * 60 * 1000; // 5 minutos em millisegundos
+
   // --- Seletores de Elementos Globais ---
   const filterNameInput = document.getElementById("filterName");
   const filterPeriodoSelect = document.getElementById("filterPeriodo");
@@ -92,6 +97,153 @@ if (typeof window.dashboardInitialized === "undefined") {
   let isDashboardOpen = false;
 
   // --- Funções Utilitárias ---
+
+  function generateCacheKey(queryParams) {
+    return queryParams.toString() + "|" + Date.now().toString().slice(0, -5); // Arredonda para 10s
+  }
+
+  function getCachedData(cacheKey) {
+    const cached = summaryCache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < CACHE_EXPIRY_TIME) {
+      return cached.data;
+    }
+    return null;
+  }
+
+  function setCachedData(cacheKey, data) {
+    // Limita o cache a 10 entradas para não consumir muita memória
+    if (summaryCache.size >= 10) {
+      const firstKey = summaryCache.keys().next().value;
+      summaryCache.delete(firstKey);
+    }
+    summaryCache.set(cacheKey, {
+      data: data,
+      timestamp: Date.now(),
+    });
+  }
+
+  // Função de debounce para otimizar event listeners
+  function debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+      const later = () => {
+        clearTimeout(timeout);
+        func(...args);
+      };
+      clearTimeout(timeout);
+      timeout = setTimeout(later, wait);
+    };
+  }
+
+  // Indicador de carregamento flutuante
+  function showFloatingLoader(message = "Carregando...") {
+    // Remove loader anterior se existir
+    hideFloatingLoader();
+
+    const loader = document.createElement("div");
+    loader.id = "floatingLoader";
+    loader.className = "floating-loader";
+    loader.innerHTML = `
+      <div class="loader-spinner"></div>
+      <span class="loader-text">${message}</span>
+      <button class="loader-close" onclick="hideFloatingLoader()" title="Fechar">
+        <i class="fas fa-times"></i>
+      </button>
+    `;
+
+    // Adiciona estilos CSS inline para garantir que funcione
+    loader.style.cssText = `
+      position: fixed;
+      top: 1rem;
+      right: 1rem;
+      z-index: 9999;
+      background: white;
+      border-radius: 0.75rem;
+      box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+      border: 1px solid #e5e7eb;
+      padding: 1rem 1.25rem;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      opacity: 0;
+      transform: translateY(-10px) scale(0.95);
+      transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+      backdrop-filter: blur(10px);
+      min-width: 240px;
+      max-width: 300px;
+    `;
+
+    // Estilos para o spinner
+    const spinnerStyle = `
+      .loader-spinner {
+        width: 20px;
+        height: 20px;
+        border: 2px solid #e5e7eb;
+        border-top: 2px solid #3b82f6;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+        flex-shrink: 0;
+      }
+      .loader-text {
+        color: #374151;
+        font-weight: 500;
+        font-size: 0.875rem;
+        flex: 1;
+      }
+      .loader-close {
+        color: #9ca3af;
+        background: none;
+        border: none;
+        cursor: pointer;
+        padding: 2px;
+        border-radius: 4px;
+        transition: color 0.2s;
+        flex-shrink: 0;
+      }
+      .loader-close:hover {
+        color: #6b7280;
+        background: #f3f4f6;
+      }
+      @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+      }
+    `;
+
+    // Adiciona CSS se não existir
+    if (!document.getElementById("floatingLoaderCSS")) {
+      const style = document.createElement("style");
+      style.id = "floatingLoaderCSS";
+      style.textContent = spinnerStyle;
+      document.head.appendChild(style);
+    }
+
+    document.body.appendChild(loader);
+
+    // Anima a entrada
+    setTimeout(() => {
+      loader.style.opacity = "1";
+      loader.style.transform = "translateY(0) scale(1)";
+    }, 50);
+
+    return loader;
+  }
+
+  function hideFloatingLoader() {
+    const loader = document.getElementById("floatingLoader");
+    if (loader) {
+      loader.style.opacity = "0";
+      loader.style.transform = "translateY(-10px) scale(0.95)";
+      setTimeout(() => {
+        if (loader.parentNode) {
+          loader.parentNode.removeChild(loader);
+        }
+      }, 300);
+    }
+  }
+
+  // Torna a função global para poder ser chamada pelo botão
+  window.hideFloatingLoader = hideFloatingLoader;
 
   function showGlobalLoading(show, message = "Carregando...") {
     if (globalLoadingIndicator && loadingMessageSpan) {
@@ -490,6 +642,28 @@ if (typeof window.dashboardInitialized === "undefined") {
     dashboardContainer.classList.toggle("overflow-hidden", !isDashboardOpen);
     // dashboardContainer.classList.toggle("max-h-screen", isDashboardOpen);
 
+    // Atualiza os ícones e textos do botão
+    if (
+      dashboardOpenIcon &&
+      dashboardCloseIcon &&
+      dashboardOpenText &&
+      dashboardCloseText
+    ) {
+      if (isDashboardOpen) {
+        // Dashboard aberto - mostra ícone e texto de fechar
+        dashboardOpenIcon.classList.add("hidden");
+        dashboardOpenText.classList.add("hidden");
+        dashboardCloseIcon.classList.remove("hidden");
+        dashboardCloseText.classList.remove("hidden");
+      } else {
+        // Dashboard fechado - mostra ícone e texto de abrir
+        dashboardOpenIcon.classList.remove("hidden");
+        dashboardOpenText.classList.remove("hidden");
+        dashboardCloseIcon.classList.add("hidden");
+        dashboardCloseText.classList.add("hidden");
+      }
+    }
+
     if (isDashboardOpen) {
       fetchAndDisplaySummary();
     }
@@ -682,25 +856,118 @@ if (typeof window.dashboardInitialized === "undefined") {
 
   function showDetailedSummary() {
     if (!detailedSummaryModal) return;
-    populateSummaryMemberSelect();
-    const today = new Date();
-    summaryStartDateInput.value = new Date(
-      today.getFullYear(),
-      today.getMonth(),
-      1
-    )
-      .toISOString()
-      .split("T")[0];
-    summaryEndDateInput.value = new Date(
-      today.getFullYear(),
-      today.getMonth() + 1,
-      0
-    )
-      .toISOString()
-      .split("T")[0];
-    updateDetailedSummaryChart();
-    detailedSummaryModal.classList.remove("hidden");
-    detailedSummaryModal.classList.add("flex");
+
+    // Mostra indicador de carregamento flutuante imediatamente
+    showFloatingLoader("Iniciando...");
+
+    // Pequeno delay para garantir que o loader apareça antes de qualquer processamento
+    setTimeout(() => {
+      // Atualiza status
+      updateFloatingLoaderText("Abrindo modal...");
+
+      // Abre o modal imediatamente para dar feedback visual
+      detailedSummaryModal.classList.remove("hidden");
+      detailedSummaryModal.classList.add("flex");
+
+      // Próxima etapa após o modal aparecer
+      setTimeout(() => {
+        updateFloatingLoaderText("Preparando campos...");
+
+        // Popula os campos de forma assíncrona
+        requestAnimationFrame(() => {
+          populateSummaryMemberSelect();
+          const today = new Date();
+          summaryStartDateInput.value = new Date(
+            today.getFullYear(),
+            today.getMonth(),
+            1
+          )
+            .toISOString()
+            .split("T")[0];
+          summaryEndDateInput.value = new Date(
+            today.getFullYear(),
+            today.getMonth() + 1,
+            0
+          )
+            .toISOString()
+            .split("T")[0];
+
+          // Próxima etapa
+          setTimeout(() => {
+            updateFloatingLoaderText("Verificando cache...");
+
+            // Pré-carrega dados em background
+            preloadSummaryData().then(() => {
+              // Carrega os dados após verificar cache
+              setTimeout(() => {
+                updateDetailedSummaryChart();
+              }, 50);
+            });
+          }, 100);
+        });
+      }, 100);
+    }, 50);
+  }
+
+  // Função helper para atualizar texto do loader
+  function updateFloatingLoaderText(message) {
+    const loader = document.getElementById("floatingLoader");
+    if (loader) {
+      const textElement = loader.querySelector(".loader-text");
+      if (textElement) textElement.textContent = message;
+    }
+  }
+
+  async function preloadSummaryData() {
+    try {
+      updateFloatingLoaderText("Montando parâmetros...");
+
+      const queryParams = new URLSearchParams();
+      queryParams.append("dataInicio", summaryStartDateInput.value);
+      queryParams.append("dataFim", summaryEndDateInput.value);
+
+      // Adiciona filtros ativos
+      if (filterLiderInput.value)
+        queryParams.append("lider", filterLiderInput.value);
+      if (filterGapeInput.value)
+        queryParams.append("gape", filterGapeInput.value);
+      if (filterPeriodoSelect.value)
+        queryParams.append("periodo", filterPeriodoSelect.value);
+
+      const cacheKey = generateCacheKey(queryParams);
+
+      updateFloatingLoaderText("Verificando dados em cache...");
+
+      // Só faz pré-carregamento se não estiver em cache
+      if (!getCachedData(cacheKey)) {
+        updateFloatingLoaderText("Dados não encontrados em cache");
+        await new Promise((resolve) => setTimeout(resolve, 200)); // Pequeno delay para mostrar a mensagem
+
+        updateFloatingLoaderText("Solicitando dados do servidor...");
+        const response = await fetch(
+          `${BACKEND_URL}/detailed-summary?${queryParams.toString()}`
+        );
+
+        if (response.ok) {
+          updateFloatingLoaderText("Recebendo dados do servidor...");
+          const summaryResponse = await response.json();
+          if (summaryResponse.success) {
+            updateFloatingLoaderText("Armazenando dados em cache...");
+            setCachedData(cacheKey, summaryResponse.data);
+            await new Promise((resolve) => setTimeout(resolve, 100)); // Pequeno delay
+            updateFloatingLoaderText("Dados preparados ✅");
+          }
+        }
+      } else {
+        updateFloatingLoaderText("Dados encontrados em cache ⚡");
+        await new Promise((resolve) => setTimeout(resolve, 200)); // Mostra a mensagem por um tempo
+      }
+    } catch (error) {
+      // Silencioso - o pré-carregamento é opcional
+      updateFloatingLoaderText("Erro no pré-carregamento (continuando...)");
+      console.log("Pré-carregamento falhou (ignorado):", error.message);
+      await new Promise((resolve) => setTimeout(resolve, 300));
+    }
   }
 
   function populateSummaryMemberSelect() {
@@ -718,23 +985,49 @@ if (typeof window.dashboardInitialized === "undefined") {
   // dashboard.js - Substitua sua função por esta versão
 
   async function updateDetailedSummaryChart() {
-    showGlobalLoading(true, "Carregando resumo detalhado...");
-
-    // Limpa o estado anterior
-    if (myChart) myChart.destroy();
-    if (myBarChart) myBarChart.destroy();
-    detailedSummaryText.innerHTML = "";
-    const absentDatesList = document.getElementById("absentDatesList");
-    const presentDatesList = document.getElementById("presentDatesList");
-    if (absentDatesList) absentDatesList.innerHTML = "";
-    if (presentDatesList) presentDatesList.innerHTML = "";
+    // Função helper para atualizar status do loader
+    const updateLoaderStatus = (message) => {
+      updateFloatingLoaderText(message);
+    };
 
     try {
+      updateLoaderStatus("Iniciando processamento...");
+
+      // Mostra loading no modal também
+      detailedSummaryText.innerHTML = `
+        <div class="flex items-center justify-center py-8">
+          <div class="flex items-center gap-3">
+            <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+            <span class="text-gray-600">Preparando dados...</span>
+          </div>
+        </div>
+      `;
+
+      // Etapa 1: Limpar gráficos antigos (não-bloqueante)
+      updateLoaderStatus("Limpando gráficos anteriores...");
+      await new Promise((resolve) => {
+        requestAnimationFrame(() => {
+          if (myChart) myChart.destroy();
+          if (myBarChart) myBarChart.destroy();
+          resolve();
+        });
+      });
+
+      // Etapa 2: Limpar listas
+      updateLoaderStatus("Limpando listas...");
+      const absentDatesList = document.getElementById("absentDatesList");
+      const presentDatesList = document.getElementById("presentDatesList");
+      if (absentDatesList) absentDatesList.innerHTML = "";
+      if (presentDatesList) presentDatesList.innerHTML = "";
+
+      // Etapa 3: Preparar parâmetros de busca
+      updateLoaderStatus("Preparando parâmetros...");
+      await new Promise((resolve) => setTimeout(resolve, 50)); // Permite UI respirar
+
       const startDateStr = summaryStartDateInput.value;
       const endDateStr = summaryEndDateInput.value;
       const selectedMemberName = summaryMemberSelect.value;
 
-      // Constrói os parâmetros de busca
       const queryParams = new URLSearchParams();
       if (startDateStr) queryParams.append("dataInicio", startDateStr);
       if (endDateStr) queryParams.append("dataFim", endDateStr);
@@ -742,7 +1035,8 @@ if (typeof window.dashboardInitialized === "undefined") {
       let title = "";
       let membersToAnalyze = [];
 
-      // Define os filtros da busca
+      // Etapa 4: Definir escopo da análise
+      updateLoaderStatus("Definindo escopo da análise...");
       if (selectedMemberName) {
         title = `Estatísticas para ${selectedMemberName}`;
         membersToAnalyze = allMembersData.filter(
@@ -762,140 +1056,210 @@ if (typeof window.dashboardInitialized === "undefined") {
 
       if (membersToAnalyze.length === 0) {
         detailedSummaryText.innerHTML = `<p class="text-lg font-semibold">Nenhum membro para analisar.</p>`;
-        showGlobalLoading(false);
+        hideFloatingLoader();
         return;
       }
 
-      // --- CHAMADA ÚNICA E OTIMIZADA ---
-      const response = await fetch(
-        `${BACKEND_URL}/detailed-summary?${queryParams.toString()}`
-      );
-      if (!response.ok) throw new Error("Falha ao buscar dados detalhados.");
+      // Etapa 5: Buscar dados (cache ou servidor)
+      updateLoaderStatus("Verificando cache local...");
+      const cacheKey = generateCacheKey(queryParams);
+      let summaryData = getCachedData(cacheKey);
 
-      const summaryResponse = await response.json();
-      if (!summaryResponse.success) throw new Error(summaryResponse.message);
+      if (!summaryData) {
+        updateLoaderStatus("Solicitando dados do servidor...");
+        const response = await fetch(
+          `${BACKEND_URL}/detailed-summary?${queryParams.toString()}`
+        );
+        if (!response.ok) throw new Error("Falha ao buscar dados detalhados.");
 
-      const summaryData = summaryResponse.data;
-      const presencesDetails = summaryData.presences || {};
-      const absencesDetails = summaryData.absences || {};
+        updateLoaderStatus("Processando resposta do servidor...");
+        const summaryResponse = await response.json();
+        if (!summaryResponse.success) throw new Error(summaryResponse.message);
 
-      // Processa os dados recebidos
-      const totalPresences = Object.values(presencesDetails).reduce(
-        (sum, data) => sum + data.totalPresencas,
-        0
-      );
-      const totalAbsences = Object.values(absencesDetails).reduce(
-        (sum, data) => sum + data.totalFaltas,
-        0
-      );
-
-      let summaryHtml, chartData, chartLabels, chartTitle;
-
-      if (selectedMemberName) {
-        // --- LÓGICA PARA VISÃO INDIVIDUAL ---
-        const totalMeetingDays =
-          summaryData.totalMeetingDays || totalPresences + totalAbsences;
-        summaryHtml = `
-                <h3 class="text-lg font-semibold text-gray-800 mb-2">${title}</h3>
-                <ul class="list-disc list-inside text-gray-700 space-y-1">
-                    <li>Total de Reuniões no Período: <span class="font-bold">${totalMeetingDays}</span></li>
-                    <li>Presenças Registradas: <span class="font-bold text-green-600">${totalPresences}</span></li>
-                    <li>Faltas Calculadas: <span class="font-bold text-red-600">${totalAbsences}</span></li>
-                </ul>`;
-        chartData = [totalPresences, totalAbsences];
-        chartLabels = ["Presenças", "Faltas"];
-        chartTitle = "Proporção Presenças vs Faltas";
+        summaryData = summaryResponse.data;
+        updateLoaderStatus("Salvando dados em cache...");
+        setCachedData(cacheKey, summaryData);
       } else {
-        // --- LÓGICA PARA VISÃO DE GRUPO ---
-        const membersWithPresence = Object.keys(presencesDetails).length;
-        const membersWithoutPresence =
-          membersToAnalyze.length - membersWithPresence;
-        summaryHtml = `
-                <h3 class="text-lg font-semibold text-gray-800 mb-2">${title}</h3>
-                <ul class="list-disc list-inside text-gray-700 space-y-1">
-                    <li>Total de Membros Analisados: <span class="font-bold">${membersToAnalyze.length}</span></li>
-                    <li>Membros com Presença no Período: <span class="font-bold text-green-600">${membersWithPresence}</span></li>
-                    <li>Membros Sem Presença no Período: <span class="font-bold text-red-600">${membersWithoutPresence}</span></li>
-                    <li>Total de Faltas Registradas no Grupo: <span class="font-bold">${totalAbsences}</span></li>
-                </ul>`;
-        chartData = [membersWithPresence, membersWithoutPresence];
-        chartLabels = ["Membros com Presença", "Membros Sem Presença"];
-        chartTitle = "Proporção de Membros com/sem Presença";
+        updateLoaderStatus("Dados carregados do cache ⚡");
       }
 
-      detailedSummaryText.innerHTML = summaryHtml;
+      // Pequeno delay para mostrar o feedback
+      await new Promise((resolve) => setTimeout(resolve, 150));
 
-      let presencesHtml = Object.entries(presencesDetails)
-        .map(
-          ([name, data]) =>
-            (selectedMemberName
-              ? ""
-              : `<h5 class="font-semibold mt-2 text-gray-700">${name}</h5>`) +
-            (data.presencas || [])
-              .map((date) => `<li class="text-sm text-gray-800">${date}</li>`)
-              .join("")
-        )
-        .join("");
-      let absencesHtml = Object.entries(absencesDetails)
-        .map(
-          ([name, data]) =>
-            (selectedMemberName
-              ? ""
-              : `<h5 class="font-semibold mt-2 text-gray-700">${name}</h5>`) +
-            (data.faltas || [])
-              .map((date) => `<li class="text-sm text-gray-800">${date}</li>`)
-              .join("")
-        )
-        .join("");
+      // Etapa 6: Processar estatísticas básicas
+      updateLoaderStatus("Calculando estatísticas...");
 
-      if (presentDatesList)
-        presentDatesList.innerHTML =
-          presencesHtml || "<li>Nenhuma presença no período.</li>";
-      if (absentDatesList)
-        absentDatesList.innerHTML =
-          absencesHtml || "<li>Nenhuma falta no período.</li>";
+      let chartRenderData;
+      await new Promise((resolve) => {
+        requestAnimationFrame(() => {
+          const presencesDetails = summaryData.presences || {};
+          const absencesDetails = summaryData.absences || {};
 
-      // Lógica do gráfico (agora unificada)
-      const pieCtx = summaryChartCanvas.getContext("2d");
-      myChart = new Chart(pieCtx, {
-        type: "pie",
-        data: {
-          labels: chartLabels,
-          datasets: [
-            {
-              data: chartData,
-              backgroundColor: [
-                "rgba(75, 192, 192, 0.8)",
-                "rgba(255, 99, 132, 0.8)",
-              ],
-            },
-          ],
-        },
-        options: {
-          responsive: true,
-          plugins: {
-            title: { display: true, text: chartTitle },
-            datalabels: {
-              formatter: (value, context) => {
-                const total = context.chart.data.datasets[0].data.reduce(
-                  (a, b) => a + b,
-                  0
-                );
-                if (total === 0 || value === 0) return "";
-                return ((value / total) * 100).toFixed(1) + "%";
-              },
-              color: "#fff",
-              font: { weight: "bold", size: 14 },
-            },
-          },
-        },
-        plugins: [ChartDataLabels],
+          const totalPresences = Object.values(presencesDetails).reduce(
+            (sum, data) => sum + data.totalPresencas,
+            0
+          );
+          const totalAbsences = Object.values(absencesDetails).reduce(
+            (sum, data) => sum + data.totalFaltas,
+            0
+          );
+
+          let summaryHtml, chartData, chartLabels, chartTitle;
+
+          if (selectedMemberName) {
+            const totalMeetingDays =
+              summaryData.totalMeetingDays || totalPresences + totalAbsences;
+            summaryHtml = `
+              <h3 class="text-lg font-semibold text-gray-800 mb-2">${title}</h3>
+              <ul class="list-disc list-inside text-gray-700 space-y-1">
+                  <li>Total de Reuniões no Período: <span class="font-bold">${totalMeetingDays}</span></li>
+                  <li>Presenças Registradas: <span class="font-bold text-green-600">${totalPresences}</span></li>
+                  <li>Faltas Calculadas: <span class="font-bold text-red-600">${totalAbsences}</span></li>
+              </ul>`;
+            chartData = [totalPresences, totalAbsences];
+            chartLabels = ["Presenças", "Faltas"];
+            chartTitle = "Proporção Presenças vs Faltas";
+          } else {
+            const membersWithPresence = Object.keys(presencesDetails).length;
+            const membersWithoutPresence =
+              membersToAnalyze.length - membersWithPresence;
+            summaryHtml = `
+              <h3 class="text-lg font-semibold text-gray-800 mb-2">${title}</h3>
+              <ul class="list-disc list-inside text-gray-700 space-y-1">
+                  <li>Total de Membros Analisados: <span class="font-bold">${membersToAnalyze.length}</span></li>
+                  <li>Membros com Presença no Período: <span class="font-bold text-green-600">${membersWithPresence}</span></li>
+                  <li>Membros Sem Presença no Período: <span class="font-bold text-red-600">${membersWithoutPresence}</span></li>
+                  <li>Total de Faltas Registradas no Grupo: <span class="font-bold">${totalAbsences}</span></li>
+              </ul>`;
+            chartData = [membersWithPresence, membersWithoutPresence];
+            chartLabels = ["Membros com Presença", "Membros Sem Presença"];
+            chartTitle = "Proporção de Membros com/sem Presença";
+          }
+
+          chartRenderData = {
+            chartData,
+            chartLabels,
+            chartTitle,
+            presencesDetails,
+            absencesDetails,
+            selectedMemberName,
+          };
+
+          // Mostra os dados básicos imediatamente
+          detailedSummaryText.innerHTML = summaryHtml;
+          resolve();
+        });
       });
+
+      // Etapa 7: Processar listas detalhadas
+      updateLoaderStatus("Montando listas detalhadas...");
+      await new Promise((resolve) => {
+        requestAnimationFrame(() => {
+          const { presencesDetails, absencesDetails, selectedMemberName } =
+            chartRenderData;
+
+          let presencesHtml = Object.entries(presencesDetails)
+            .map(
+              ([name, data]) =>
+                (selectedMemberName
+                  ? ""
+                  : `<h5 class="font-semibold mt-2 text-gray-700">${name}</h5>`) +
+                (data.presencas || [])
+                  .map(
+                    (date) => `<li class="text-sm text-gray-800">${date}</li>`
+                  )
+                  .join("")
+            )
+            .join("");
+          let absencesHtml = Object.entries(absencesDetails)
+            .map(
+              ([name, data]) =>
+                (selectedMemberName
+                  ? ""
+                  : `<h5 class="font-semibold mt-2 text-gray-700">${name}</h5>`) +
+                (data.faltas || [])
+                  .map(
+                    (date) => `<li class="text-sm text-gray-800">${date}</li>`
+                  )
+                  .join("")
+            )
+            .join("");
+
+          if (presentDatesList)
+            presentDatesList.innerHTML =
+              presencesHtml || "<li>Nenhuma presença no período.</li>";
+          if (absentDatesList)
+            absentDatesList.innerHTML =
+              absencesHtml || "<li>Nenhuma falta no período.</li>";
+
+          resolve();
+        });
+      });
+
+      // Etapa 8: Renderizar gráfico
+      updateLoaderStatus("Criando gráfico...");
+      await new Promise((resolve) => {
+        setTimeout(() => {
+          requestAnimationFrame(() => {
+            const { chartData, chartLabels, chartTitle } = chartRenderData;
+
+            const pieCtx = summaryChartCanvas.getContext("2d");
+            myChart = new Chart(pieCtx, {
+              type: "pie",
+              data: {
+                labels: chartLabels,
+                datasets: [
+                  {
+                    data: chartData,
+                    backgroundColor: [
+                      "rgba(75, 192, 192, 0.8)",
+                      "rgba(255, 99, 132, 0.8)",
+                    ],
+                  },
+                ],
+              },
+              options: {
+                responsive: true,
+                animation: {
+                  duration: 300,
+                  easing: "easeOutQuart",
+                },
+                plugins: {
+                  title: { display: true, text: chartTitle },
+                  datalabels: {
+                    formatter: (value, context) => {
+                      const total = context.chart.data.datasets[0].data.reduce(
+                        (a, b) => a + b,
+                        0
+                      );
+                      if (total === 0 || value === 0) return "";
+                      return ((value / total) * 100).toFixed(1) + "%";
+                    },
+                    color: "#fff",
+                    font: { weight: "bold", size: 14 },
+                  },
+                },
+              },
+              plugins: [ChartDataLabels],
+            });
+
+            resolve();
+          });
+        }, 100);
+      });
+
+      // Etapa final: Concluído
+      updateLoaderStatus("Concluído! 🎉");
+      setTimeout(() => {
+        hideFloatingLoader();
+      }, 800);
     } catch (error) {
+      updateLoaderStatus("Erro encontrado!");
+      setTimeout(() => {
+        hideFloatingLoader();
+      }, 1000);
       showMessage(`Erro ao atualizar resumo: ${error.message}`, "error");
       detailedSummaryText.innerHTML = `<p class="text-red-500">Falha ao carregar dados: ${error.message}</p>`;
-    } finally {
-      showGlobalLoading(false);
     }
   }
 
@@ -1279,9 +1643,10 @@ if (typeof window.dashboardInitialized === "undefined") {
     if (showDetailedSummaryBtn)
       showDetailedSummaryBtn.addEventListener("click", showDetailedSummary);
     if (closeModalBtn)
-      closeModalBtn.addEventListener("click", () =>
-        detailedSummaryModal.classList.add("hidden")
-      );
+      closeModalBtn.addEventListener("click", () => {
+        detailedSummaryModal.classList.add("hidden");
+        hideFloatingLoader(); // Esconde o loader se o modal for fechado
+      });
     if (closeHistoryModalBtn)
       closeHistoryModalBtn.addEventListener("click", () =>
         historyModal.classList.add("hidden")
@@ -1303,27 +1668,23 @@ if (typeof window.dashboardInitialized === "undefined") {
       });
     }
 
-    // Listeners para filtros do modal de resumo
+    // Listeners para filtros do modal de resumo com debounce para melhor performance
+    const debouncedUpdateChart = debounce(() => {
+      showFloatingLoader("Atualizando resumo...");
+      updateDetailedSummaryChart();
+    }, 300);
+
     if (applySummaryFiltersBtn)
-      applySummaryFiltersBtn.addEventListener(
-        "click",
-        updateDetailedSummaryChart
-      );
+      applySummaryFiltersBtn.addEventListener("click", () => {
+        showFloatingLoader("Aplicando filtros...");
+        updateDetailedSummaryChart();
+      });
     if (summaryStartDateInput)
-      summaryStartDateInput.addEventListener(
-        "change",
-        updateDetailedSummaryChart
-      );
+      summaryStartDateInput.addEventListener("change", debouncedUpdateChart);
     if (summaryEndDateInput)
-      summaryEndDateInput.addEventListener(
-        "change",
-        updateDetailedSummaryChart
-      );
+      summaryEndDateInput.addEventListener("change", debouncedUpdateChart);
     if (summaryMemberSelect)
-      summaryMemberSelect.addEventListener(
-        "change",
-        updateDetailedSummaryChart
-      );
+      summaryMemberSelect.addEventListener("change", debouncedUpdateChart);
     if (downloadPdfBtn)
       downloadPdfBtn.addEventListener("click", handleDownloadPdf);
 
