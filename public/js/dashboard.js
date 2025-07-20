@@ -488,7 +488,7 @@ if (typeof window.dashboardInitialized === "undefined") {
     dashboardContainer.classList.toggle("max-h-0", !isDashboardOpen);
     dashboardContainer.classList.toggle("opacity-0", !isDashboardOpen);
     dashboardContainer.classList.toggle("overflow-hidden", !isDashboardOpen);
-    dashboardContainer.classList.toggle("max-h-screen", isDashboardOpen);
+    // dashboardContainer.classList.toggle("max-h-screen", isDashboardOpen);
 
     if (isDashboardOpen) {
       fetchAndDisplaySummary();
@@ -639,10 +639,10 @@ if (typeof window.dashboardInitialized === "undefined") {
                           100
                       )
                     : 0;
-                return `<li class="text-sm text-green-300"><span class="font-semibold text-green-100">${name}:</span> ${data.totalPresencas} presenças <span class="text-green-200">(${percentage}%)</span></li>`;
+                return `<div class="text-sm text-green-300 py-1 border-b border-gray-600 last:border-b-0"><span class="font-semibold text-green-100">${name}:</span> ${data.totalPresencas} presenças <span class="text-green-200">(${percentage}%)</span></div>`;
               })
               .join("")
-          : '<li class="text-sm text-gray-400 text-center">Nenhuma presença.</li>';
+          : '<div class="text-sm text-gray-400 text-center">Nenhuma presença.</div>';
 
       // Atualiza a lista de Ranking de Faltas (em vermelho)
       const sortedAbsences = Object.entries(absencesDetails).sort(
@@ -666,10 +666,10 @@ if (typeof window.dashboardInitialized === "undefined") {
                         (data.totalFaltas / summaryData.totalMeetingDays) * 100
                       )
                     : 0;
-                return `<li class="text-sm text-red-300"><span class="font-semibold text-red-100">${name}:</span> ${data.totalFaltas} faltas <span class="text-red-200">(${percentage}%)</span></li>`;
+                return `<div class="text-sm text-red-300 py-1 border-b border-gray-600 last:border-b-0"><span class="font-semibold text-red-100">${name}:</span> ${data.totalFaltas} faltas <span class="text-red-200">(${percentage}%)</span></div>`;
               })
               .join("")
-          : '<li class="text-sm text-gray-400 text-center">Nenhuma falta.</li>';
+          : '<div class="text-sm text-gray-400 text-center">Nenhuma falta.</div>';
     } catch (error) {
       console.error("❌ Erro ao carregar resumo:", error);
       showMessage(`Erro ao carregar resumo: ${error.message}`, "error");
