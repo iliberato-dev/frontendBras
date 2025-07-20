@@ -550,6 +550,40 @@ if (typeof window.dashboardInitialized === "undefined") {
         absencesDetails: absencesDetails,
       });
 
+      // 🔍 DEBUG DETALHADO - Verificação matemática no frontend
+      console.log("🔢 Verificação matemática no frontend:");
+      console.log(
+        `📅 Total de reuniões encontradas no período: ${summaryData.totalMeetingDays}`
+      );
+      Object.keys(presencesDetails).forEach((nome) => {
+        const presencas = presencesDetails[nome]?.totalPresencas || 0;
+        const faltas = absencesDetails[nome]?.totalFaltas || 0;
+        const total = presencas + faltas;
+        console.log(
+          `${nome}: ${presencas} presenças + ${faltas} faltas = ${total} reuniões`
+        );
+
+        if (total !== summaryData.totalMeetingDays) {
+          console.warn(
+            `⚠️ INCONSISTÊNCIA: ${nome} tem total ${total} mas esperado ${summaryData.totalMeetingDays}`
+          );
+        }
+      });
+
+      // Explicação clara da matemática
+      console.log(
+        "💡 EXPLICAÇÃO: Se houve",
+        summaryData.totalMeetingDays,
+        "reuniões no período:"
+      );
+      console.log(
+        "   • Cada membro deveria ter: Presenças + Faltas =",
+        summaryData.totalMeetingDays
+      );
+      console.log(
+        "   • É normal que membros com poucas presenças tenham muitas faltas!"
+      );
+
       // Processa os dados recebidos para os cards principais
       const totalPresences = Object.values(presencesDetails).reduce(
         (sum, data) => sum + (data.totalPresencas || 0),
@@ -568,6 +602,13 @@ if (typeof window.dashboardInitialized === "undefined") {
 
       dashboardPresencasMes.textContent = totalPresences;
       dashboardFaltasMes.textContent = totalAbsences;
+
+      // Adiciona informação sobre total de reuniões para maior clareza
+      const dashboardInfo = document.getElementById("dashboardTotalReunions");
+      if (dashboardInfo) {
+        dashboardInfo.textContent = summaryData.totalMeetingDays || 0;
+      }
+
       dashboardPeriodo.textContent =
         filterPeriodoSelect.options[filterPeriodoSelect.selectedIndex].text;
       dashboardLider.textContent =
@@ -579,13 +620,27 @@ if (typeof window.dashboardInitialized === "undefined") {
       const sortedPresences = Object.entries(presencesDetails).sort(
         ([, a], [, b]) => b.totalPresencas - a.totalPresencas
       );
+
+      console.log(
+        "🟢 Lista de presenças ordenada:",
+        sortedPresences.map(
+          ([nome, data]) => `${nome}: ${data.totalPresencas} presenças`
+        )
+      );
+
       totalCountsList.innerHTML =
         sortedPresences.length > 0
           ? sortedPresences
-              .map(
-                ([name, data]) =>
-                  `<li class="text-sm text-green-300"><span class="font-semibold text-green-100">${name}:</span> ${data.totalPresencas} presenças</li>`
-              )
+              .map(([name, data]) => {
+                const percentage =
+                  summaryData.totalMeetingDays > 0
+                    ? Math.round(
+                        (data.totalPresencas / summaryData.totalMeetingDays) *
+                          100
+                      )
+                    : 0;
+                return `<li class="text-sm text-green-300"><span class="font-semibold text-green-100">${name}:</span> ${data.totalPresencas} presenças <span class="text-green-200">(${percentage}%)</span></li>`;
+              })
               .join("")
           : '<li class="text-sm text-gray-400 text-center">Nenhuma presença.</li>';
 
@@ -593,13 +648,26 @@ if (typeof window.dashboardInitialized === "undefined") {
       const sortedAbsences = Object.entries(absencesDetails).sort(
         ([, a], [, b]) => b.totalFaltas - a.totalFaltas
       );
+
+      console.log(
+        "🔴 Lista de faltas ordenada:",
+        sortedAbsences.map(
+          ([nome, data]) => `${nome}: ${data.totalFaltas} faltas`
+        )
+      );
+
       totalAbsencesList.innerHTML =
         sortedAbsences.length > 0
           ? sortedAbsences
-              .map(
-                ([name, data]) =>
-                  `<li class="text-sm text-red-300"><span class="font-semibold text-red-100">${name}:</span> ${data.totalFaltas} faltas</li>`
-              )
+              .map(([name, data]) => {
+                const percentage =
+                  summaryData.totalMeetingDays > 0
+                    ? Math.round(
+                        (data.totalFaltas / summaryData.totalMeetingDays) * 100
+                      )
+                    : 0;
+                return `<li class="text-sm text-red-300"><span class="font-semibold text-red-100">${name}:</span> ${data.totalFaltas} faltas <span class="text-red-200">(${percentage}%)</span></li>`;
+              })
               .join("")
           : '<li class="text-sm text-gray-400 text-center">Nenhuma falta.</li>';
     } catch (error) {
