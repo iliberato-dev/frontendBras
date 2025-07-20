@@ -80,6 +80,47 @@
           margin: 5mm;
         }
       }
+
+      /* Estilos para os menus de foto */
+      #photoOptionsMenu,
+      #photoContextMenu {
+        min-width: 200px;
+        max-width: 250px;
+        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+        border: 1px solid #e5e7eb;
+        backdrop-filter: blur(10px);
+      }
+
+      #photoOptionsMenu button,
+      #photoContextMenu button {
+        transition: all 0.2s ease;
+        font-size: 14px;
+        min-height: 40px;
+      }
+
+      #photoOptionsMenu button:hover,
+      #photoContextMenu button:hover {
+        transform: translateX(2px);
+      }
+
+      /* Estilos para o modal da câmera */
+      #cameraVideo {
+        max-height: 400px;
+        object-fit: cover;
+      }
+
+      /* Responsividade para dispositivos móveis */
+      @media (max-width: 768px) {
+        #photoOptionsMenu,
+        #photoContextMenu {
+          position: fixed !important;
+          bottom: 20px !important;
+          left: 50% !important;
+          transform: translateX(-50%) !important;
+          top: auto !important;
+          right: auto !important;
+        }
+      }
     </style>
   </head>
   <body class="bg-gray-100 flex flex-col min-h-screen">
