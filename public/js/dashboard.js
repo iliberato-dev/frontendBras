@@ -2,6 +2,14 @@
 // Frontend (js/dashboard.js) - VERSÃO COMPLETA E FINAL
 // ------------------------------------------------------
 
+// Configuração global do BACKEND_URL (fora do escopo de inicialização)
+const isLocalhost =
+  window.location.hostname === "localhost" ||
+  window.location.hostname === "127.0.0.1";
+const BACKEND_URL = isLocalhost
+  ? "http://localhost:3000"
+  : "https://backendbras.onrender.com";
+
 // Verificação para evitar redeclaração se o script for carregado múltiplas vezes
 if (typeof window.dashboardInitialized === "undefined") {
   window.dashboardInitialized = true;
@@ -42,6 +50,7 @@ if (typeof window.dashboardInitialized === "undefined") {
   // Elementos do Dashboard Principal
   const toggleDashboardBtn = document.getElementById("toggleDashboardBtn");
   const dashboardContainer = document.getElementById("dashboardContainer");
+  const dashboardTitle = document.getElementById("dashboardTitle");
   const dashboardOpenIcon = document.getElementById("dashboardOpenIcon");
   const dashboardCloseIcon = document.getElementById("dashboardCloseIcon");
   const dashboardOpenText = document.getElementById("dashboardOpenText");
@@ -58,6 +67,16 @@ if (typeof window.dashboardInitialized === "undefined") {
   // Elementos de Login e Usuário
   const loggedInLeaderNameElement =
     document.getElementById("loggedInLeaderName");
+
+  // Elementos do Dashboard Principal
+  const openDashboardBtn = document.getElementById("openDashboardBtn");
+  const mainDashboardOverlay = document.getElementById("mainDashboardOverlay");
+  const closeDashboard = document.getElementById("closeDashboard");
+  const dashboardMesFilter = document.getElementById("dashboardMesFilter");
+  const dashboardGrupoFilter = document.getElementById("dashboardGrupoFilter");
+  const limparFiltrosDashboard = document.getElementById(
+    "limparFiltrosDashboard"
+  );
 
   // Elementos do Modal de Resumo Detalhado
   const detailedSummaryModal = document.getElementById("detailedSummaryModal");
@@ -90,13 +109,6 @@ if (typeof window.dashboardInitialized === "undefined") {
   );
 
   // --- Configurações ---
-  // Detecta se está rodando localmente ou em produção
-  const isLocalhost =
-    window.location.hostname === "localhost" ||
-    window.location.hostname === "127.0.0.1";
-  const BACKEND_URL = isLocalhost
-    ? "http://localhost:3000"
-    : "https://backendbras.onrender.com";
   let isDashboardOpen = false;
 
   // --- Funções Utilitárias ---
@@ -1168,7 +1180,7 @@ if (typeof window.dashboardInitialized === "undefined") {
       updatePresenceStatus();
 
       historyBtn.addEventListener("click", () =>
-        showPresenceHistory(member.Nome)
+        showPresenceHistory(member.Nome, member)
       );
 
       checkbox.addEventListener("change", function () {
@@ -1215,6 +1227,7 @@ if (typeof window.dashboardInitialized === "undefined") {
               nome: member.Nome,
               data: presenceDate,
               hora: presenceTime,
+              grupo: member.GAPE, // Incluir grupo
             }),
           });
           const result = await response.json();
@@ -1240,8 +1253,11 @@ if (typeof window.dashboardInitialized === "undefined") {
 
   // --- Funções de Histórico de Presença ---
 
-  async function showPresenceHistory(memberName) {
+  async function showPresenceHistory(memberName, memberObj = null) {
     if (!historyModal || !historyModalTitle || !historyListContainer) return;
+
+    // Armazenar o objeto membro para uso posterior
+    window.currentMemberForHistory = memberObj;
 
     historyModalTitle.textContent = `Histórico de Presenças de ${memberName}`;
     historyListContainer.innerHTML = `<p class="text-center text-gray-500">Carregando...</p>`;
@@ -1288,10 +1304,20 @@ if (typeof window.dashboardInitialized === "undefined") {
   async function removePresence(nome, data) {
     showGlobalLoading(true, "Removendo presença...");
     try {
+      // Tentar obter o grupo do membro atual
+      const grupo = window.currentMemberForHistory
+        ? window.currentMemberForHistory.GAPE
+        : null;
+
       const response = await fetch(`${BACKEND_URL}/presenca`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "delete", nome, data }),
+        body: JSON.stringify({
+          action: "delete",
+          nome,
+          data,
+          grupo: grupo,
+        }),
       });
       const result = await response.json();
       if (!result.success) throw new Error(result.message);
@@ -1761,6 +1787,16 @@ if (typeof window.dashboardInitialized === "undefined") {
         },
         options: {
           responsive: true,
+          maintainAspectRatio: false,
+          aspectRatio: 2,
+          layout: {
+            padding: {
+              top: 10,
+              bottom: 10,
+              left: 10,
+              right: 10,
+            },
+          },
           animation: {
             duration: 400,
           },
@@ -2356,6 +2392,16 @@ if (typeof window.dashboardInitialized === "undefined") {
                 },
                 options: {
                   responsive: true,
+                  maintainAspectRatio: false,
+                  aspectRatio: 2,
+                  layout: {
+                    padding: {
+                      top: 10,
+                      bottom: 10,
+                      left: 10,
+                      right: 10,
+                    },
+                  },
                   animation: {
                     duration: 400,
                     easing: "easeOutQuart",
@@ -2960,9 +3006,32 @@ if (typeof window.dashboardInitialized === "undefined") {
   function displayLoggedInLeaderName() {
     const leaderName = localStorage.getItem("loggedInLeaderName");
     if (loggedInLeaderNameElement) {
-      loggedInLeaderNameElement.innerHTML = leaderName
-        ? `Logado como: <span class="text-blue-600 font-bold">${leaderName}</span>`
-        : `Logado como: Não identificado`;
+      if (leaderName === "admin") {
+        // Destaque especial para admin com fundo dourado e coroas
+        loggedInLeaderNameElement.innerHTML = `
+          <span class="text-gray-700">Logado como:</span> 
+          <span class="inline-flex items-center px-3 py-1 rounded-full bg-gradient-to-r from-yellow-400 to-yellow-600 text-yellow-900 font-bold text-sm shadow-lg border-2 border-yellow-300">
+            <i class="fas fa-crown mr-1 text-yellow-800"></i>
+            ADMINISTRADOR
+            <i class="fas fa-crown ml-1 text-yellow-800"></i>
+          </span>
+        `;
+
+        // Abrir automaticamente o dashboard principal para admin
+        setTimeout(() => {
+          if (
+            mainDashboardOverlay &&
+            mainDashboardOverlay.classList.contains("hidden")
+          ) {
+            abrirDashboard();
+          }
+        }, 1000); // Aguarda 1 segundo para garantir que todos os elementos estejam carregados
+      } else if (leaderName) {
+        // Destaque normal para outros usuários
+        loggedInLeaderNameElement.innerHTML = `Logado como: <span class="text-blue-600 font-bold">${leaderName}</span>`;
+      } else {
+        loggedInLeaderNameElement.innerHTML = `Logado como: Não identificado`;
+      }
     }
   }
 
@@ -3649,3 +3718,1125 @@ Arquitetura:
 - Backend: Armazena arquivos físicos e URLs
 - Sincronização: GET /get-membros retorna URLs atualizadas
 */
+
+// --- FUNÇÕES DO DASHBOARD PRINCIPAL ---
+
+// Definição da URL do backend para o dashboard
+const DASHBOARD_BACKEND_URL = (function () {
+  const isLocalhost =
+    window.location.hostname === "localhost" ||
+    window.location.hostname === "127.0.0.1";
+  return isLocalhost
+    ? "http://localhost:3000"
+    : "https://backendbras.onrender.com";
+})();
+
+let presencaPorGrupoChart = null;
+let evolucaoSemanalChart = null;
+
+// Função para carregar dados do dashboard
+async function carregarDadosDashboard(mes = "", grupo = "") {
+  try {
+    console.log("🎯 Carregando dados do dashboard...", { mes, grupo });
+
+    // Mostrar indicador de carregamento
+    mostrarCarregandoDashboard();
+
+    const params = new URLSearchParams();
+    if (mes) params.append("mes", mes);
+    if (grupo) params.append("grupo", grupo);
+
+    console.log(
+      "📡 Fazendo requisição para:",
+      `${DASHBOARD_BACKEND_URL}/dashboard-stats?${params}`
+    );
+
+    const response = await fetch(
+      `${DASHBOARD_BACKEND_URL}/dashboard-stats?${params}`
+    );
+
+    if (!response.ok) {
+      throw new Error(`Erro HTTP: ${response.status}`);
+    }
+
+    const result = await response.json();
+
+    if (result.success) {
+      console.log("✅ Dados do dashboard carregados:", result.data);
+
+      // Verificar se os dados são simulados e mostrar aviso
+      if (result.data.isSimulated) {
+        console.log("⚠️ Usando dados simulados como fallback");
+        mostrarAvisoSimulacao();
+      } else {
+        console.log("✅ Usando dados reais do Google Sheets");
+        esconderAvisoSimulacao();
+      }
+
+      // Esconder indicador de carregamento
+      esconderCarregandoDashboard();
+
+      atualizarInterfaceDashboard(result.data);
+      return result.data;
+    } else {
+      throw new Error(result.message || "Erro ao carregar dados");
+    }
+  } catch (error) {
+    console.error("❌ Erro ao carregar dados do dashboard:", error);
+
+    // Esconder indicador de carregamento em caso de erro
+    esconderCarregandoDashboard();
+
+    // Mostrar erro para o usuário
+    mostrarErroCarregamento(error.message);
+
+    // Dados simulados para fallback local
+    const dadosSimulados = {
+      totalPessoas: 235,
+      totalGrupos: 12,
+      presencaMedia: 87,
+      melhorGrupo: { nome: "Grupo A", percentual: 95 },
+      piorGrupo: { nome: "Grupo F", percentual: 65 },
+      grupos: [
+        { nome: "Grupo A", totalMembros: 25, presencaPercentual: 95 },
+        { nome: "Grupo B", totalMembros: 22, presencaPercentual: 88 },
+        { nome: "Grupo C", totalMembros: 20, presencaPercentual: 82 },
+        { nome: "Grupo D", totalMembros: 18, presencaPercentual: 76 },
+        { nome: "Grupo E", totalMembros: 15, presencaPercentual: 70 },
+        { nome: "Grupo F", totalMembros: 12, presencaPercentual: 65 },
+      ],
+      ultimosRegistros: [
+        {
+          dataHora: "22/07 08:10",
+          grupo: "Grupo B",
+          pessoa: "João Silva",
+          status: "Presente",
+        },
+        {
+          dataHora: "22/07 08:12",
+          grupo: "Grupo A",
+          pessoa: "Maria Costa",
+          status: "Presente",
+        },
+        {
+          dataHora: "22/07 08:15",
+          grupo: "Grupo C",
+          pessoa: "Pedro Santos",
+          status: "Presente",
+        },
+        {
+          dataHora: "22/07 08:18",
+          grupo: "Grupo D",
+          pessoa: "Ana Oliveira",
+          status: "Presente",
+        },
+        {
+          dataHora: "22/07 08:20",
+          grupo: "Grupo E",
+          pessoa: "Carlos Lima",
+          status: "Presente",
+        },
+      ],
+      isSimulated: true,
+    };
+
+    console.log("🔄 Usando dados simulados locais como fallback final");
+    mostrarAvisoSimulacao();
+    atualizarInterfaceDashboard(dadosSimulados);
+    return dadosSimulados;
+  }
+}
+
+// Função para mostrar aviso de simulação
+function mostrarAvisoSimulacao() {
+  const avisoId = "avisoSimulacao";
+  let aviso = document.getElementById(avisoId);
+
+  if (!aviso) {
+    aviso = document.createElement("div");
+    aviso.id = avisoId;
+    aviso.className =
+      "fixed top-4 right-4 z-50 bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 rounded-r-lg shadow-lg max-w-md";
+    aviso.innerHTML = `
+        <div class="flex items-center">
+          <div class="flex-shrink-0">
+            <i class="fas fa-exclamation-triangle text-yellow-500"></i>
+          </div>
+          <div class="ml-3">
+            <h4 class="text-sm font-bold">Dados Simulados</h4>
+            <p class="text-xs mt-1">Os dados reais não puderam ser carregados. Exibindo dados simulados para demonstração.</p>
+          </div>
+          <button onclick="document.getElementById('${avisoId}').remove()" class="ml-auto text-yellow-500 hover:text-yellow-700">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+      `;
+
+    document.body.appendChild(aviso);
+
+    // Auto remover após 8 segundos
+    setTimeout(() => {
+      if (document.getElementById(avisoId)) {
+        document.getElementById(avisoId).remove();
+      }
+    }, 8000);
+  }
+}
+
+// Função para esconder aviso de simulação
+function esconderAvisoSimulacao() {
+  const aviso = document.getElementById("avisoSimulacao");
+  if (aviso) {
+    aviso.remove();
+  }
+}
+
+// Função para mostrar erro de carregamento
+function mostrarErroCarregamento(mensagem) {
+  const erroId = "erroCarregamento";
+  let erro = document.getElementById(erroId);
+
+  if (!erro) {
+    erro = document.createElement("div");
+    erro.id = erroId;
+    erro.className =
+      "fixed top-4 right-4 z-50 bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded-r-lg shadow-lg max-w-md";
+    erro.innerHTML = `
+        <div class="flex items-center">
+          <div class="flex-shrink-0">
+            <i class="fas fa-exclamation-circle text-red-500"></i>
+          </div>
+          <div class="ml-3">
+            <h4 class="text-sm font-bold">Erro no Carregamento</h4>
+            <p class="text-xs mt-1">${mensagem}</p>
+            <p class="text-xs mt-1 font-semibold">Usando dados simulados temporariamente.</p>
+          </div>
+          <button onclick="document.getElementById('${erroId}').remove()" class="ml-auto text-red-500 hover:text-red-700">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+      `;
+
+    document.body.appendChild(erro);
+
+    // Auto remover após 10 segundos
+    setTimeout(() => {
+      if (document.getElementById(erroId)) {
+        document.getElementById(erroId).remove();
+      }
+    }, 10000);
+  }
+}
+
+// Função para mostrar indicador de carregamento no dashboard
+function mostrarCarregandoDashboard() {
+  // Adicionar overlay de loading sobre o dashboard
+  const dashboard = document.getElementById("mainDashboardOverlay");
+  if (!dashboard) return;
+
+  // Remove loading anterior se existir
+  const existingLoading = document.getElementById("dashboardLoading");
+  if (existingLoading) {
+    existingLoading.remove();
+  }
+
+  const loadingOverlay = document.createElement("div");
+  loadingOverlay.id = "dashboardLoading";
+  loadingOverlay.className =
+    "absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 rounded-lg";
+  loadingOverlay.innerHTML = `
+    <div class="bg-white p-6 rounded-lg shadow-lg flex items-center gap-3">
+      <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      <span class="text-gray-700 font-medium">Atualizando dados...</span>
+    </div>
+  `;
+
+  dashboard.appendChild(loadingOverlay);
+}
+
+// Função para esconder indicador de carregamento no dashboard
+function esconderCarregandoDashboard() {
+  const loadingOverlay = document.getElementById("dashboardLoading");
+  if (loadingOverlay) {
+    loadingOverlay.remove();
+  }
+}
+
+// Função para atualizar a interface do dashboard
+function atualizarInterfaceDashboard(dados) {
+  // Atualizar título do dashboard principal
+  if (dashboardTitle) {
+    if (
+      dados.filtros &&
+      dados.filtros.grupoNome &&
+      dados.filtros.grupoEspecifico
+    ) {
+      // Título com grupo selecionado destacado
+      dashboardTitle.innerHTML = `DASHBOARD DE PRESENÇA - <span class="text-yellow-300 font-bold">${dados.filtros.grupoNome}</span>`;
+    } else {
+      // Título normal
+      dashboardTitle.textContent = "DASHBOARD DE PRESENÇA";
+    }
+  }
+
+  // Atualizar cards de estatísticas
+  document.getElementById("totalPessoas").textContent = dados.totalPessoas || 0;
+  document.getElementById("totalGrupos").textContent = dados.totalGrupos || 0;
+  document.getElementById("presencaMediaGeral").textContent = `${
+    dados.presencaMedia || 0
+  }%`;
+
+  // Atualizar títulos e dados dos cards baseado no contexto
+  const melhorTitulo = document.getElementById("melhorGrupoTitulo");
+  const piorTitulo = document.getElementById("piorGrupoTitulo");
+
+  if (dados.filtros && dados.filtros.grupoEspecifico) {
+    // Contexto de grupo específico - mostrar estatísticas de membros
+    if (melhorTitulo) melhorTitulo.innerHTML = "MELHOR EM<br />PRESENÇAS";
+    if (piorTitulo) piorTitulo.innerHTML = "MEMBRO COM<br />MAIS FALTAS";
+  } else {
+    // Contexto geral - mostrar estatísticas de grupos
+    if (melhorTitulo) melhorTitulo.innerHTML = "MELHOR<br />GRUPO<br />(MÊS)";
+    if (piorTitulo) piorTitulo.innerHTML = "PIOR<br />GRUPO<br />(MÊS)";
+  }
+
+  document.getElementById("melhorGrupoNome").textContent =
+    dados.melhorGrupo?.nome || "N/A";
+  document.getElementById("melhorGrupoPercentual").textContent = `${
+    dados.melhorGrupo?.percentual || 0
+  }%`;
+
+  document.getElementById("piorGrupoNome").textContent =
+    dados.piorGrupo?.nome || "N/A";
+  document.getElementById("piorGrupoPercentual").textContent = `${
+    dados.piorGrupo?.percentual || 0
+  }%`;
+
+  // Adicionar indicador de tipo de dados e filtros no cabeçalho
+  const titulo = document.querySelector("#mainDashboardOverlay h2");
+  if (titulo) {
+    const indicador = dados.isSimulated
+      ? '<span class="text-xs bg-yellow-200 text-yellow-800 px-2 py-1 rounded-full ml-2">DADOS SIMULADOS</span>'
+      : '<span class="text-xs bg-green-200 text-green-800 px-2 py-1 rounded-full ml-2">DADOS REAIS</span>';
+
+    // Mostrar filtros aplicados
+    let filtrosTexto = "";
+    if (dados.filtros) {
+      const filtrosAtivos = [];
+      if (dados.filtros.mes && dados.filtros.mes !== "todos") {
+        const meses = [
+          "",
+          "Jan",
+          "Fev",
+          "Mar",
+          "Abr",
+          "Mai",
+          "Jun",
+          "Jul",
+          "Ago",
+          "Set",
+          "Out",
+          "Nov",
+          "Dez",
+        ];
+        filtrosAtivos.push(
+          `Mês: ${meses[parseInt(dados.filtros.mes)] || dados.filtros.mes}`
+        );
+      }
+      if (dados.filtros.grupo && dados.filtros.grupo !== "todos") {
+        filtrosAtivos.push(`Grupo: ${dados.filtros.grupo}`);
+      }
+
+      if (filtrosAtivos.length > 0) {
+        filtrosTexto = `<div class="text-xs text-blue-600 mt-1">📊 Filtros: ${filtrosAtivos.join(
+          " | "
+        )}</div>`;
+      }
+    }
+
+    titulo.innerHTML = `Dashboard Administrativo ${indicador}${filtrosTexto}`;
+  }
+
+  // Atualizar tabela de últimos registros
+  console.log("🔄 Carregando últimos registros com paginação...");
+  // Sempre usar a nova API de paginação
+  carregarUltimosRegistros(true);
+
+  // Atualizar gráficos
+  atualizarGraficoPresencaPorGrupo(dados.grupos || []);
+  atualizarGraficoEvolucaoSemanal(dados.grupos || []);
+
+  // Atualizar filtro de grupos
+  atualizarFiltroGrupos(dados.grupos || []);
+
+  // Log para debug
+  console.log("📊 Interface do dashboard atualizada:", {
+    totalPessoas: dados.totalPessoas,
+    totalGrupos: dados.totalGrupos,
+    presencaMedia: dados.presencaMedia,
+    isSimulated: dados.isSimulated || false,
+  });
+}
+
+// Variáveis para controle de paginação dos registros
+let registrosPaginacao = {
+  offset: 0,
+  limit: 5,
+  total: 0,
+  carregando: false,
+  grupoAtual: null,
+};
+
+// Função para atualizar tabela de últimos registros (versão básica para compatibilidade)
+function atualizarTabelaUltimosRegistros(registros) {
+  const tabela = document.getElementById("ultimosRegistrosTable");
+  if (!tabela) {
+    console.log("❌ Tabela ultimosRegistrosTable não encontrada");
+    return;
+  }
+
+  console.log(
+    "📊 atualizarTabelaUltimosRegistros chamada - sempre usando paginação"
+  );
+
+  // Sempre buscar registros via API com paginação
+  carregarUltimosRegistros(true);
+}
+
+// Função principal para carregar registros via API
+async function carregarUltimosRegistros(resetar = false) {
+  if (registrosPaginacao.carregando) {
+    console.log("⏳ Já está carregando registros, ignorando");
+    return;
+  }
+
+  const tabela = document.getElementById("ultimosRegistrosTable");
+  if (!tabela) {
+    console.log(
+      "❌ Tabela ultimosRegistrosTable não encontrada em carregarUltimosRegistros"
+    );
+    return;
+  }
+
+  console.log("🔄 carregarUltimosRegistros chamada, resetar:", resetar);
+
+  if (resetar) {
+    registrosPaginacao.offset = 0;
+    tabela.innerHTML = "";
+    console.log("🔄 Resetando paginação e limpando tabela");
+  }
+
+  registrosPaginacao.carregando = true;
+
+  try {
+    const grupoFiltro = document.getElementById("groupFilter")?.value || "";
+    registrosPaginacao.grupoAtual = grupoFiltro;
+
+    const params = new URLSearchParams({
+      offset: registrosPaginacao.offset,
+      limit: registrosPaginacao.limit,
+    });
+
+    if (grupoFiltro && grupoFiltro !== "todos") {
+      params.append("grupo", grupoFiltro);
+    }
+
+    const response = await fetch(`${BACKEND_URL}/ultimos-registros?${params}`);
+    const data = await response.json();
+
+    if (data.success) {
+      registrosPaginacao.total = data.total;
+
+      console.log("📊 Dados recebidos:", {
+        registros: data.registros.length,
+        total: data.total,
+        offset: data.offset,
+        hasMore: data.hasMore,
+        offsetAtual: registrosPaginacao.offset,
+      });
+
+      if (resetar) {
+        exibirRegistrosNaTabela(data.registros, data.hasMore);
+      } else {
+        adicionarRegistrosNaTabela(data.registros, data.hasMore);
+      }
+
+      registrosPaginacao.offset += data.registros.length;
+    } else {
+      console.error("Erro ao carregar registros:", data.message);
+    }
+  } catch (error) {
+    console.error("Erro ao buscar registros:", error);
+    if (resetar) {
+      tabela.innerHTML = `
+        <tr>
+          <td colspan="4" class="px-6 py-4 text-center text-red-500">
+            Erro ao carregar registros
+          </td>
+        </tr>
+      `;
+    }
+  } finally {
+    registrosPaginacao.carregando = false;
+  }
+}
+
+// Função para exibir registros na tabela (primeira carga)
+function exibirRegistrosNaTabela(registros, hasMore) {
+  const tabela = document.getElementById("ultimosRegistrosTable");
+  if (!tabela) {
+    console.log(
+      "❌ Tabela ultimosRegistrosTable não encontrada em exibirRegistrosNaTabela"
+    );
+    return;
+  }
+
+  console.log(
+    "📋 exibirRegistrosNaTabela chamada com:",
+    registros.length,
+    "registros, hasMore:",
+    hasMore
+  );
+
+  if (registros.length === 0) {
+    tabela.innerHTML = `
+      <tr>
+        <td colspan="4" class="px-6 py-4 text-center text-gray-500">
+          Nenhum registro encontrado
+        </td>
+      </tr>
+    `;
+    return;
+  }
+
+  // Limpar tabela
+  tabela.innerHTML = "";
+
+  // Adicionar registros
+  registros.forEach((registro, index) => {
+    console.log(`📝 Adicionando registro ${index + 1}:`, registro);
+    adicionarLinhaRegistro(tabela, registro);
+  });
+
+  // Sempre verificar se deve mostrar o botão "Ver Mais"
+  // Mostrar se hasMore for true OU se há mais registros no total
+  const totalCarregado = registrosPaginacao.offset + registros.length;
+  const temMaisRegistros = hasMore || registrosPaginacao.total > totalCarregado;
+
+  if (temMaisRegistros) {
+    console.log(
+      "➕ Adicionando botão Ver Mais (hasMore:",
+      hasMore,
+      "total:",
+      registrosPaginacao.total,
+      "carregado:",
+      totalCarregado,
+      ")"
+    );
+    adicionarBotaoVerMais(tabela);
+  } else {
+    console.log("✅ Não há mais registros para carregar");
+  }
+}
+
+// Função para adicionar mais registros na tabela (carregamento adicional)
+function adicionarRegistrosNaTabela(registros, hasMore) {
+  const tabela = document.getElementById("ultimosRegistrosTable");
+  if (!tabela) return;
+
+  // Remover botão "Ver Mais" anterior se existir
+  const botaoAnterior = tabela.querySelector(".btn-ver-mais-row");
+  if (botaoAnterior) {
+    botaoAnterior.remove();
+  }
+
+  // Adicionar novos registros
+  registros.forEach((registro) => {
+    adicionarLinhaRegistro(tabela, registro);
+  });
+
+  // Sempre verificar se deve mostrar o botão "Ver Mais"
+  // Mostrar se hasMore for true OU se há mais registros no total
+  const totalCarregado = registrosPaginacao.offset + registros.length;
+  const temMaisRegistros = hasMore || registrosPaginacao.total > totalCarregado;
+
+  if (temMaisRegistros) {
+    console.log(
+      "➕ Adicionando novo botão Ver Mais após carregar mais registros"
+    );
+    adicionarBotaoVerMais(tabela);
+  } else {
+    console.log("✅ Todos os registros foram carregados");
+  }
+}
+
+// Função para adicionar uma linha de registro
+function adicionarLinhaRegistro(tabela, registro) {
+  let statusClass, statusIcon;
+
+  switch (registro.status) {
+    case "Presente":
+      statusClass = "text-green-600";
+      statusIcon = "fa-check-circle";
+      break;
+    case "Presença Removida":
+      statusClass = "text-orange-600";
+      statusIcon = "fa-minus-circle";
+      break;
+    case "Ausente":
+      statusClass = "text-red-600";
+      statusIcon = "fa-times-circle";
+      break;
+    default:
+      statusClass = "text-gray-600";
+      statusIcon = "fa-question-circle";
+  }
+
+  const linha = document.createElement("tr");
+  linha.className =
+    "border-b border-gray-200 hover:bg-gray-50 transition-colors";
+  linha.innerHTML = `
+    <td class="px-6 py-3 whitespace-nowrap text-sm text-gray-900">${
+      registro.dataHora
+    }</td>
+    <td class="px-6 py-3 whitespace-nowrap text-sm text-gray-900">${
+      registro.grupo || "N/A"
+    }</td>
+    <td class="px-6 py-3 whitespace-nowrap text-sm text-gray-900">${
+      registro.pessoa
+    }</td>
+    <td class="px-6 py-3 whitespace-nowrap text-sm ${statusClass}">
+      <i class="fas ${statusIcon} mr-2"></i>${registro.status}
+    </td>
+  `;
+  tabela.appendChild(linha);
+}
+
+// Função para adicionar botão "Ver Mais"
+function adicionarBotaoVerMais(tabela) {
+  const linhaBotao = document.createElement("tr");
+  linhaBotao.className = "btn-ver-mais-row";
+  linhaBotao.innerHTML = `
+    <td colspan="4" class="px-6 py-4 text-center">
+      <button 
+        class="btn-ver-mais inline-flex items-center px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium rounded-md transition-colors duration-200"
+        onclick="carregarMaisRegistros()"
+      >
+        <i class="fas fa-chevron-down mr-2"></i>
+        Ver mais 10 registros
+      </button>
+    </td>
+  `;
+  tabela.appendChild(linhaBotao);
+}
+
+// Função para carregar mais registros (chamada pelo botão)
+async function carregarMaisRegistros() {
+  const botao = document.querySelector(".btn-ver-mais");
+  if (!botao || registrosPaginacao.carregando) return;
+
+  // Mostrar loading no botão
+  const textoOriginal = botao.innerHTML;
+  botao.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Carregando...';
+  botao.disabled = true;
+
+  // Aumentar limite para carregar mais registros
+  registrosPaginacao.limit = 10;
+
+  try {
+    await carregarUltimosRegistros(false);
+  } finally {
+    // Restaurar botão
+    botao.innerHTML = textoOriginal;
+    botao.disabled = false;
+  }
+}
+
+// Função simplificada para limpar registros (usa apenas GET)
+async function limparRegistrosSimples() {
+  if (
+    !confirm(
+      "Tem certeza que deseja limpar todos os registros? Esta ação não pode ser desfeita."
+    )
+  ) {
+    return;
+  }
+
+  try {
+    console.log("🧹 Limpando registros via GET...");
+
+    const response = await fetch(`${BACKEND_URL}/limpar-registros-agora`);
+
+    if (!response.ok) {
+      throw new Error(`Erro HTTP: ${response.status}`);
+    }
+
+    const data = await response.json();
+
+    if (data.success) {
+      console.log("✅ Registros limpos:", data.message);
+
+      // Limpar tabela visualmente
+      const tabela = document.getElementById("ultimosRegistrosTable");
+      if (tabela) {
+        tabela.innerHTML = `
+          <tr>
+            <td colspan="4" class="px-6 py-4 text-center text-gray-500">
+              Nenhum registro encontrado
+            </td>
+          </tr>
+        `;
+      }
+
+      // Resetar controle de paginação
+      registrosPaginacao.offset = 0;
+      registrosPaginacao.total = 0;
+
+      alert(`✅ ${data.totalRemovidos} registros foram limpos com sucesso!`);
+    } else {
+      alert("Erro: " + (data.message || "Erro desconhecido"));
+    }
+  } catch (error) {
+    console.error("❌ Erro:", error);
+    alert(`Erro ao limpar registros: ${error.message}`);
+  }
+}
+
+// Função para limpar todos os registros
+async function limparRegistros() {
+  if (
+    !confirm(
+      "Tem certeza que deseja limpar todos os registros? Esta ação não pode ser desfeita."
+    )
+  ) {
+    return;
+  }
+
+  try {
+    console.log("🧹 Limpando registros...");
+
+    // Tentar DELETE, depois POST, depois GET como fallback
+    let response;
+    let metodoUsado = "";
+
+    try {
+      response = await fetch(`${BACKEND_URL}/ultimos-registros`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+      });
+      metodoUsado = "DELETE";
+
+      // Verificar se a resposta é válida
+      if (!response.ok) {
+        throw new Error(`DELETE falhou com status ${response.status}`);
+      }
+    } catch (deleteError) {
+      console.log("⚠️ DELETE falhou, tentando POST:", deleteError.message);
+      try {
+        response = await fetch(`${BACKEND_URL}/limpar-registros`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+        });
+        metodoUsado = "POST";
+
+        // Verificar se a resposta é válida
+        if (!response.ok) {
+          throw new Error(`POST falhou com status ${response.status}`);
+        }
+      } catch (postError) {
+        console.log("⚠️ POST falhou, tentando GET:", postError.message);
+        response = await fetch(`${BACKEND_URL}/limpar-registros-agora`);
+        metodoUsado = "GET";
+      }
+    }
+
+    // Verificar se temos uma resposta válida
+    if (!response.ok) {
+      throw new Error(
+        `Todas as tentativas falharam. Último status: ${response.status}`
+      );
+    }
+
+    // Verificar se é JSON válido
+    const contentType = response.headers.get("content-type");
+    if (!contentType || !contentType.includes("application/json")) {
+      console.log("⚠️ Resposta não é JSON, tentando como texto");
+      const text = await response.text();
+      console.log("📄 Resposta recebida:", text);
+      throw new Error("Servidor retornou resposta inválida (não JSON)");
+    }
+
+    const data = await response.json();
+
+    if (data.success) {
+      console.log(`✅ Registros limpos via ${metodoUsado}:`, data.message);
+
+      // Limpar tabela visualmente
+      const tabela = document.getElementById("ultimosRegistrosTable");
+      if (tabela) {
+        tabela.innerHTML = `
+          <tr>
+            <td colspan="4" class="px-6 py-4 text-center text-gray-500">
+              Nenhum registro encontrado
+            </td>
+          </tr>
+        `;
+      }
+
+      // Resetar controle de paginação
+      registrosPaginacao.offset = 0;
+      registrosPaginacao.total = 0;
+
+      // Mostrar mensagem de sucesso
+      alert(`✅ ${data.totalRemovidos} registros foram limpos com sucesso!`);
+    } else {
+      console.error("❌ Erro ao limpar registros:", data.message);
+      alert("Erro ao limpar registros: " + data.message);
+    }
+  } catch (error) {
+    console.error("❌ Erro ao limpar registros:", error);
+    alert(
+      `Erro ao limpar registros: ${error.message}\n\nVerifique se o servidor está rodando.`
+    );
+  }
+}
+
+// Função para atualizar gráfico de presença por grupo
+function atualizarGraficoPresencaPorGrupo(grupos) {
+  const canvas = document.getElementById("presencaPorGrupoChart");
+  if (!canvas) return;
+
+  const ctx = canvas.getContext("2d");
+
+  // Destruir gráfico anterior se existir
+  if (presencaPorGrupoChart) {
+    presencaPorGrupoChart.destroy();
+  }
+
+  const labels = grupos.map((g) => g.nome);
+  const data = grupos.map((g) => g.presencaPercentual);
+
+  presencaPorGrupoChart = new Chart(ctx, {
+    type: "bar",
+    data: {
+      labels: labels,
+      datasets: [
+        {
+          label: "Presença (%)",
+          data: data,
+          backgroundColor: [
+            "#10B981",
+            "#3B82F6",
+            "#8B5CF6",
+            "#F59E0B",
+            "#EF4444",
+            "#6B7280",
+          ],
+          borderWidth: 1,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      aspectRatio: 2,
+      layout: {
+        padding: 10,
+      },
+      plugins: {
+        legend: {
+          display: false,
+        },
+      },
+      scales: {
+        y: {
+          beginAtZero: true,
+          max: 100,
+          ticks: {
+            callback: function (value) {
+              return value + "%";
+            },
+          },
+        },
+      },
+    },
+  });
+}
+
+// Função para atualizar gráfico de evolução semanal
+function atualizarGraficoEvolucaoSemanal(grupos = []) {
+  const canvas = document.getElementById("evolucaoSemanalChart");
+  if (!canvas) return;
+
+  const ctx = canvas.getContext("2d");
+
+  // Destruir gráfico anterior se existir
+  if (evolucaoSemanalChart) {
+    evolucaoSemanalChart.destroy();
+  }
+
+  // Calcular dados de evolução baseados nos grupos
+  const labels = ["Semana 1", "Semana 2", "Semana 3", "Semana 4"];
+  let data = [];
+
+  if (grupos.length > 0) {
+    // Usar dados dos grupos para calcular evolução
+    const presencaMedia =
+      grupos.reduce((acc, g) => acc + g.presencaPercentual, 0) / grupos.length;
+
+    // Simular uma evolução baseada na presença média atual
+    data = [
+      Math.max(presencaMedia - 5, 50), // Semana 1
+      Math.max(presencaMedia - 2, 55), // Semana 2
+      Math.max(presencaMedia + 1, 60), // Semana 3
+      presencaMedia, // Semana 4 (atual)
+    ];
+  } else {
+    // Dados de fallback
+    data = [82, 85, 88, 87];
+  }
+
+  evolucaoSemanalChart = new Chart(ctx, {
+    type: "line",
+    data: {
+      labels: labels,
+      datasets: [
+        {
+          label: "Presença Média (%)",
+          data: data,
+          borderColor: "#3B82F6",
+          backgroundColor: "rgba(59, 130, 246, 0.1)",
+          tension: 0.4,
+          fill: true,
+          pointBackgroundColor: "#3B82F6",
+          pointBorderColor: "#ffffff",
+          pointBorderWidth: 2,
+          pointRadius: 5,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      aspectRatio: 2,
+      layout: {
+        padding: 10,
+      },
+      plugins: {
+        legend: {
+          display: false,
+        },
+        tooltip: {
+          callbacks: {
+            label: function (context) {
+              return `Presença: ${Math.round(context.parsed.y)}%`;
+            },
+          },
+        },
+      },
+      scales: {
+        y: {
+          beginAtZero: true,
+          max: 100,
+          ticks: {
+            callback: function (value) {
+              return value + "%";
+            },
+          },
+          grid: {
+            color: "rgba(0, 0, 0, 0.05)",
+          },
+        },
+        x: {
+          grid: {
+            color: "rgba(0, 0, 0, 0.05)",
+          },
+        },
+      },
+      elements: {
+        line: {
+          borderWidth: 3,
+        },
+      },
+    },
+  });
+}
+
+// Função para atualizar filtro de grupos
+function atualizarFiltroGrupos(grupos) {
+  const select = document.getElementById("dashboardGrupoFilter");
+  if (!select) return;
+
+  // Armazenar valor selecionado atual
+  const valorAtual = select.value;
+
+  // Limpar opções existentes (exceto a primeira - "Todos os grupos")
+  while (select.children.length > 1) {
+    select.removeChild(select.lastChild);
+  }
+
+  // Adicionar opções dos grupos
+  grupos.forEach((grupo) => {
+    const option = document.createElement("option");
+    option.value = grupo.nome;
+    option.textContent = grupo.nome;
+    select.appendChild(option);
+  });
+
+  // Restaurar seleção anterior se ainda existir
+  if (valorAtual) {
+    const opcaoExiste = Array.from(select.options).some(
+      (option) => option.value === valorAtual
+    );
+    if (opcaoExiste) {
+      select.value = valorAtual;
+    } else {
+      select.value = ""; // Reset para "Todos os grupos" se a opção não existir mais
+    }
+  }
+}
+
+// Função para resetar filtros do dashboard
+function resetarFiltrosDashboard() {
+  if (dashboardMesFilter) {
+    dashboardMesFilter.value = "";
+  }
+  if (dashboardGrupoFilter) {
+    dashboardGrupoFilter.value = "";
+    // Remover destaque visual
+    dashboardGrupoFilter.classList.remove(
+      "ring-2",
+      "ring-yellow-400",
+      "border-yellow-400"
+    );
+  }
+}
+
+// Função para abrir o dashboard
+function abrirDashboard() {
+  if (mainDashboardOverlay) {
+    mainDashboardOverlay.classList.remove("hidden");
+    // Carregar dashboard com filtros atuais (mantém seleção se houver)
+    const mes = dashboardMesFilter ? dashboardMesFilter.value : "";
+    const grupo = dashboardGrupoFilter ? dashboardGrupoFilter.value : "";
+    carregarDadosDashboard(mes, grupo);
+  }
+}
+
+// Função para fechar o dashboard
+function fecharDashboard() {
+  if (mainDashboardOverlay) {
+    mainDashboardOverlay.classList.add("hidden");
+  }
+}
+
+// Event listeners para o dashboard
+if (openDashboardBtn) {
+  openDashboardBtn.addEventListener("click", abrirDashboard);
+}
+
+if (closeDashboard) {
+  closeDashboard.addEventListener("click", fecharDashboard);
+}
+
+// Event listeners para filtros do dashboard
+if (dashboardMesFilter) {
+  dashboardMesFilter.addEventListener("change", () => {
+    const mes = dashboardMesFilter.value;
+    const grupo = dashboardGrupoFilter ? dashboardGrupoFilter.value : "";
+
+    console.log("📅 Filtro de mês alterado:", mes);
+
+    // Mostrar feedback visual imediato
+    if (mes) {
+      const mesNome =
+        dashboardMesFilter.options[dashboardMesFilter.selectedIndex].text;
+      console.log(`🎯 Aplicando filtro: ${mesNome}`);
+    } else {
+      console.log("🎯 Removendo filtro de mês - mostrando todos os meses");
+    }
+
+    carregarDadosDashboard(mes, grupo);
+  });
+}
+
+if (dashboardGrupoFilter) {
+  dashboardGrupoFilter.addEventListener("change", () => {
+    const mes = dashboardMesFilter ? dashboardMesFilter.value : "";
+    const grupo = dashboardGrupoFilter.value;
+
+    console.log("👥 Filtro de grupo alterado:", grupo || "TODOS");
+
+    // Mostrar feedback visual imediato
+    if (grupo && grupo.trim() !== "") {
+      console.log(`🎯 Aplicando filtro: ${grupo}`);
+      // Destacar visualmente o select quando um grupo específico está selecionado
+      dashboardGrupoFilter.classList.add(
+        "ring-2",
+        "ring-yellow-400",
+        "border-yellow-400"
+      );
+    } else {
+      console.log("🎯 Removendo filtro de grupo - mostrando todos os grupos");
+      // Remover destaque visual quando voltamos para "Todos os grupos"
+      dashboardGrupoFilter.classList.remove(
+        "ring-2",
+        "ring-yellow-400",
+        "border-yellow-400"
+      );
+    }
+
+    carregarDadosDashboard(mes, grupo);
+
+    // Recarregar registros com o novo filtro de grupo
+    carregarUltimosRegistros(true);
+  });
+}
+
+// Event listener para o botão de limpar filtros
+if (limparFiltrosDashboard) {
+  limparFiltrosDashboard.addEventListener("click", () => {
+    console.log("🧹 Limpando todos os filtros do dashboard");
+
+    // Resetar filtros
+    resetarFiltrosDashboard();
+
+    // Recarregar dashboard sem filtros
+    carregarDadosDashboard("", "");
+
+    console.log("✅ Filtros limpos - mostrando dados gerais");
+  });
+}
+
+// Função para verificar se o usuário é admin e mostrar botão do dashboard
+function verificarPermissoesDashboard() {
+  const loggedUser = sessionStorage.getItem("loggedInUser");
+  const loggedRI = sessionStorage.getItem("loggedInRI");
+
+  if (loggedUser === "admin" || loggedRI === "admin") {
+    if (openDashboardBtn) {
+      openDashboardBtn.classList.remove("hidden");
+    }
+  } else {
+    if (openDashboardBtn) {
+      openDashboardBtn.classList.add("hidden");
+    }
+  }
+}
+
+// Chamar verificação de permissões quando a página carregar
+document.addEventListener("DOMContentLoaded", verificarPermissoesDashboard);
+
+// Event listeners para botões de ação do dashboard
+document.addEventListener("click", (e) => {
+  if (e.target.id === "baixarRelatorio") {
+    alert("Funcionalidade de relatório em desenvolvimento");
+  } else if (e.target.id === "configurarGrupos") {
+    alert("Funcionalidade de configuração de grupos em desenvolvimento");
+  } else if (e.target.id === "gerenciarPessoas") {
+    fecharDashboard();
+    // O painel principal já está aberto
+  }
+});
+
+// Fim da verificação dashboardInitialized
