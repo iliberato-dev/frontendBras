@@ -119,7 +119,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 `;
         showMessage("✅ Login bem-sucedido! Redirecionando...", "success");
 
-        // NOVO: Armazena o nome do líder no localStorage
+        // Armazena o nome do líder no localStorage e verifica permissões de admin
         if (data.leaderName) {
           localStorage.setItem("loggedInLeaderName", data.leaderName);
           console.log(`Nome do líder armazenado: ${data.leaderName}`);
@@ -127,6 +127,16 @@ document.addEventListener("DOMContentLoaded", () => {
           localStorage.removeItem("loggedInLeaderName"); // Limpa se não houver nome
           console.log("Nome do líder não recebido no login.");
         }
+
+        // Armazena informações de sessão para verificações de permissão
+        sessionStorage.setItem("loggedInUser", username);
+        sessionStorage.setItem("loggedInRI", password);
+
+        console.log("Usuário logado:", username);
+        console.log(
+          "Admin status:",
+          username === "admin" || password === "admin"
+        );
 
         setTimeout(() => {
           // Redireciona para a página principal do frontend
