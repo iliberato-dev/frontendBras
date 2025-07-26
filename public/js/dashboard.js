@@ -31,10 +31,6 @@ if (typeof window.dashboardInitialized === "undefined") {
       .trim();
 
     // Log de debug para verificar normalização (remover em produção)
-    if (str !== normalized && str.length < 50) {
-      // Só loga strings curtas para evitar spam
-      console.log(`🔤 Normalização: "${str}" → "${normalized}"`);
-    }
 
     return normalized;
   }
@@ -45,6 +41,9 @@ if (typeof window.dashboardInitialized === "undefined") {
   let allAbsencesData = {};
   let myChart = null;
   let myBarChart = null;
+
+  // Variável global para armazenar dados reais do último resumo gerado
+  let lastRealSummaryData = null;
 
   // Cache para otimização de performance
   let summaryCache = new Map();
@@ -2395,6 +2394,24 @@ if (typeof window.dashboardInitialized === "undefined") {
             0
           );
 
+          // Armazenar dados reais para uso no PDF
+          lastRealSummaryData = {
+            presencesDetails,
+            absencesDetails,
+            totalPresences,
+            totalAbsences,
+            totalMeetingDays: summaryData.totalMeetingDays,
+            selectedMemberName,
+            membersToAnalyze,
+            filters: {
+              startDate: document.getElementById("summaryStartDate")?.value,
+              endDate: document.getElementById("summaryEndDate")?.value,
+              period: filterPeriodoSelect?.value,
+              leader: filterLiderInput?.value,
+              gape: filterGapeInput?.value,
+            },
+          };
+
           let summaryHtml, chartData, chartLabels, chartTitle;
 
           if (selectedMemberName) {
@@ -2516,7 +2533,7 @@ if (typeof window.dashboardInitialized === "undefined") {
               membersToAnalyze.length - membersWithPresence;
 
             // CORREÇÃO: Cálculo correto da média de presença baseada em membros
-            // Fórmula: (Membros com Presença / Total de Membros) × 100
+            // Fórmula: (Membros com Presença / Total de Membros) x 100
             const avgPresenceRate =
               membersToAnalyze.length > 0
                 ? (
@@ -2873,249 +2890,10 @@ if (typeof window.dashboardInitialized === "undefined") {
 
   async function handleDownloadPdf() {
     try {
-      console.log("📄 Iniciando geração de PDF...");
+      console.log("📄 Iniciando geração de PDF com dados reais...");
 
       // Mostra loading
       showGlobalLoading(true, "Gerando PDF...");
-
-      const container = document.getElementById("detailedSummaryContent");
-      if (!container) {
-        throw new Error("Container do resumo detalhado não encontrado");
-      }
-
-      // Captura as estatísticas atuais do resumo detalhado
-      const getStatisticsFromSummary = () => {
-        console.log("🔍 Iniciando captura de estatísticas do resumo...");
-        console.log(
-          "📄 HTML do container:",
-          container.innerHTML.substring(0, 500) + "..."
-        );
-
-        let totalReunions = 0;
-        let totalPresences = 0;
-        let totalAbsences = 0;
-        let presenceRate = 0;
-        let membersCount = 0;
-
-        // Abordagem mais direta: procurar pelo texto específico no HTML
-        const htmlContent = container.innerHTML;
-        const textContent = container.textContent;
-
-        console.log(
-          "📝 Texto do container:",
-          textContent.substring(0, 300) + "..."
-        );
-
-        // Busca por padrões específicos no texto
-        // Para presenças: "1 presenças", "5 presenças", etc.
-        const presencePatterns = [
-          /(\d+)\s+presenças?/gi,
-          /presenças?[:\s]+(\d+)/gi,
-          /Total[:\s]+(\d+)[:\s]+presenças?/gi,
-          /<span[^>]*text-green-600[^>]*>(\d+)<\/span>/gi,
-        ];
-
-        for (const pattern of presencePatterns) {
-          const matches = [...textContent.matchAll(pattern)];
-          if (matches.length > 0) {
-            // Pega o menor valor (mais provável de ser o correto)
-            const values = matches
-              .map((m) => parseInt(m[1]))
-              .filter((v) => v >= 0);
-            if (values.length > 0) {
-              totalPresences = Math.min(...values);
-              console.log(
-                `✅ Presenças encontradas (padrão ${pattern}):`,
-                values,
-                "→ Selecionado:",
-                totalPresences
-              );
-              break;
-            }
-          }
-        }
-
-        // Para faltas
-        const absencePatterns = [
-          /(\d+)\s+faltas?/gi,
-          /faltas?[:\s]+(\d+)/gi,
-          /Total[:\s]+(\d+)[:\s]+faltas?/gi,
-          /<span[^>]*text-red-600[^>]*>(\d+)<\/span>/gi,
-        ];
-
-        for (const pattern of absencePatterns) {
-          const matches = [...textContent.matchAll(pattern)];
-          if (matches.length > 0) {
-            const values = matches
-              .map((m) => parseInt(m[1]))
-              .filter((v) => v >= 0);
-            if (values.length > 0) {
-              totalAbsences = Math.min(...values);
-              console.log(
-                `✅ Faltas encontradas (padrão ${pattern}):`,
-                values,
-                "→ Selecionado:",
-                totalAbsences
-              );
-              break;
-            }
-          }
-        }
-
-        // Para reuniões
-        const meetingPatterns = [
-          /(\d+)\s+reuniões?/gi,
-          /Total\s+Reuniões[:\s]+(\d+)/gi,
-          /reuniões?[:\s]+(\d+)/gi,
-        ];
-
-        for (const pattern of meetingPatterns) {
-          const matches = [...textContent.matchAll(pattern)];
-          if (matches.length > 0) {
-            const values = matches
-              .map((m) => parseInt(m[1]))
-              .filter((v) => v > 0);
-            if (values.length > 0) {
-              totalReunions = Math.max(...values);
-              console.log(
-                `✅ Reuniões encontradas (padrão ${pattern}):`,
-                values,
-                "→ Selecionado:",
-                totalReunions
-              );
-              break;
-            }
-          }
-        }
-
-        // Para membros
-        const memberPatterns = [
-          /(\d+)\s+membros?/gi,
-          /Total\s+Membros[:\s]+(\d+)/gi,
-          /membros?[:\s]+(\d+)/gi,
-        ];
-
-        for (const pattern of memberPatterns) {
-          const matches = [...textContent.matchAll(pattern)];
-          if (matches.length > 0) {
-            const values = matches
-              .map((m) => parseInt(m[1]))
-              .filter((v) => v > 0);
-            if (values.length > 0) {
-              membersCount = Math.max(...values);
-              console.log(
-                `✅ Membros encontrados (padrão ${pattern}):`,
-                values,
-                "→ Selecionado:",
-                membersCount
-              );
-              break;
-            }
-          }
-        }
-
-        // Para taxa de presença
-        const ratePatterns = [
-          /(\d+(?:\.\d+)?)%/g,
-          /taxa[^:]*:\s*(\d+(?:\.\d+)?)%/gi,
-        ];
-
-        for (const pattern of ratePatterns) {
-          const matches = [...textContent.matchAll(pattern)];
-          if (matches.length > 0) {
-            const values = matches
-              .map((m) => parseFloat(m[1]))
-              .filter((v) => v >= 0 && v <= 100);
-            if (values.length > 0) {
-              presenceRate = values[0]; // Pega o primeiro percentual encontrado
-              console.log(
-                `✅ Taxa encontrada (padrão ${pattern}):`,
-                values,
-                "→ Selecionado:",
-                presenceRate
-              );
-              break;
-            }
-          }
-        }
-
-        // Se ainda não encontrou dados, tenta buscar nas métricas visuais
-        if (totalPresences === 0 && totalAbsences === 0) {
-          console.log("🔍 Buscando nas métricas visuais...");
-
-          const metricCards = container.querySelectorAll(
-            ".text-2xl, .font-bold"
-          );
-          metricCards.forEach((card, index) => {
-            const value = parseInt(card.textContent) || 0;
-            const parentText =
-              card.parentElement?.textContent?.toLowerCase() || "";
-
-            console.log(
-              `� Card ${index}: valor=${value}, contexto="${parentText}"`
-            );
-
-            if (value > 0 && value < 1000) {
-              // Filtro para valores razoáveis
-              if (parentText.includes("presença") && totalPresences === 0) {
-                totalPresences = value;
-                console.log(`✅ Presenças da métrica visual: ${value}`);
-              } else if (parentText.includes("falta") && totalAbsences === 0) {
-                totalAbsences = value;
-                console.log(`✅ Faltas da métrica visual: ${value}`);
-              } else if (
-                parentText.includes("reunião") &&
-                totalReunions === 0
-              ) {
-                totalReunions = value;
-                console.log(`✅ Reuniões da métrica visual: ${value}`);
-              }
-            }
-          });
-        }
-
-        const result = {
-          totalReunions,
-          totalPresences,
-          totalAbsences,
-          presenceRate,
-          membersCount,
-        };
-
-        console.log("📊 Resultado final da captura:", result);
-        return result;
-      };
-
-      const statistics = getStatisticsFromSummary();
-
-      // Temporarily hide the download button during PDF generation
-      const downloadBtn = document.getElementById("downloadPdfBtn");
-      const originalDisplay = downloadBtn ? downloadBtn.style.display : "";
-      if (downloadBtn) downloadBtn.style.display = "none";
-
-      console.log("📸 Capturando conteúdo...");
-
-      // Configurações otimizadas para captura mais compacta
-      const canvas = await html2canvas(container, {
-        scale: 1.5, // Reduzido de 2 para 1.5 para economizar espaço
-        useCORS: true,
-        allowTaint: true,
-        backgroundColor: "#ffffff",
-        logging: false,
-        height: container.scrollHeight, // Captura altura real do conteúdo
-        width: container.scrollWidth, // Captura largura real do conteúdo
-        scrollX: 0,
-        scrollY: 0,
-      });
-
-      // Restore the download button
-      if (downloadBtn) downloadBtn.style.display = originalDisplay;
-
-      console.log("📄 Criando documento PDF...");
-
-      // Usa a versão global do jsPDF
-      const { jsPDF } = window.jspdf;
-      const doc = new jsPDF("p", "mm", "a4");
 
       // Obter informações dos filtros atuais
       const grupoInfo =
@@ -3132,6 +2910,78 @@ if (typeof window.dashboardInitialized === "undefined") {
       const membroSelecionado =
         summaryMemberSelect?.options[summaryMemberSelect.selectedIndex]?.text ||
         "Todos os Membros";
+
+      // Função para calcular estatísticas se não tiver dados reais armazenados
+      function calculateStatisticsFromFilteredData() {
+        const membersToAnalyze = filteredMembers || [];
+
+        if (!presencesDetails || Object.keys(presencesDetails).length === 0) {
+          return {
+            totalPresences: 0,
+            totalAbsences: 0,
+            totalMeetingDays,
+            membersCount: membersToAnalyze.length,
+            presenceRate: 0,
+          };
+        }
+
+        let totalPresences = 0;
+        let totalAbsences = 0;
+
+        // Contar presenças e faltas dos membros filtrados
+        Object.values(presencesDetails).forEach((memberData) => {
+          if (memberData.presenceCount !== undefined) {
+            totalPresences += memberData.presenceCount;
+          }
+          if (memberData.absenceCount !== undefined) {
+            totalAbsences += memberData.absenceCount;
+          }
+        });
+
+        return {
+          totalPresences,
+          totalAbsences,
+          totalMeetingDays,
+          membersCount: membersToAnalyze.length,
+          presenceRate:
+            totalPresences + totalAbsences > 0
+              ? (
+                  (totalPresences / (totalPresences + totalAbsences)) *
+                  100
+                ).toFixed(1)
+              : 0,
+        };
+      }
+
+      // Usar dados reais armazenados ou calcular a partir dos dados atuais
+      let statistics;
+      if (lastRealSummaryData) {
+        console.log("📊 Usando dados reais armazenados:", lastRealSummaryData);
+
+        const totalMembers = lastRealSummaryData.membersToAnalyze?.length || 0;
+        const totalPresences = lastRealSummaryData.totalPresences || 0;
+        const totalAbsences = totalMembers - totalPresences; // Calcular ausentes corretamente
+
+        statistics = {
+          totalPresences: totalPresences,
+          totalAbsences: totalAbsences,
+          totalMeetingDays: lastRealSummaryData.totalMeetingDays || 0,
+          membersCount: totalMembers,
+          presenceRate:
+            totalMembers > 0
+              ? ((totalPresences / totalMembers) * 100).toFixed(1)
+              : 0,
+        };
+      } else {
+        console.log("📊 Calculando estatísticas dos dados filtrados atuais");
+        statistics = calculateStatisticsFromFilteredData();
+      }
+
+      console.log("� Estatísticas para PDF:", statistics);
+
+      // Usa a versão global do jsPDF
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF("p", "mm", "a4");
 
       // Configurações responsivas e otimizadas para layout compacto
       const isMobile = window.innerWidth < 768;
@@ -3151,192 +3001,666 @@ if (typeof window.dashboardInitialized === "undefined") {
         return false;
       };
 
-      // CABEÇALHO DO RELATÓRIO - Compacto
-      doc.setFontSize(11);
+      // =================== CABEÇALHO PRINCIPAL PROFISSIONAL ===================
+      doc.setFillColor(52, 73, 93); // Azul escuro profissional
+      doc.rect(0, 0, pageWidth, 25, "F");
+
+      // Título principal
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(14);
       doc.setFont(undefined, "bold");
-      doc.text(
-        "RELATÓRIO DE PRESENÇAS - AD BRAS - VILA SOLANGE",
-        margin,
-        currentY
-      );
+      doc.text("RELATÓRIO ANALÍTICO DE PRESENÇAS", margin, 12);
+
+      doc.setFontSize(11);
+      doc.setFont(undefined, "normal");
+      doc.text("Assembleia de Deus BRAS - Vila Solange/SP", margin, 18);
+
+      // Data e hora no canto direito
+      const dataGeracao = new Date();
+      const dateTimeStr = `${dataGeracao.toLocaleDateString(
+        "pt-BR"
+      )} - ${dataGeracao.toLocaleTimeString("pt-BR", {
+        hour: "2-digit",
+        minute: "2-digit",
+      })}`;
+      doc.setFontSize(8);
+      doc.text(`Gerado: ${dateTimeStr}`, pageWidth - margin - 35, 15);
+
+      currentY = 32;
+      doc.setTextColor(0, 0, 0);
+
+      // =================== SEÇÃO DE FILTROS E PERÍODO ===================
+      doc.setFillColor(240, 248, 255); // Azul muito claro
+      doc.rect(margin, currentY, contentWidth, 18, "F");
+
+      // Barra de título da seção
+      doc.setFillColor(70, 130, 180);
+      doc.rect(margin, currentY, contentWidth, 4, "F");
+
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(8);
+      doc.setFont(undefined, "bold");
+      doc.text("PARÂMETROS E CRITÉRIOS DE ANÁLISE", margin + 2, currentY + 2.8);
+
+      currentY += 6;
+      doc.setTextColor(0, 0, 0);
+      doc.setFontSize(7);
+      doc.setFont(undefined, "normal");
+
+      // Organizar informações em duas colunas
+      const col1X = margin + 3;
+      const col2X = margin + contentWidth / 2 + 5;
+
+      doc.text(`Grupo/GAPE: ${grupoInfo}`, col1X, currentY);
+      doc.text(`Período: ${periodoInfo}`, col2X, currentY);
       currentY += 3.5;
 
-      doc.setFontSize(6);
-      doc.setFont(undefined, "normal");
-      const dataGeracao = new Date();
-      doc.text(
-        `Gerado em: ${dataGeracao.toLocaleDateString(
-          "pt-BR"
-        )} às ${dataGeracao.toLocaleTimeString("pt-BR")}`,
-        margin,
-        currentY
-      );
-      currentY += 4;
+      doc.text(`Lider: ${liderInfo}`, col1X, currentY);
+      doc.text(`Membro: ${membroSelecionado}`, col2X, currentY);
+      currentY += 3.5;
 
-      // INFORMAÇÕES DO FILTRO - Compacto
-      doc.setFontSize(8);
-      doc.setFont(undefined, "bold");
-      doc.text("INFORMAÇÕES DO RELATÓRIO", margin, currentY);
-      currentY += 2.5;
+      doc.text(`Data Inicio: ${dataInicio}`, col1X, currentY);
+      doc.text(`Data Fim: ${dataFim}`, col2X, currentY);
 
-      doc.setFontSize(6);
-      doc.setFont(undefined, "normal");
+      currentY += 8;
 
-      const infoLines = [
-        `Grupo (GAPE): ${grupoInfo}`,
-        `Líder: ${liderInfo}`,
-        `Período: ${periodoInfo}`,
-        `Data Início: ${dataInicio}`,
-        `Data Fim: ${dataFim}`,
-        `Membro Selecionado: ${membroSelecionado}`,
-      ];
-
-      infoLines.forEach((line) => {
-        checkPageBreak(5);
-        doc.text(line, margin, currentY);
-        currentY += 2;
-      });
-
-      currentY += 3;
-
-      // ESTATÍSTICAS GERAIS - Layout compacto
-      checkPageBreak(35);
-      doc.setFontSize(8);
-      doc.setFont(undefined, "bold");
-      doc.text("ESTATÍSTICAS GERAIS", margin, currentY);
-      currentY += 2.5;
-
-      doc.setFontSize(6);
-      doc.setFont(undefined, "normal");
-
-      console.log("📊 Estatísticas capturadas:", statistics);
-
-      const statsLines = [];
-
-      if (statistics.totalReunions > 0) {
-        statsLines.push(
-          `Total de Reuniões no Período: ${statistics.totalReunions}`
-        );
-      }
-      if (statistics.membersCount > 0) {
-        statsLines.push(
-          `Total de Membros Analisados: ${statistics.membersCount}`
-        );
-      }
-      if (statistics.totalPresences > 0) {
-        statsLines.push(
-          `Total de Presenças Registradas: ${statistics.totalPresences}`
-        );
-      }
-      if (statistics.totalAbsences > 0) {
-        statsLines.push(
-          `Total de Faltas Registradas: ${statistics.totalAbsences}`
-        );
-      }
-      if (statistics.presenceRate > 0) {
-        statsLines.push(`Taxa de Presença Média: ${statistics.presenceRate}%`);
-      }
-
-      // Calcula estatísticas adicionais se possível
-      if (statistics.totalPresences > 0 && statistics.totalAbsences > 0) {
-        const totalEvents =
-          statistics.totalPresences + statistics.totalAbsences;
-        const calculatedPresenceRate = (
-          (statistics.totalPresences / totalEvents) *
-          100
-        ).toFixed(1);
-        if (!statistics.presenceRate || statistics.presenceRate === 0) {
-          statsLines.push(
-            `Taxa de Presença Calculada: ${calculatedPresenceRate}%`
-          );
+      // Função melhorada para quebra de página com cabeçalho
+      function checkPageBreakWithHeader(neededHeight) {
+        if (currentY + neededHeight > pageHeight - margin - 15) {
+          addPageHeader();
+          return true;
         }
+        return false;
       }
 
-      if (statsLines.length === 0) {
-        statsLines.push(
-          "Estatísticas não disponíveis para o período/filtro selecionado"
-        );
-      }
-
-      statsLines.forEach((line) => {
-        checkPageBreak(5);
-        doc.text(line, margin, currentY);
-        currentY += 2.5;
-      });
-
-      currentY += 3;
-
-      // CONTEÚDO DETALHADO - Seção mais compacta
-      checkPageBreak(50);
-      doc.setFontSize(9);
-      doc.setFont(undefined, "bold");
-      doc.text("DETALHAMENTO COMPLETO", margin, currentY);
-      currentY += 3;
-
-      // Otimização de dimensões da imagem para máximo aproveitamento
-      const imgData = canvas.toDataURL("image/png");
-      const maxImgWidth = contentWidth;
-      const maxImgHeight = pageHeight - currentY - margin - 10; // Reserva espaço mínimo para rodapé
-
-      // Calcula dimensões mantendo proporção
-      let imgWidth = maxImgWidth;
-      let imgHeight = (canvas.height * imgWidth) / canvas.width;
-
-      // Se a imagem for muito alta, redimensiona baseado na altura disponível
-      if (imgHeight > maxImgHeight) {
-        imgHeight = maxImgHeight;
-        imgWidth = (canvas.width * imgHeight) / canvas.height;
-      }
-
-      // Verifica se a imagem cabe na página atual
-      if (currentY + imgHeight > pageHeight - margin - 8) {
+      // Função para adicionar cabeçalho em novas páginas
+      function addPageHeader() {
         doc.addPage();
         currentY = margin;
-        // Recalcula para nova página
-        const newMaxHeight = pageHeight - currentY - margin - 8;
-        if (imgHeight > newMaxHeight) {
-          imgHeight = newMaxHeight;
-          imgWidth = (canvas.width * imgHeight) / canvas.height;
+
+        // Cabeçalho simplificado para páginas subsequentes
+        doc.setFillColor(52, 73, 93);
+        doc.rect(0, 0, pageWidth, 12, "F");
+
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(10);
+        doc.setFont(undefined, "bold");
+        doc.text("RELATÓRIO DE PRESENÇAS - BRAS", margin, 8);
+
+        doc.setTextColor(0, 0, 0);
+        currentY = 18;
+      }
+
+      // Função para calcular estatísticas se não tiver dados reais armazenados
+      function calculateStatisticsFromFilteredData() {
+        const membersToAnalyze = filteredMembers || [];
+
+        if (!presencesDetails || Object.keys(presencesDetails).length === 0) {
+          return {
+            totalPresences: 0,
+            totalAbsences: 0,
+            totalMeetingDays,
+            membersCount: membersToAnalyze.length,
+            presenceRate: 0,
+          };
         }
+
+        let totalPresences = 0;
+        let totalAbsences = 0;
+
+        // Contar presenças e faltas dos membros filtrados
+        Object.values(presencesDetails).forEach((memberData) => {
+          if (memberData.presenceCount !== undefined) {
+            totalPresences += memberData.presenceCount;
+          }
+          if (memberData.absenceCount !== undefined) {
+            totalAbsences += memberData.absenceCount;
+          }
+        });
+
+        return {
+          totalPresences,
+          totalAbsences,
+          totalMeetingDays,
+          membersCount: membersToAnalyze.length,
+          presenceRate:
+            totalPresences + totalAbsences > 0
+              ? (
+                  (totalPresences / (totalPresences + totalAbsences)) *
+                  100
+                ).toFixed(1)
+              : 0,
+        };
       }
 
-      // Renderização otimizada da imagem
-      let heightLeft = imgHeight;
-      let position = currentY;
+      // Coletar informações detalhadas dos membros para o PDF
+      function collectMembersDetailForPdf() {
+        let membersToUse = [];
+        let presenceDataToUse = {};
+        let totalMeetings = 1; // Default
 
-      // Adiciona a primeira parte da imagem
-      doc.addImage(imgData, "PNG", margin, position, imgWidth, imgHeight);
-      heightLeft -= pageHeight - position - margin - 8;
+        if (lastRealSummaryData && lastRealSummaryData.membersToAnalyze) {
+          membersToUse = lastRealSummaryData.membersToAnalyze;
+          presenceDataToUse = lastRealSummaryData.presencesDetails || {};
+          totalMeetings = lastRealSummaryData.totalMeetingDays || 1;
 
-      // Adiciona páginas extras apenas se necessário e com aproveitamento máximo
-      while (heightLeft > 0) {
-        doc.addPage();
-        position = heightLeft - imgHeight + margin;
+          console.log(
+            "🔍 Debug: Dados de presença disponíveis:",
+            Object.keys(presenceDataToUse)
+          );
+          console.log(
+            "🔍 Debug: Primeiro membro com dados:",
+            presenceDataToUse[Object.keys(presenceDataToUse)[0]]
+          );
+          console.log(
+            "🔍 Debug: Estrutura completa do primeiro membro:",
+            JSON.stringify(
+              presenceDataToUse[Object.keys(presenceDataToUse)[0]],
+              null,
+              2
+            )
+          );
+        } else if (filteredMembers && filteredMembers.length > 0) {
+          membersToUse = filteredMembers;
+          presenceDataToUse = presencesDetails || {};
+          totalMeetings = totalMeetingDays || 1;
+        }
 
-        // Calcula altura disponível na nova página
-        const availableHeight = pageHeight - margin - 8;
-        const renderHeight = Math.min(imgHeight, availableHeight);
+        if (membersToUse.length === 0) {
+          return [];
+        }
 
-        doc.addImage(imgData, "PNG", margin, position, imgWidth, renderHeight);
-        heightLeft -= availableHeight;
+        const membersDetail = [];
+
+        membersToUse.forEach((member) => {
+          const memberPresenceData = presenceDataToUse[member.Nome] || {};
+
+          // Debug para verificar os dados de cada membro
+          if (memberPresenceData.presenceCount > 0) {
+            console.log(
+              `🎯 Membro com presença: ${member.Nome}`,
+              memberPresenceData
+            );
+          }
+
+          // Obter dados de presença real - usar a propriedade correta
+          let presencas = 0;
+          if (memberPresenceData.totalPresencas !== undefined) {
+            presencas = memberPresenceData.totalPresencas;
+          } else if (memberPresenceData.presenceCount !== undefined) {
+            presencas = memberPresenceData.presenceCount;
+          } else if (memberPresenceData.presences !== undefined) {
+            presencas = memberPresenceData.presences;
+          }
+
+          const faltas = totalMeetings - presencas;
+          const taxa =
+            totalMeetings > 0
+              ? ((presencas / totalMeetings) * 100).toFixed(1)
+              : 0;
+
+          const detail = {
+            nome: member.Nome || "N/A",
+            gape: member.GAPE || "N/A",
+            lider: member.Lider || "N/A",
+            periodo: member.Periodo || "N/A",
+            presencas: presencas,
+            faltas: faltas,
+            taxa: parseFloat(taxa),
+            status: parseFloat(taxa) >= 80 ? "Ativo" : "Irregular",
+          };
+
+          membersDetail.push(detail);
+        });
+
+        // Ordenar por taxa de presença (maior para menor) e depois por nome
+        return membersDetail.sort((a, b) => {
+          if (b.taxa !== a.taxa) {
+            return b.taxa - a.taxa; // Taxa decrescente
+          }
+          return a.nome.localeCompare(b.nome); // Nome crescente
+        });
       }
 
-      // RODAPÉ COMPACTO EM TODAS AS PÁGINAS
+      const membersDetail = collectMembersDetailForPdf();
+      console.log(
+        "👥 Detalhes dos membros coletados:",
+        membersDetail.length,
+        "membros"
+      );
+      console.log(
+        "📊 Primeiros 3 membros com dados:",
+        membersDetail.slice(0, 3)
+      );
+
+      // =================== ESTATÍSTICAS GERAIS ===================
+      checkPageBreakWithHeader(40);
+
+      // Cabeçalho da seção de estatísticas
+      doc.setFillColor(34, 139, 34); // Verde para estatísticas
+      doc.rect(margin, currentY, contentWidth, 6, "F");
+
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(9);
+      doc.setFont(undefined, "bold");
+      doc.text(
+        "INDICADORES E ESTATÍSTICAS DE FREQUÊNCIA",
+        margin + 2,
+        currentY + 4
+      );
+      currentY += 8;
+      doc.setTextColor(0, 0, 0);
+
+      console.log("📊 Estatísticas processadas:", statistics);
+
+      // Layout em cards para as estatísticas principais
+      const cardWidth = (contentWidth - 9) / 4; // 4 colunas com espaços
+      const cardHeight = 12;
+
+      // Card 1: Membros
+      doc.setFillColor(240, 248, 255);
+      doc.rect(margin, currentY, cardWidth, cardHeight, "F");
+      doc.setDrawColor(70, 130, 180);
+      doc.rect(margin, currentY, cardWidth, cardHeight);
+
+      doc.setFontSize(7);
+      doc.setFont(undefined, "bold");
+      doc.setTextColor(70, 130, 180);
+      doc.text("MEMBROS", margin + 2, currentY + 3);
+
+      doc.setFontSize(11);
+      doc.setTextColor(0, 0, 0);
+      const membersText = statistics.membersCount?.toString() || "0";
+      doc.text(membersText, margin + 2, currentY + 8);
+
+      // Card 2: Presenças
+      const card2X = margin + cardWidth + 3;
+      doc.setFillColor(240, 255, 240);
+      doc.rect(card2X, currentY, cardWidth, cardHeight, "F");
+      doc.setDrawColor(34, 139, 34);
+      doc.rect(card2X, currentY, cardWidth, cardHeight);
+
+      doc.setFontSize(7);
+      doc.setFont(undefined, "bold");
+      doc.setTextColor(34, 139, 34);
+      doc.text("PRESENTES", card2X + 2, currentY + 3);
+
+      doc.setFontSize(11);
+      doc.setTextColor(0, 0, 0);
+      const presencesText = statistics.totalPresences?.toString() || "0";
+      doc.text(presencesText, card2X + 2, currentY + 8);
+
+      // Card 3: Ausentes
+      const card3X = margin + (cardWidth + 3) * 2;
+      doc.setFillColor(255, 240, 240);
+      doc.rect(card3X, currentY, cardWidth, cardHeight, "F");
+      doc.setDrawColor(220, 20, 60);
+      doc.rect(card3X, currentY, cardWidth, cardHeight);
+
+      doc.setFontSize(7);
+      doc.setFont(undefined, "bold");
+      doc.setTextColor(220, 20, 60);
+      doc.text("AUSENTES", card3X + 2, currentY + 3);
+
+      doc.setFontSize(11);
+      doc.setTextColor(0, 0, 0);
+      const absencesText = statistics.totalAbsences?.toString() || "0";
+      doc.text(absencesText, card3X + 2, currentY + 8);
+
+      // Card 4: Taxa de Presença
+      const card4X = margin + (cardWidth + 3) * 3;
+      doc.setFillColor(255, 248, 240);
+      doc.rect(card4X, currentY, cardWidth, cardHeight, "F");
+      doc.setDrawColor(255, 140, 0);
+      doc.rect(card4X, currentY, cardWidth, cardHeight);
+
+      doc.setFontSize(7);
+      doc.setFont(undefined, "bold");
+      doc.setTextColor(255, 140, 0);
+      doc.text("TAXA", card4X + 2, currentY + 3);
+
+      doc.setFontSize(11);
+      doc.setTextColor(0, 0, 0);
+      const rateText = statistics.presenceRate
+        ? `${statistics.presenceRate}%`
+        : "0%";
+      doc.text(rateText, card4X + 2, currentY + 8);
+
+      currentY += cardHeight + 5;
+
+      // Estatísticas detalhadas em lista
+      doc.setFontSize(7);
+      doc.setFont(undefined, "normal");
+      doc.setTextColor(60, 60, 60);
+
+      const detailStats = [];
+
+      if (statistics.totalMeetingDays > 0) {
+        detailStats.push(
+          `- Total de Eventos/Reuniões Analisados: ${statistics.totalMeetingDays}`
+        );
+      }
+
+      if (statistics.membersCount > 0) {
+        const participacao =
+          statistics.totalPresences > 0
+            ? `${(
+                (statistics.totalPresences / statistics.membersCount) *
+                100
+              ).toFixed(1)}%`
+            : "0%";
+        detailStats.push(
+          `- Índice Geral de Participação: ${participacao} dos membros estiveram presentes`
+        );
+      }
+
+      // Mostrar breakdown por status se tiver dados dos membros
+      if (membersDetail.length > 0) {
+        const ativos = membersDetail.filter((m) => m.taxa >= 80).length;
+        const irregulares = membersDetail.filter(
+          (m) => m.taxa < 80 && m.taxa > 0
+        ).length;
+        const ausentes = membersDetail.filter((m) => m.taxa === 0).length;
+
+        // Calcular porcentagens baseadas no total real de membros analisados
+        const totalMembros = membersDetail.length;
+        const percAtivos =
+          totalMembros > 0 ? ((ativos / totalMembros) * 100).toFixed(1) : 0;
+        const percIrregulares =
+          totalMembros > 0
+            ? ((irregulares / totalMembros) * 100).toFixed(1)
+            : 0;
+        const percAusentes =
+          totalMembros > 0 ? ((ausentes / totalMembros) * 100).toFixed(1) : 0;
+
+        if (ativos > 0)
+          detailStats.push(
+            `- Membros com Frequência Ativa (>=80%): ${ativos} pessoas (${percAtivos}%)`
+          );
+        if (irregulares > 0)
+          detailStats.push(
+            `- Membros com Frequência Irregular (<80%): ${irregulares} pessoas (${percIrregulares}%)`
+          );
+        if (ausentes > 0)
+          detailStats.push(
+            `- Membros Ausentes no Período (0%): ${ausentes} pessoas (${percAusentes}%)`
+          );
+      }
+
+      // Adicionar linha informativa com total de membros analisados
+      if (membersDetail.length > 0) {
+        detailStats.push(
+          `- Total de Membros Analisados: ${membersDetail.length} pessoas`
+        );
+      }
+
+      if (detailStats.length === 0) {
+        detailStats.push(
+          "- Não foram encontrados dados suficientes para análise estatística"
+        );
+      }
+
+      detailStats.forEach((stat) => {
+        checkPageBreakWithHeader(4);
+        doc.text(stat, margin + 2, currentY);
+        currentY += 3;
+      });
+
+      currentY += 4;
+
+      // =================== TABELA DE MEMBROS ===================
+      if (membersDetail.length > 0) {
+        checkPageBreakWithHeader(30);
+
+        // Cabeçalho da seção de membros
+        doc.setFillColor(128, 0, 128); // Roxo para membros
+        doc.rect(margin, currentY, contentWidth, 6, "F");
+
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(9);
+        doc.setFont(undefined, "bold");
+        doc.text(
+          `DETALHAMENTO POR MEMBRO (${membersDetail.length} analisados)`,
+          margin + 2,
+          currentY + 4
+        );
+
+        currentY += 8;
+        doc.setTextColor(0, 0, 0);
+
+        // Verificar se deve mostrar colunas completas (quando filtro for "todos")
+        const isShowingAllMembers =
+          grupoInfo.includes("Todos") &&
+          liderInfo.includes("Todos") &&
+          periodoInfo.includes("Todos");
+
+        let colWidths, headers;
+        if (isShowingAllMembers) {
+          // Configuração completa da tabela (7 colunas)
+          colWidths = [55, 25, 20, 20, 20, 20, 25]; // Nome, GAPE, Líder, Período, Presenças, Faltas, Taxa
+          headers = [
+            "Nome do Membro",
+            "GAPE",
+            "Líder",
+            "Período",
+            "Presenças",
+            "Faltas",
+            "Taxa %",
+          ];
+        } else {
+          // Configuração simplificada da tabela (4 colunas)
+          colWidths = [80, 25, 25, 25]; // Nome, Presenças, Faltas, Taxa
+          headers = ["Nome do Membro", "Presenças", "Faltas", "Taxa %"];
+        }
+
+        const tableStartY = currentY;
+        const rowHeight = 4;
+
+        // Cabeçalho da tabela com fundo colorido
+        doc.setFillColor(230, 230, 230);
+        doc.rect(margin, currentY, contentWidth, rowHeight + 1, "F");
+
+        doc.setDrawColor(100, 100, 100);
+        doc.rect(margin, currentY, contentWidth, rowHeight + 1);
+
+        doc.setFontSize(7);
+        doc.setFont(undefined, "bold");
+        doc.setTextColor(50, 50, 50);
+
+        let xPos = margin + 1;
+        headers.forEach((header, i) => {
+          doc.text(header, xPos, currentY + 3);
+          // Linhas verticais
+          if (i < headers.length - 1) {
+            doc.line(
+              xPos + colWidths[i] - 1,
+              currentY,
+              xPos + colWidths[i] - 1,
+              currentY + rowHeight + 1
+            );
+          }
+          xPos += colWidths[i];
+        });
+
+        currentY += rowHeight + 1;
+
+        // Mostrar todos os membros analisados (sem limite de 20)
+        const membersToShow = membersDetail;
+        let rowIndex = 0;
+
+        membersToShow.forEach((member) => {
+          checkPageBreakWithHeader(rowHeight + 2);
+
+          // Alternância de cores nas linhas
+          if (rowIndex % 2 === 0) {
+            doc.setFillColor(248, 248, 248);
+            doc.rect(margin, currentY, contentWidth, rowHeight, "F");
+          }
+
+          // Borda da linha
+          doc.setDrawColor(200, 200, 200);
+          doc.rect(margin, currentY, contentWidth, rowHeight);
+
+          xPos = margin + 1;
+          doc.setFontSize(6);
+          doc.setFont(undefined, "normal");
+          doc.setTextColor(0, 0, 0);
+
+          let rowData;
+          if (isShowingAllMembers) {
+            // Dados completos com 7 colunas
+            rowData = [
+              member.nome.substring(0, 30), // Nome mais curto para caber
+              (member.gape || "N/A").substring(0, 15),
+              (member.lider || "N/A").substring(0, 12),
+              (member.periodo || "N/A").substring(0, 12),
+              member.presencas?.toString() || "0",
+              member.faltas?.toString() || "0",
+              member.taxa ? `${member.taxa}%` : "0%",
+            ];
+          } else {
+            // Dados simplificados com 4 colunas
+            rowData = [
+              member.nome.substring(0, 40), // Nome com mais espaço
+              member.presencas?.toString() || "0",
+              member.faltas?.toString() || "0",
+              member.taxa ? `${member.taxa}%` : "0%",
+            ];
+          }
+
+          rowData.forEach((data, i) => {
+            // Cor especial para taxa baseada no valor (última coluna)
+            const taxaColumnIndex = isShowingAllMembers ? 6 : 3; // 7ª coluna (índice 6) ou 4ª coluna (índice 3)
+            if (i === taxaColumnIndex) {
+              const taxa = parseFloat(member.taxa) || 0;
+              if (taxa >= 80) {
+                doc.setTextColor(0, 128, 0); // Verde para boa frequência
+              } else if (taxa >= 60) {
+                doc.setTextColor(255, 140, 0); // Laranja para frequência regular
+              } else {
+                doc.setTextColor(220, 20, 60); // Vermelho para baixa frequência
+              }
+            } else {
+              doc.setTextColor(0, 0, 0);
+            }
+
+            doc.text(data, xPos, currentY + 2.8);
+
+            // Linhas verticais
+            if (i < rowData.length - 1) {
+              doc.setDrawColor(200, 200, 200);
+              doc.line(
+                xPos + colWidths[i] - 1,
+                currentY,
+                xPos + colWidths[i] - 1,
+                currentY + rowHeight
+              );
+            }
+
+            xPos += colWidths[i];
+          });
+
+          currentY += rowHeight;
+          rowIndex++;
+        });
+
+        // Rodapé da tabela se houver mais membros
+        // Resumo por status com porcentagens
+        currentY += 4;
+        const ativos = membersDetail.filter((m) => (m.taxa || 0) >= 80).length;
+        const irregulares = membersDetail.length - ativos;
+        const totalMembros = membersDetail.length;
+        const percAtivos =
+          totalMembros > 0 ? ((ativos / totalMembros) * 100).toFixed(1) : 0;
+        const percIrregulares =
+          totalMembros > 0
+            ? ((irregulares / totalMembros) * 100).toFixed(1)
+            : 0;
+
+        doc.setFontSize(7);
+        doc.setFont(undefined, "normal");
+        doc.setTextColor(0, 0, 0);
+        doc.text(
+          `CONSOLIDADO: ${ativos} com frequência ativa (${percAtivos}%) | ${irregulares} com frequência irregular (${percIrregulares}%) | Total: ${totalMembros} membros`,
+          margin,
+          currentY
+        );
+
+        currentY += 6;
+      }
+
+      // =================== INFORMAÇÕES FINAIS ===================
+      checkPageBreakWithHeader(15);
+
+      doc.setFillColor(245, 245, 245);
+      doc.rect(margin, currentY, contentWidth, 12, "F");
+      doc.setDrawColor(150, 150, 150);
+      doc.rect(margin, currentY, contentWidth, 12);
+
+      doc.setFontSize(7);
+      doc.setFont(undefined, "bold");
+      doc.setTextColor(70, 70, 70);
+      doc.text("OBSERVAÇÕES E METODOLOGIA", margin + 2, currentY + 3);
+
+      doc.setFontSize(6);
+      doc.setFont(undefined, "normal");
+      doc.text(
+        "- Este relatório foi gerado automaticamente pelo Sistema de Gestão BRAS",
+        margin + 2,
+        currentY + 6
+      );
+      doc.text(
+        "- Análise baseada nos registros de presença do período especificado nos filtros",
+        margin + 2,
+        currentY + 8.5
+      );
+      doc.text(
+        "- Classificação: Ativo (>=80%), Irregular (<80%), Ausente (0%)",
+        margin + 2,
+        currentY + 11
+      );
+      doc.text(
+        "- Para esclarecimentos ou correções, contate a liderança responsável",
+        margin + 2,
+        currentY + 13.5
+      );
+
+      // =================== RODAPÉ PROFISSIONAL ===================
       const totalPages = doc.internal.getNumberOfPages();
       for (let i = 1; i <= totalPages; i++) {
         doc.setPage(i);
+
+        // Linha superior do rodapé
+        doc.setDrawColor(52, 73, 93);
+        doc.line(margin, pageHeight - 12, pageWidth - margin, pageHeight - 12);
+
+        // Informações do sistema
         doc.setFontSize(6);
         doc.setFont(undefined, "normal");
+        doc.setTextColor(100, 100, 100);
+        doc.text(
+          "Sistema de Controle de Presenças - AD BRAS Vila Solange",
+          margin,
+          pageHeight - 8
+        );
+
+        // Data de geração
+        doc.text(`Gerado em: ${dateTimeStr}`, margin, pageHeight - 5);
+
+        // Paginação
+        doc.setFont(undefined, "bold");
+        doc.setTextColor(52, 73, 93);
         doc.text(
           `Página ${i} de ${totalPages}`,
-          pageWidth - margin - 18,
-          pageHeight - 5
+          pageWidth - margin - 20,
+          pageHeight - 6.5
         );
-        doc.text(
-          "Sistema de Controle de Presenças BRAS",
-          margin,
-          pageHeight - 5
-        );
+
+        // Logo/marca (simulado com texto)
+        doc.setFontSize(8);
+        doc.setFont(undefined, "bold");
+        doc.setTextColor(52, 73, 93);
+        doc.text("BRAS", pageWidth - margin - 20, pageHeight - 3);
       }
 
       // Gera o nome do arquivo com informações relevantes
