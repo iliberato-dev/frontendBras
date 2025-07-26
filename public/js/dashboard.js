@@ -39,8 +39,6 @@ if (typeof window.dashboardInitialized === "undefined") {
     return normalized;
   }
 
-
-
   let allMembersData = [];
   let filteredMembers = [];
   let lastPresencesData = {};
@@ -441,6 +439,10 @@ if (typeof window.dashboardInitialized === "undefined") {
   }
 
   async function handlePhotoUpload(file, memberName) {
+    console.log("🎯 handlePhotoUpload chamada:", {
+      file: file?.name,
+      memberName,
+    });
     if (!file) return;
 
     // Validações
@@ -455,79 +457,9 @@ if (typeof window.dashboardInitialized === "undefined") {
       return;
     }
 
-    // Mostra loading durante o processamento
-    showGlobalLoading(true, "Processando imagem...");
-
-    const reader = new FileReader();
-
-    reader.onload = async function (e) {
-      const img = new Image();
-
-      img.onload = async function () {
-        try {
-          // Cria canvas para redimensionar a imagem
-          const canvas = document.createElement("canvas");
-          const ctx = canvas.getContext("2d");
-
-          // Define tamanho máximo (200x200 pixels)
-          const maxSize = 200;
-          let { width, height } = img;
-
-          if (width > height) {
-            if (width > maxSize) {
-              height = (height * maxSize) / width;
-              width = maxSize;
-            }
-          } else {
-            if (height > maxSize) {
-              width = (width * maxSize) / height;
-              height = maxSize;
-            }
-          }
-
-          canvas.width = width;
-          canvas.height = height;
-
-          // Desenha a imagem redimensionada
-          ctx.drawImage(img, 0, 0, width, height);
-
-          // Converte para base64 com qualidade comprimida
-          const compressedBase64 = canvas.toDataURL("image/jpeg", 0.8);
-
-          // Salva a foto no servidor
-          const photoUrl = await saveMemberPhoto(memberName, compressedBase64);
-
-          // Atualiza a foto na interface
-          updateMemberPhotoInCard(memberName, photoUrl);
-
-          // Recarrega os membros para ter as URLs atualizadas
-          await fetchMembers();
-
-          showGlobalLoading(false);
-          showMessage(
-            `✅ Foto de ${memberName} atualizada com sucesso!`,
-            "success"
-          );
-        } catch (error) {
-          showGlobalLoading(false);
-          showMessage("Erro ao salvar foto no servidor", "error");
-        }
-      };
-
-      img.onerror = function () {
-        showGlobalLoading(false);
-        showMessage("Erro ao processar a imagem", "error");
-      };
-
-      img.src = e.target.result;
-    };
-
-    reader.onerror = function () {
-      showGlobalLoading(false);
-      showMessage("Erro ao ler o arquivo de imagem", "error");
-    };
-
-    reader.readAsDataURL(file);
+    console.log("✅ Arquivo validado, abrindo editor de fotos...");
+    // Abre o editor de fotos diretamente
+    showPhotoEditor(file, memberName);
   }
 
   function updateMemberPhotoInCard(memberName, photoUrl) {
@@ -663,6 +595,297 @@ if (typeof window.dashboardInitialized === "undefined") {
     } finally {
       showGlobalLoading(false);
     }
+  }
+
+  // Função para capturar foto da câmera
+  // Função para abrir editor de fotos com recorte
+  async function openPhotoEditor(memberName) {
+    console.log("🖼️ Abrindo editor de fotos para:", memberName);
+
+    // Cria input de arquivo temporário
+    const fileInput = document.createElement("input");
+    fileInput.type = "file";
+    fileInput.accept = "image/*";
+    fileInput.style.display = "none";
+
+    fileInput.onchange = (e) => {
+      const file = e.target.files[0];
+      if (file) {
+        showPhotoEditor(file, memberName);
+      }
+    };
+
+    document.body.appendChild(fileInput);
+    fileInput.click();
+    document.body.removeChild(fileInput);
+  }
+
+  // Editor de fotos com recorte e redimensionamento
+  function showPhotoEditor(file, memberName) {
+    console.log("✂️ Mostrando editor de fotos para:", memberName);
+
+    const reader = new FileReader();
+
+    reader.onload = (e) => {
+      // Cria modal do editor
+      const editorModal = document.createElement("div");
+      editorModal.className =
+        "fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50";
+      editorModal.innerHTML = `
+        <div class="bg-white rounded-lg p-6 max-w-2xl w-full mx-4 max-h-[90vh] overflow-auto">
+          <h3 class="text-lg font-semibold mb-4 text-center">Editor de Foto - ${memberName}</h3>
+          
+          <!-- Área do editor -->
+          <div class="relative mb-4">
+            <canvas id="photoCanvas" class="border border-gray-300 rounded-lg max-w-full"></canvas>
+          </div>
+          
+          <!-- Controles -->
+          <div class="space-y-4">
+            <!-- Controles de recorte -->
+            <div class="grid grid-cols-2 gap-4">
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Posição X:</label>
+                <input type="range" id="cropX" min="0" max="100" value="0" class="w-full">
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Posição Y:</label>
+                <input type="range" id="cropY" min="0" max="100" value="0" class="w-full">
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Largura:</label>
+                <input type="range" id="cropWidth" min="20" max="100" value="100" class="w-full">
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Altura:</label>
+                <input type="range" id="cropHeight" min="20" max="100" value="100" class="w-full">
+              </div>
+            </div>
+            
+            <!-- Botões de ação -->
+            <div class="flex gap-3">
+              <button id="resetCrop" class="flex-1 bg-gray-500 text-white py-2 px-4 rounded-lg hover:bg-gray-600 transition-colors">
+                <i class="fas fa-undo mr-2"></i>Resetar
+              </button>
+              <button id="centerCrop" class="flex-1 bg-blue-500 text-white py-2 px-4 rounded-lg hover:bg-blue-600 transition-colors">
+                <i class="fas fa-crosshairs mr-2"></i>Centralizar
+              </button>
+              <button id="squareCrop" class="flex-1 bg-purple-500 text-white py-2 px-4 rounded-lg hover:bg-purple-600 transition-colors">
+                <i class="fas fa-square mr-2"></i>Quadrado
+              </button>
+            </div>
+            
+            <!-- Botões principais -->
+            <div class="flex gap-3">
+              <button id="savePhoto" class="flex-1 bg-green-500 text-white py-2 px-4 rounded-lg hover:bg-green-600 transition-colors">
+                <i class="fas fa-save mr-2"></i>Salvar Foto
+              </button>
+              <button id="cancelEdit" class="flex-1 bg-red-500 text-white py-2 px-4 rounded-lg hover:bg-red-600 transition-colors">
+                <i class="fas fa-times mr-2"></i>Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      `;
+
+      document.body.appendChild(editorModal);
+
+      // Inicializa o editor
+      initializePhotoEditor(e.target.result, memberName, editorModal);
+    };
+
+    reader.readAsDataURL(file);
+  }
+
+  function initializePhotoEditor(imageSrc, memberName, modal) {
+    const canvas = document.getElementById("photoCanvas");
+    const ctx = canvas.getContext("2d");
+    const img = new Image();
+
+    let originalWidth, originalHeight;
+    let cropX = 0,
+      cropY = 0,
+      cropWidth = 100,
+      cropHeight = 100;
+
+    img.onload = () => {
+      originalWidth = img.width;
+      originalHeight = img.height;
+
+      // Define tamanho do canvas (máximo 500px para facilitar edição)
+      const maxSize = 500;
+      const scale = Math.min(maxSize / originalWidth, maxSize / originalHeight);
+      canvas.width = originalWidth * scale;
+      canvas.height = originalHeight * scale;
+
+      // Desenha a imagem inicial
+      redrawCanvas();
+
+      // Configura event listeners
+      setupEditorControls();
+    };
+
+    function redrawCanvas() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // Desenha a imagem original
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+      // Desenha overlay de recorte
+      const cropXPx = (cropX / 100) * canvas.width;
+      const cropYPx = (cropY / 100) * canvas.height;
+      const cropWidthPx = (cropWidth / 100) * canvas.width;
+      const cropHeightPx = (cropHeight / 100) * canvas.height;
+
+      // Overlay escuro
+      ctx.fillStyle = "rgba(0, 0, 0, 0.5)";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Área de recorte (transparente)
+      ctx.clearRect(cropXPx, cropYPx, cropWidthPx, cropHeightPx);
+      ctx.drawImage(
+        img,
+        (cropX / 100) * originalWidth,
+        (cropY / 100) * originalHeight,
+        (cropWidth / 100) * originalWidth,
+        (cropHeight / 100) * originalHeight,
+        cropXPx,
+        cropYPx,
+        cropWidthPx,
+        cropHeightPx
+      );
+
+      // Borda da seleção
+      ctx.strokeStyle = "#3b82f6";
+      ctx.lineWidth = 2;
+      ctx.strokeRect(cropXPx, cropYPx, cropWidthPx, cropHeightPx);
+    }
+
+    function setupEditorControls() {
+      const cropXSlider = document.getElementById("cropX");
+      const cropYSlider = document.getElementById("cropY");
+      const cropWidthSlider = document.getElementById("cropWidth");
+      const cropHeightSlider = document.getElementById("cropHeight");
+
+      // Event listeners para sliders
+      [cropXSlider, cropYSlider, cropWidthSlider, cropHeightSlider].forEach(
+        (slider) => {
+          slider.addEventListener("input", () => {
+            cropX = parseInt(cropXSlider.value);
+            cropY = parseInt(cropYSlider.value);
+            cropWidth = parseInt(cropWidthSlider.value);
+            cropHeight = parseInt(cropHeightSlider.value);
+
+            // Ajusta limites
+            cropXSlider.max = 100 - cropWidth;
+            cropYSlider.max = 100 - cropHeight;
+
+            if (cropX > 100 - cropWidth) cropX = 100 - cropWidth;
+            if (cropY > 100 - cropHeight) cropY = 100 - cropHeight;
+
+            cropXSlider.value = cropX;
+            cropYSlider.value = cropY;
+
+            redrawCanvas();
+          });
+        }
+      );
+
+      // Botão resetar
+      document.getElementById("resetCrop").onclick = () => {
+        cropX = 0;
+        cropY = 0;
+        cropWidth = 100;
+        cropHeight = 100;
+        cropXSlider.value = 0;
+        cropYSlider.value = 0;
+        cropWidthSlider.value = 100;
+        cropHeightSlider.value = 100;
+        redrawCanvas();
+      };
+
+      // Botão centralizar
+      document.getElementById("centerCrop").onclick = () => {
+        cropX = (100 - cropWidth) / 2;
+        cropY = (100 - cropHeight) / 2;
+        cropXSlider.value = cropX;
+        cropYSlider.value = cropY;
+        redrawCanvas();
+      };
+
+      // Botão quadrado
+      document.getElementById("squareCrop").onclick = () => {
+        const size = Math.min(cropWidth, cropHeight);
+        cropWidth = size;
+        cropHeight = size;
+        cropWidthSlider.value = size;
+        cropHeightSlider.value = size;
+        redrawCanvas();
+      };
+
+      // Botão salvar
+      document.getElementById("savePhoto").onclick = async () => {
+        try {
+          showGlobalLoading(true, "Processando foto...");
+
+          // Cria canvas para o resultado final
+          const resultCanvas = document.createElement("canvas");
+          const resultCtx = resultCanvas.getContext("2d");
+
+          // Define tamanho final (200x200 para perfil)
+          resultCanvas.width = 200;
+          resultCanvas.height = 200;
+
+          // Calcula área de recorte na imagem original
+          const srcX = (cropX / 100) * originalWidth;
+          const srcY = (cropY / 100) * originalHeight;
+          const srcWidth = (cropWidth / 100) * originalWidth;
+          const srcHeight = (cropHeight / 100) * originalHeight;
+
+          // Desenha a área recortada redimensionada
+          resultCtx.drawImage(
+            img,
+            srcX,
+            srcY,
+            srcWidth,
+            srcHeight,
+            0,
+            0,
+            200,
+            200
+          );
+
+          // Converte para base64
+          const photoBase64 = resultCanvas.toDataURL("image/jpeg", 0.8);
+
+          // Salva no servidor
+          const photoUrl = await saveMemberPhoto(memberName, photoBase64);
+
+          if (photoUrl) {
+            updateMemberPhotoInCard(memberName, photoUrl);
+            await fetchMembers();
+            showMessage(
+              `✅ Foto de ${memberName} salva com sucesso!`,
+              "success"
+            );
+          }
+
+          modal.remove();
+        } catch (error) {
+          console.error("Erro ao salvar foto:", error);
+          showMessage("Erro ao salvar foto", "error");
+        } finally {
+          showGlobalLoading(false);
+        }
+      };
+
+      // Botão cancelar
+      document.getElementById("cancelEdit").onclick = () => {
+        modal.remove();
+      };
+    }
+
+    img.src = imageSrc;
   }
 
   // Função para capturar foto da câmera
@@ -886,15 +1109,19 @@ if (typeof window.dashboardInitialized === "undefined") {
 
     menu.innerHTML = `
       <div class="px-3 py-2 text-sm font-semibold text-gray-700 border-b border-gray-200">
-        ${memberName}
+        📸 Opções de Foto - ${memberName}
       </div>
       <button id="selectFile" class="w-full px-4 py-2 text-left hover:bg-blue-50 text-blue-600 flex items-center gap-2">
         <i class="fas fa-folder-open"></i>
-        Selecionar arquivo
+        Selecionar da galeria
+      </button>
+      <button id="editPhoto" class="w-full px-4 py-2 text-left hover:bg-purple-50 text-purple-600 flex items-center gap-2">
+        <i class="fas fa-edit"></i>
+        Editor com recorte
       </button>
       <button id="useCamera" class="w-full px-4 py-2 text-left hover:bg-green-50 text-green-600 flex items-center gap-2">
         <i class="fas fa-camera"></i>
-        Usar câmera
+        Tirar foto (câmera)
       </button>
       ${
         hasCustomPhoto
@@ -913,14 +1140,49 @@ if (typeof window.dashboardInitialized === "undefined") {
 
     // Event listeners para as opções
     document.getElementById("selectFile").onclick = () => {
+      console.log("📁 Botão 'Selecionar da galeria' clicado para:", memberName);
       menu.remove();
-      // Encontra o input de arquivo correspondente e clica nele
-      const photoInput = document.querySelector(
-        `input[data-member-name="${memberName}"]`
-      );
-      if (photoInput) {
-        photoInput.click();
-      }
+
+      // Cria input de arquivo temporário para seleção da galeria
+      const fileInput = document.createElement("input");
+      fileInput.type = "file";
+      fileInput.accept = "image/*";
+      fileInput.style.display = "none";
+
+      fileInput.onchange = (e) => {
+        const file = e.target.files[0];
+        console.log("📄 Arquivo selecionado:", file ? file.name : "nenhum");
+        if (file) {
+          handlePhotoUpload(file, memberName);
+        }
+        // Remove o input após o uso
+        if (fileInput.parentNode) {
+          fileInput.parentNode.removeChild(fileInput);
+        }
+      };
+
+      // Adiciona evento para limpar caso o usuário cancele
+      fileInput.oncancel = () => {
+        console.log("❌ Seleção de arquivo cancelada");
+        if (fileInput.parentNode) {
+          fileInput.parentNode.removeChild(fileInput);
+        }
+      };
+
+      document.body.appendChild(fileInput);
+      fileInput.click();
+
+      // Fallback para remover após 30 segundos se não foi usado
+      setTimeout(() => {
+        if (fileInput.parentNode) {
+          fileInput.parentNode.removeChild(fileInput);
+        }
+      }, 30000);
+    };
+
+    document.getElementById("editPhoto").onclick = () => {
+      menu.remove();
+      openPhotoEditor(memberName);
     };
 
     document.getElementById("useCamera").onclick = () => {
@@ -1154,7 +1416,7 @@ if (typeof window.dashboardInitialized === "undefined") {
                     <div class="relative w-16 h-16 rounded-full overflow-hidden border-2 border-indigo-400 flex-shrink-0 group cursor-pointer">
                         <img src="${photoUrl}" alt="Foto de ${
         member.Nome
-      }" class="member-photo w-full h-full object-cover transition-transform duration-200 group-hover:scale-105" title="Clique para trocar a foto">
+      }" class="member-photo w-full h-full object-cover object-center transition-transform duration-200 group-hover:scale-105" title="Clique para trocar a foto" style="object-position: center center;">
                         <input type="file" class="photo-upload-input hidden" accept="image/*" data-member-name="${
                           member.Nome
                         }">
