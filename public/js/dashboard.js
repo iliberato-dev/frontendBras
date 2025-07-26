@@ -19,6 +19,28 @@ if (typeof window.dashboardInitialized === "undefined") {
     return name ? name.replace(/[^a-zA-Z0-9]/g, "_").toLowerCase() : "";
   }
 
+  // Função para normalizar strings removendo acentos e convertendo para minúsculas
+  // Permite busca insensível a acentos: "Jose" encontra "José" e vice-versa
+  // Exemplos: "José" → "jose", "María" → "maria", "João" → "joao"
+  function normalizeString(str) {
+    if (!str || typeof str !== "string") return "";
+    const normalized = str
+      .toLowerCase()
+      .normalize("NFD") // Decompõe caracteres acentuados
+      .replace(/[\u0300-\u036f]/g, "") // Remove os acentos (diacríticos)
+      .trim();
+
+    // Log de debug para verificar normalização (remover em produção)
+    if (str !== normalized && str.length < 50) {
+      // Só loga strings curtas para evitar spam
+      console.log(`🔤 Normalização: "${str}" → "${normalized}"`);
+    }
+
+    return normalized;
+  }
+
+
+
   let allMembersData = [];
   let filteredMembers = [];
   let lastPresencesData = {};
@@ -46,8 +68,7 @@ if (typeof window.dashboardInitialized === "undefined") {
 
     const loggedInMember = allMembersData.find(
       (member) =>
-        (member.Nome || "").toLowerCase().trim() ===
-        leaderName.toLowerCase().trim()
+        normalizeString(member.Nome || "") === normalizeString(leaderName)
     );
 
     const userGroup = loggedInMember ? loggedInMember.GAPE : null;
@@ -1043,7 +1064,7 @@ if (typeof window.dashboardInitialized === "undefined") {
 
   function applyFilters() {
     const filters = {
-      name: (filterNameInput?.value || "").toLowerCase().trim(),
+      name: normalizeString(filterNameInput?.value || ""),
       periodo: (filterPeriodoSelect?.value || "").toLowerCase().trim(),
       lider: (filterLiderInput?.value || "").toLowerCase().trim(),
       gape: (filterGapeInput?.value || "").toLowerCase().trim(),
@@ -1053,7 +1074,7 @@ if (typeof window.dashboardInitialized === "undefined") {
     const { isAdmin, userGroup } = getUserGroupRestriction();
 
     filteredMembers = allMembersData.filter((member) => {
-      const memberName = (member.Nome || "").toLowerCase();
+      const memberName = normalizeString(member.Nome || "");
 
       // Restrição por grupo: se não for admin, só mostra membros do mesmo grupo
       const groupRestriction =
@@ -3087,8 +3108,7 @@ if (typeof window.dashboardInitialized === "undefined") {
     if (leaderName && leaderName !== "admin") {
       const loggedInMember = allMembersData.find(
         (member) =>
-          (member.Nome || "").toLowerCase().trim() ===
-          leaderName.toLowerCase().trim()
+          normalizeString(member.Nome || "") === normalizeString(leaderName)
       );
       if (loggedInMember) {
         if (filterLiderInput) filterLiderInput.value = loggedInMember.Lider;
@@ -3126,7 +3146,8 @@ if (typeof window.dashboardInitialized === "undefined") {
   }
 
   function handleNameInput(event) {
-    const query = event.target.value.toLowerCase().trim();
+    const originalQuery = event.target.value.trim();
+    const query = normalizeString(originalQuery);
 
     if (query.length === 0) {
       hideNameAutocomplete();
@@ -3152,7 +3173,7 @@ if (typeof window.dashboardInitialized === "undefined") {
         return (
           groupRestriction &&
           member.Nome &&
-          member.Nome.toLowerCase().includes(query)
+          normalizeString(member.Nome).includes(query)
         );
       })
       .map((member) => member.Nome)
@@ -3160,11 +3181,11 @@ if (typeof window.dashboardInitialized === "undefined") {
       .slice(0, 8); // Limita a 8 sugestões
 
     if (matchingNames.length === 0) {
-      showNoResultsMessage(query);
+      showNoResultsMessage(originalQuery);
       return;
     }
 
-    showNameSuggestions(matchingNames, query);
+    showNameSuggestions(matchingNames, originalQuery);
   }
 
   function showNameSuggestions(names, query) {
@@ -3176,7 +3197,7 @@ if (typeof window.dashboardInitialized === "undefined") {
       // Busca dados do membro para mostrar informações extras
       const memberData = allMembersData.find(
         (member) =>
-          member.Nome && member.Nome.toLowerCase() === name.toLowerCase()
+          member.Nome && normalizeString(member.Nome) === normalizeString(name)
       );
 
       const suggestionItem = document.createElement("div");
@@ -3222,11 +3243,43 @@ if (typeof window.dashboardInitialized === "undefined") {
   }
 
   function highlightMatch(text, query) {
-    const regex = new RegExp(`(${escapeRegExp(query)})`, "gi");
-    return text.replace(
-      regex,
-      '<span class="bg-yellow-200 font-semibold">$1</span>'
-    );
+    if (!text || !query) return text;
+
+    // Normaliza o texto e a query para comparação
+    const normalizedText = normalizeString(text);
+    const normalizedQuery = normalizeString(query);
+
+    // Encontra todas as ocorrências da query no texto normalizado
+    let result = text;
+    let searchIndex = 0;
+    let offset = 0;
+
+    while (true) {
+      const matchIndex = normalizedText.indexOf(normalizedQuery, searchIndex);
+      if (matchIndex === -1) break;
+
+      // Calcula as posições no texto original considerando o offset das tags HTML já inseridas
+      const realMatchStart = matchIndex + offset;
+      const realMatchEnd = realMatchStart + normalizedQuery.length;
+
+      // Extrai a parte original do texto que corresponde à match
+      const originalMatch = result.substring(realMatchStart, realMatchEnd);
+
+      // Substitui no texto com destaque
+      const highlighted = `<span class="bg-yellow-200 font-semibold">${originalMatch}</span>`;
+      result =
+        result.substring(0, realMatchStart) +
+        highlighted +
+        result.substring(realMatchEnd);
+
+      // Atualiza o offset devido às tags HTML inseridas
+      offset += highlighted.length - originalMatch.length;
+
+      // Move para a próxima posição de busca
+      searchIndex = matchIndex + normalizedQuery.length;
+    }
+
+    return result;
   }
 
   function escapeRegExp(string) {
@@ -3242,7 +3295,7 @@ if (typeof window.dashboardInitialized === "undefined") {
       const selectedMember = allMembersData.find(
         (member) =>
           member.Nome &&
-          member.Nome.toLowerCase() === selectedName.toLowerCase()
+          normalizeString(member.Nome) === normalizeString(selectedName)
       );
 
       if (selectedMember) {
