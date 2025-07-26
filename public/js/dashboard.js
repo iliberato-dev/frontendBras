@@ -1806,19 +1806,34 @@ if (typeof window.dashboardInitialized === "undefined") {
         0
       );
 
+      // Calcula estatísticas melhoradas conforme solicitado
+      const totalPeopleInGroup = filteredMembers.length;
+      const totalPossiblePresences =
+        totalPeopleInGroup * (summaryData.totalMeetingDays || 1);
+      const generalPresencePercentage =
+        totalPossiblePresences > 0
+          ? Math.round((totalPresences / totalPossiblePresences) * 100)
+          : 0;
+      const absencePercentage = 100 - generalPresencePercentage;
+
       console.log("🔢 Totais calculados:", {
         totalPresences,
         totalAbsences,
-        filteredMembersCount: filteredMembers.length,
+        totalPeopleInGroup,
+        generalPresencePercentage,
+        absencePercentage,
+        totalPossiblePresences,
       });
 
-      dashboardPresencasMes.textContent = totalPresences;
-      dashboardFaltasMes.textContent = totalAbsences;
+      // Atualiza com porcentagem geral do grupo em vez do total absoluto
+      dashboardPresencasMes.textContent = `${generalPresencePercentage}%`;
+      // Atualiza com porcentagem de faltas em vez do total absoluto
+      dashboardFaltasMes.textContent = `${absencePercentage}%`;
 
-      // Adiciona informação sobre total de reuniões para maior clareza
+      // Adiciona informação sobre total de pessoas do grupo
       const dashboardInfo = document.getElementById("dashboardTotalReunions");
       if (dashboardInfo) {
-        dashboardInfo.textContent = summaryData.totalMeetingDays || 0;
+        dashboardInfo.textContent = totalPeopleInGroup;
       }
 
       dashboardPeriodo.textContent =
@@ -1885,8 +1900,12 @@ if (typeof window.dashboardInitialized === "undefined") {
     } catch (error) {
       console.error("❌ Erro ao carregar resumo:", error);
       showMessage(`Erro ao carregar resumo: ${error.message}`, "error");
-      dashboardPresencasMes.textContent = "-";
-      dashboardFaltasMes.textContent = "-";
+      dashboardPresencasMes.textContent = "0%";
+      dashboardFaltasMes.textContent = "0%";
+      const dashboardInfo = document.getElementById("dashboardTotalReunions");
+      if (dashboardInfo) {
+        dashboardInfo.textContent = "0";
+      }
     } finally {
       showGlobalLoading(false);
     }
@@ -3325,6 +3344,9 @@ if (typeof window.dashboardInitialized === "undefined") {
     const gapes = [
       ...new Set(allMembersData.map((m) => m.GAPE).filter(Boolean)),
     ].sort();
+    const periodos = [
+      ...new Set(allMembersData.map((m) => m.Periodo).filter(Boolean)),
+    ].sort();
 
     if (filterLiderInput) {
       filterLiderInput.innerHTML =
@@ -3335,6 +3357,247 @@ if (typeof window.dashboardInitialized === "undefined") {
       filterGapeInput.innerHTML =
         '<option value="">Todos</option>' +
         gapes.map((g) => `<option value="${g}">${g}</option>`).join("");
+    }
+    if (filterPeriodoSelect) {
+      filterPeriodoSelect.innerHTML =
+        '<option value="">Todos</option>' +
+        periodos.map((p) => `<option value="${p}">${p}</option>`).join("");
+    }
+  }
+
+  // Função para atualizar filtros dinamicamente baseado nas seleções
+  function updateFiltersBasedOnSelection() {
+    const currentLider = filterLiderInput?.value;
+    const currentGape = filterGapeInput?.value;
+    const currentPeriodo = filterPeriodoSelect?.value;
+
+    // Verifica se é admin
+    const leaderName = localStorage.getItem("loggedInLeaderName");
+    const isAdmin = !leaderName || leaderName === "admin";
+
+    console.log("🔄 Atualizando filtros dinamicamente:", {
+      lider: currentLider,
+      gape: currentGape,
+      periodo: currentPeriodo,
+      isAdmin: isAdmin,
+    });
+
+    // Para admin: auto-seleção e correspondência de filtros
+    if (isAdmin) {
+      if (currentLider && currentLider !== "") {
+        // Quando seleciona um líder, preenche automaticamente GAPE e período
+        const membrosDoLider = allMembersData.filter(
+          (m) => m.Lider === currentLider
+        );
+
+        // Pega os GAPEs únicos deste líder
+        const gapesDoLider = [
+          ...new Set(membrosDoLider.map((m) => m.GAPE).filter(Boolean)),
+        ];
+        // Pega os períodos únicos deste líder
+        const periodosDoLider = [
+          ...new Set(membrosDoLider.map((m) => m.Periodo).filter(Boolean)),
+        ];
+
+        console.log(`👨‍💼 Líder "${currentLider}" selecionado:`, {
+          gapes: gapesDoLider,
+          periodos: periodosDoLider,
+          totalMembros: membrosDoLider.length,
+        });
+
+        // Atualiza e seleciona automaticamente o GAPE (se houver apenas um)
+        if (filterGapeInput) {
+          filterGapeInput.innerHTML =
+            '<option value="">Todos</option>' +
+            gapesDoLider
+              .map((g) => `<option value="${g}">${g}</option>`)
+              .join("");
+
+          if (gapesDoLider.length === 1) {
+            filterGapeInput.value = gapesDoLider[0];
+            console.log(
+              `🎯 GAPE "${gapesDoLider[0]}" selecionado automaticamente`
+            );
+          } else if (gapesDoLider.length > 1) {
+            // Se há múltiplos GAPEs, seleciona o primeiro por padrão
+            filterGapeInput.value = gapesDoLider[0];
+            console.log(
+              `🎯 GAPE "${gapesDoLider[0]}" selecionado (primeiro da lista)`
+            );
+          }
+        }
+
+        // Atualiza e seleciona automaticamente o período (se houver apenas um)
+        if (filterPeriodoSelect) {
+          filterPeriodoSelect.innerHTML =
+            '<option value="">Todos</option>' +
+            periodosDoLider
+              .map((p) => `<option value="${p}">${p}</option>`)
+              .join("");
+
+          if (periodosDoLider.length === 1) {
+            filterPeriodoSelect.value = periodosDoLider[0];
+            console.log(
+              `📅 Período "${periodosDoLider[0]}" selecionado automaticamente`
+            );
+          } else if (periodosDoLider.length > 1) {
+            // Se há múltiplos períodos, seleciona o primeiro por padrão
+            filterPeriodoSelect.value = periodosDoLider[0];
+            console.log(
+              `📅 Período "${periodosDoLider[0]}" selecionado (primeiro da lista)`
+            );
+          }
+        }
+
+        return; // Sai da função para não executar a lógica padrão
+      }
+
+      if (currentGape && currentGape !== "") {
+        // Quando seleciona um GAPE, preenche automaticamente líder e período
+        const membrosDoGape = allMembersData.filter(
+          (m) => m.GAPE === currentGape
+        );
+
+        // Pega os líderes únicos deste GAPE
+        const lideresDoGape = [
+          ...new Set(membrosDoGape.map((m) => m.Lider).filter(Boolean)),
+        ];
+        // Pega os períodos únicos deste GAPE
+        const periodosDoGape = [
+          ...new Set(membrosDoGape.map((m) => m.Periodo).filter(Boolean)),
+        ];
+
+        console.log(`👥 GAPE "${currentGape}" selecionado:`, {
+          lideres: lideresDoGape,
+          periodos: periodosDoGape,
+          totalMembros: membrosDoGape.length,
+        });
+
+        // Atualiza e seleciona automaticamente o líder (se houver apenas um)
+        if (filterLiderInput) {
+          filterLiderInput.innerHTML =
+            '<option value="">Todos</option>' +
+            lideresDoGape
+              .map((l) => `<option value="${l}">${l}</option>`)
+              .join("");
+
+          if (lideresDoGape.length === 1) {
+            filterLiderInput.value = lideresDoGape[0];
+            console.log(
+              `🎯 Líder "${lideresDoGape[0]}" selecionado automaticamente`
+            );
+          } else if (lideresDoGape.length > 1) {
+            // Se há múltiplos líderes, seleciona o primeiro por padrão
+            filterLiderInput.value = lideresDoGape[0];
+            console.log(
+              `🎯 Líder "${lideresDoGape[0]}" selecionado (primeiro da lista)`
+            );
+          }
+        }
+
+        // Atualiza e seleciona automaticamente o período (se houver apenas um)
+        if (filterPeriodoSelect) {
+          filterPeriodoSelect.innerHTML =
+            '<option value="">Todos</option>' +
+            periodosDoGape
+              .map((p) => `<option value="${p}">${p}</option>`)
+              .join("");
+
+          if (periodosDoGape.length === 1) {
+            filterPeriodoSelect.value = periodosDoGape[0];
+            console.log(
+              `📅 Período "${periodosDoGape[0]}" selecionado automaticamente`
+            );
+          } else if (periodosDoGape.length > 1) {
+            // Se há múltiplos períodos, seleciona o primeiro por padrão
+            filterPeriodoSelect.value = periodosDoGape[0];
+            console.log(
+              `📅 Período "${periodosDoGape[0]}" selecionado (primeiro da lista)`
+            );
+          }
+        }
+
+        return; // Sai da função para não executar a lógica padrão
+      }
+    }
+
+    // Lógica padrão para não-admin ou quando não há seleção específica
+    let filteredData = allMembersData;
+
+    if (currentLider) {
+      filteredData = filteredData.filter((m) => m.Lider === currentLider);
+    }
+
+    if (currentGape) {
+      filteredData = filteredData.filter((m) => m.GAPE === currentGape);
+    }
+
+    // Atualiza as opções de período baseado nos membros filtrados
+    if (filterPeriodoSelect && (currentLider || currentGape)) {
+      const availablePeriodos = [
+        ...new Set(filteredData.map((m) => m.Periodo).filter(Boolean)),
+      ].sort();
+
+      console.log("📅 Períodos disponíveis após filtro:", availablePeriodos);
+
+      const currentSelected = filterPeriodoSelect.value;
+
+      filterPeriodoSelect.innerHTML =
+        '<option value="">Todos</option>' +
+        availablePeriodos
+          .map((p) => `<option value="${p}">${p}</option>`)
+          .join("");
+
+      // Mantém a seleção se ainda estiver disponível
+      if (availablePeriodos.includes(currentSelected)) {
+        filterPeriodoSelect.value = currentSelected;
+      }
+    }
+
+    // Atualiza as opções de líder baseado nas seleções
+    if (filterLiderInput && currentGape && !isAdmin) {
+      // Só para não-admin
+      const availableLideres = [
+        ...new Set(filteredData.map((m) => m.Lider).filter(Boolean)),
+      ].sort();
+
+      console.log("👨‍💼 Líderes disponíveis após filtro:", availableLideres);
+
+      const currentSelected = filterLiderInput.value;
+
+      filterLiderInput.innerHTML =
+        '<option value="">Todos</option>' +
+        availableLideres
+          .map((l) => `<option value="${l}">${l}</option>`)
+          .join("");
+
+      // Mantém a seleção se ainda estiver disponível
+      if (availableLideres.includes(currentSelected)) {
+        filterLiderInput.value = currentSelected;
+      }
+    }
+
+    // Atualiza as opções de GAPE baseado nas seleções
+    if (filterGapeInput && currentLider && !isAdmin) {
+      // Só para não-admin
+      const availableGapes = [
+        ...new Set(filteredData.map((m) => m.GAPE).filter(Boolean)),
+      ].sort();
+
+      console.log("👥 GAPEs disponíveis após filtro:", availableGapes);
+
+      const currentSelected = filterGapeInput.value;
+
+      filterGapeInput.innerHTML =
+        '<option value="">Todos</option>' +
+        availableGapes
+          .map((g) => `<option value="${g}">${g}</option>`)
+          .join("");
+
+      // Mantém a seleção se ainda estiver disponível
+      if (availableGapes.includes(currentSelected)) {
+        filterGapeInput.value = currentSelected;
+      }
     }
   }
 
@@ -3748,6 +4011,10 @@ if (typeof window.dashboardInitialized === "undefined") {
         if (!filterLiderInput?.disabled) filterLiderInput.value = "";
         if (!filterGapeInput?.disabled) filterGapeInput.value = "";
         hideNameAutocomplete(); // Esconde autocomplete se estiver aberto
+
+        // Restaura todas as opções dos filtros
+        fillSelectOptions();
+
         applyFilters();
         if (isDashboardOpen) fetchAndDisplaySummary();
         showMessage("🔄 Todos os filtros foram limpos", "info");
@@ -3812,12 +4079,16 @@ if (typeof window.dashboardInitialized === "undefined") {
 
     if (filterLiderInput) {
       filterLiderInput.addEventListener("change", () => {
+        updateFiltersBasedOnSelection();
+        applyFilters();
         if (isDashboardOpen) fetchAndDisplaySummary();
       });
     }
 
     if (filterGapeInput) {
       filterGapeInput.addEventListener("change", () => {
+        updateFiltersBasedOnSelection();
+        applyFilters();
         if (isDashboardOpen) fetchAndDisplaySummary();
       });
     }
