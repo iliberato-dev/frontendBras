@@ -1808,21 +1808,43 @@ if (typeof window.dashboardInitialized === "undefined") {
 
       // Calcula estatísticas melhoradas conforme solicitado
       const totalPeopleInGroup = filteredMembers.length;
-      const totalPossiblePresences =
-        totalPeopleInGroup * (summaryData.totalMeetingDays || 1);
-      const generalPresencePercentage =
-        totalPossiblePresences > 0
-          ? Math.round((totalPresences / totalPossiblePresences) * 100)
-          : 0;
-      const absencePercentage = 100 - generalPresencePercentage;
 
-      console.log("🔢 Totais calculados:", {
-        totalPresences,
-        totalAbsences,
+      // CORREÇÃO: Calcular porcentagem baseada nos membros com/sem presença
+      // Contar membros com presença registrada usando presencesDetails
+      const membersWithPresenceCount = Object.keys(presencesDetails).filter(
+        (memberName) => {
+          const memberData = presencesDetails[memberName];
+          return memberData && memberData.totalPresencas > 0;
+        }
+      ).length;
+
+      console.log("🔍 DEBUG presencesDetails:", Object.keys(presencesDetails));
+      console.log(
+        "🔍 Membros com presença:",
+        Object.keys(presencesDetails).filter((memberName) => {
+          const memberData = presencesDetails[memberName];
+          return memberData && memberData.totalPresencas > 0;
+        })
+      );
+
+      const membersWithoutPresenceCount =
+        totalPeopleInGroup - membersWithPresenceCount;
+
+      const generalPresencePercentage =
+        totalPeopleInGroup > 0
+          ? Math.round((membersWithPresenceCount / totalPeopleInGroup) * 100)
+          : 0;
+      const absencePercentage =
+        totalPeopleInGroup > 0
+          ? Math.round((membersWithoutPresenceCount / totalPeopleInGroup) * 100)
+          : 0;
+
+      console.log("🔢 Totais calculados (CORRIGIDO - baseado em membros):", {
         totalPeopleInGroup,
+        membersWithPresenceCount,
+        membersWithoutPresenceCount,
         generalPresencePercentage,
         absencePercentage,
-        totalPossiblePresences,
       });
 
       // Atualiza com porcentagem geral do grupo em vez do total absoluto
@@ -2492,15 +2514,22 @@ if (typeof window.dashboardInitialized === "undefined") {
             const membersWithPresence = Object.keys(presencesDetails).length;
             const membersWithoutPresence =
               membersToAnalyze.length - membersWithPresence;
+
+            // CORREÇÃO: Cálculo correto da média de presença baseada em membros
+            // Fórmula: (Membros com Presença / Total de Membros) × 100
             const avgPresenceRate =
               membersToAnalyze.length > 0
                 ? (
-                    (totalPresences /
-                      (membersToAnalyze.length *
-                        summaryData.totalMeetingDays)) *
+                    (membersWithPresence / membersToAnalyze.length) *
                     100
                   ).toFixed(1)
                 : 0;
+
+            console.log(`📊 Cálculo da média de presença por membros:
+              - Membros com presença: ${membersWithPresence}
+              - Total de membros: ${membersToAnalyze.length}
+              - Membros sem presença: ${membersWithoutPresence}
+              - Taxa calculada: ${avgPresenceRate}%`);
 
             // Ranking dos Top 5 mais presentes
             const topMembers = Object.entries(presencesDetails)
@@ -2647,7 +2676,8 @@ if (typeof window.dashboardInitialized === "undefined") {
             addInsightsSection(
               chartRenderData,
               selectedMemberName,
-              summaryData
+              summaryData,
+              membersToAnalyze
             );
           }, 100);
 
@@ -4119,7 +4149,8 @@ if (typeof window.dashboardInitialized === "undefined") {
   function addInsightsSection(
     chartRenderData,
     selectedMemberName,
-    summaryData
+    summaryData,
+    membersToAnalyze = []
   ) {
     try {
       console.log("🎯 Iniciando geração de insights...");
@@ -4201,20 +4232,21 @@ if (typeof window.dashboardInitialized === "undefined") {
       } else {
         console.log("🔍 Processando insights para grupo completo");
         // Insights para grupo
-        const totalMembers =
-          Object.keys(presencesDetails).length +
-          Object.keys(absencesDetails).length;
+        // Calcular total de membros no escopo atual usando membersToAnalyze
+        const membersWithPresence = Object.keys(presencesDetails).length;
+        const totalMembers = membersToAnalyze.length || membersWithPresence;
         console.log("📊 Total de membros:", totalMembers);
 
+        // CORREÇÃO: Cálculo correto da média de presença baseado em membros
         const avgPresenceRate =
           totalMembers > 0
-            ? (Object.values(presencesDetails).reduce(
-                (sum, data) => sum + data.totalPresencas,
-                0
-              ) /
-                (totalMembers * summaryData.totalMeetingDays)) *
-              100
+            ? ((membersWithPresence / totalMembers) * 100).toFixed(1)
             : 0;
+
+        console.log(`📊 Cálculo da média de presença do grupo (por membros):
+          - Membros com presença: ${membersWithPresence}
+          - Total de membros: ${totalMembers}
+          - Taxa calculada: ${avgPresenceRate}%`);
 
         console.log("📈 Taxa média de presença do grupo:", avgPresenceRate);
 
