@@ -31,6 +31,34 @@ if (typeof window.dashboardInitialized === "undefined") {
   let lastCacheKey = null;
   const CACHE_EXPIRY_TIME = 5 * 60 * 1000; // 5 minutos em millisegundos
 
+  // --- Função auxiliar para verificar restrições de grupo ---
+  // Esta função implementa a segurança de acesso por grupo:
+  // - Admin: pode ver e gerenciar todos os membros
+  // - Líder/Usuário comum: só pode ver e gerenciar membros do seu próprio grupo (GAPE)
+  function getUserGroupRestriction() {
+    const leaderName = localStorage.getItem("loggedInLeaderName");
+    const isAdmin = !leaderName || leaderName === "admin";
+
+    if (isAdmin) {
+      console.log("🔓 Usuário admin detectado - sem restrições de grupo");
+      return { isAdmin: true, userGroup: null };
+    }
+
+    const loggedInMember = allMembersData.find(
+      (member) =>
+        (member.Nome || "").toLowerCase().trim() ===
+        leaderName.toLowerCase().trim()
+    );
+
+    const userGroup = loggedInMember ? loggedInMember.GAPE : null;
+    console.log(`🔒 Usuário "${leaderName}" restrito ao grupo: "${userGroup}"`);
+
+    return {
+      isAdmin: false,
+      userGroup: userGroup,
+    };
+  }
+
   // --- Seletores de Elementos Globais ---
   const filterNameInput = document.getElementById("filterName");
   const filterPeriodoSelect = document.getElementById("filterPeriodo");
@@ -1021,9 +1049,18 @@ if (typeof window.dashboardInitialized === "undefined") {
       gape: (filterGapeInput?.value || "").toLowerCase().trim(),
     };
 
+    // Obtém as restrições de grupo do usuário logado
+    const { isAdmin, userGroup } = getUserGroupRestriction();
+
     filteredMembers = allMembersData.filter((member) => {
       const memberName = (member.Nome || "").toLowerCase();
+
+      // Restrição por grupo: se não for admin, só mostra membros do mesmo grupo
+      const groupRestriction =
+        isAdmin || !userGroup || member.GAPE === userGroup;
+
       return (
+        groupRestriction &&
         (!filters.name || memberName.includes(filters.name)) &&
         (!filters.periodo ||
           (member.Periodo || "").toLowerCase().includes(filters.periodo)) &&
@@ -1033,6 +1070,16 @@ if (typeof window.dashboardInitialized === "undefined") {
           (member.GAPE || "").toLowerCase().includes(filters.gape))
       );
     });
+
+    console.log(
+      `📋 Filtros aplicados: ${filteredMembers.length} de ${allMembersData.length} membros`
+    );
+    if (!isAdmin && userGroup) {
+      const membersInUserGroup = allMembersData.filter(
+        (m) => m.GAPE === userGroup
+      ).length;
+      console.log(`👥 Membros no grupo "${userGroup}": ${membersInUserGroup}`);
+    }
 
     displayMembers(filteredMembers);
   }
@@ -3093,10 +3140,22 @@ if (typeof window.dashboardInitialized === "undefined") {
       return;
     }
 
-    // Filtra nomes que contenham a query
+    // Obtém as restrições de grupo do usuário logado
+    const { isAdmin, userGroup } = getUserGroupRestriction();
+
+    // Filtra nomes que contenham a query, restringindo por grupo se necessário
     const matchingNames = allMembersData
+      .filter((member) => {
+        // Restrição por grupo: se não for admin, só mostra membros do mesmo grupo
+        const groupRestriction =
+          isAdmin || !userGroup || member.GAPE === userGroup;
+        return (
+          groupRestriction &&
+          member.Nome &&
+          member.Nome.toLowerCase().includes(query)
+        );
+      })
       .map((member) => member.Nome)
-      .filter((name) => name && name.toLowerCase().includes(query))
       .sort()
       .slice(0, 8); // Limita a 8 sugestões
 
