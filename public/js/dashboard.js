@@ -1432,9 +1432,16 @@ if (typeof window.dashboardInitialized === "undefined") {
                             : ""
                         }
                     </div>
-                    <div class="font-bold text-lg text-gray-800">${
-                      member.Nome || "N/A"
-                    }</div>
+                    <div>
+                      <div class="font-bold text-lg text-gray-800">${
+                        member.Nome || "N/A"
+                      }</div>
+                      ${
+                        member.RI
+                          ? `<div class="text-sm text-blue-600 font-mono">RI - ${member.RI}</div>`
+                          : ""
+                      }
+                    </div>
                 </div>
                 <button class="btn-history text-gray-400 hover:text-blue-600 transition" data-member-name="${
                   member.Nome
