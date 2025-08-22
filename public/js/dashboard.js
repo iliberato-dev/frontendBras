@@ -19,6 +19,22 @@ if (typeof window.dashboardInitialized === "undefined") {
     return name ? name.replace(/[^a-zA-Z0-9]/g, "_").toLowerCase() : "";
   }
 
+  // Função para normalizar strings removendo acentos e convertendo para minúsculas
+  // Permite busca insensível a acentos: "Jose" encontra "José" e vice-versa
+  // Exemplos: "José" → "jose", "María" → "maria", "João" → "joao"
+  function normalizeString(str) {
+    if (!str || typeof str !== "string") return "";
+    const normalized = str
+      .toLowerCase()
+      .normalize("NFD") // Decompõe caracteres acentuados
+      .replace(/[\u0300-\u036f]/g, "") // Remove os acentos (diacríticos)
+      .trim();
+
+    // Log de debug para verificar normalização (remover em produção)
+
+    return normalized;
+  }
+
   let allMembersData = [];
   let filteredMembers = [];
   let lastPresencesData = {};
@@ -26,250 +42,39 @@ if (typeof window.dashboardInitialized === "undefined") {
   let myChart = null;
   let myBarChart = null;
 
+  // Variável global para armazenar dados reais do último resumo gerado
+  let lastRealSummaryData = null;
+
   // Cache para otimização de performance
   let summaryCache = new Map();
   let lastCacheKey = null;
   const CACHE_EXPIRY_TIME = 5 * 60 * 1000; // 5 minutos em millisegundos
 
-  // Cache Manager - Sistema de cache local otimizado
-  class CacheManager {
-    constructor() {
-      this.cachePrefix = "dashboard_cache_";
-      this.defaultTTL = 5 * 60 * 1000; // 5 minutos
-      this.maxCacheSize = 50; // Máximo de itens no cache
+  // --- Função auxiliar para verificar restrições de grupo ---
+  // Esta função implementa a segurança de acesso por grupo:
+  // - Admin: pode ver e gerenciar todos os membros
+  // - Líder/Usuário comum: só pode ver e gerenciar membros do seu próprio grupo (GAPE)
+  function getUserGroupRestriction() {
+    const leaderName = localStorage.getItem("loggedInLeaderName");
+    const isAdmin = !leaderName || leaderName === "admin";
+
+    if (isAdmin) {
+      console.log("🔓 Usuário admin detectado - sem restrições de grupo");
+      return { isAdmin: true, userGroup: null };
     }
 
-    // Gerar chave única para o cache
-    generateKey(endpoint, params = {}) {
-      const sortedParams = Object.keys(params)
-        .sort()
-        .map((key) => `${key}=${params[key]}`)
-        .join("&");
-      return `${this.cachePrefix}${endpoint}_${sortedParams}`;
-    }
+    const loggedInMember = allMembersData.find(
+      (member) =>
+        normalizeString(member.Nome || "") === normalizeString(leaderName)
+    );
 
-    // Salvar dados no cache
-    set(key, data, ttl = this.defaultTTL) {
-      try {
-        const cacheItem = {
-          data: data,
-          timestamp: Date.now(),
-          ttl: ttl,
-          expires: Date.now() + ttl,
-        };
+    const userGroup = loggedInMember ? loggedInMember.GAPE : null;
+    console.log(`🔒 Usuário "${leaderName}" restrito ao grupo: "${userGroup}"`);
 
-        localStorage.setItem(key, JSON.stringify(cacheItem));
-
-        // Limpar cache antigo se necessário
-        this.cleanupCache();
-
-        console.log(`💾 Cache salvo: ${key} (TTL: ${ttl / 1000}s)`);
-        return true;
-      } catch (error) {
-        console.warn("⚠️ Erro ao salvar cache:", error);
-        return false;
-      }
-    }
-
-    // Recuperar dados do cache
-    get(key) {
-      try {
-        const cached = localStorage.getItem(key);
-        if (!cached) return null;
-
-        const cacheItem = JSON.parse(cached);
-
-        // Verificar se o cache ainda é válido
-        if (Date.now() > cacheItem.expires) {
-          localStorage.removeItem(key);
-          console.log(`🗑️ Cache expirado removido: ${key}`);
-          return null;
-        }
-
-        console.log(`📦 Cache encontrado: ${key}`);
-        return cacheItem.data;
-      } catch (error) {
-        console.warn("⚠️ Erro ao ler cache:", error);
-        localStorage.removeItem(key);
-        return null;
-      }
-    }
-
-    // Verificar se existe cache válido
-    has(key) {
-      return this.get(key) !== null;
-    }
-
-    // Remover item específico do cache
-    remove(key) {
-      localStorage.removeItem(key);
-      console.log(`🗑️ Cache removido: ${key}`);
-    }
-
-    // Limpar todo o cache do dashboard
-    clear() {
-      const keys = Object.keys(localStorage);
-      keys.forEach((key) => {
-        if (key.startsWith(this.cachePrefix)) {
-          localStorage.removeItem(key);
-        }
-      });
-      console.log("🧹 Cache limpo completamente");
-    }
-
-    // Limpeza automática de cache antigo
-    cleanupCache() {
-      try {
-        const keys = Object.keys(localStorage);
-        const dashboardKeys = keys.filter((key) =>
-          key.startsWith(this.cachePrefix)
-        );
-
-        // Se exceder o limite, remover os mais antigos
-        if (dashboardKeys.length > this.maxCacheSize) {
-          const cacheItems = dashboardKeys
-            .map((key) => {
-              try {
-                const item = JSON.parse(localStorage.getItem(key));
-                return { key, timestamp: item.timestamp };
-              } catch {
-                return { key, timestamp: 0 };
-              }
-            })
-            .sort((a, b) => a.timestamp - b.timestamp);
-
-          // Remover os 10 mais antigos
-          const toRemove = cacheItems.slice(0, 10);
-          toRemove.forEach((item) => localStorage.removeItem(item.key));
-
-          console.log(
-            `🧹 Limpeza automática: ${toRemove.length} itens removidos`
-          );
-        }
-
-        // Remover itens expirados
-        dashboardKeys.forEach((key) => {
-          try {
-            const item = JSON.parse(localStorage.getItem(key));
-            if (Date.now() > item.expires) {
-              localStorage.removeItem(key);
-            }
-          } catch {
-            localStorage.removeItem(key);
-          }
-        });
-      } catch (error) {
-        console.warn("⚠️ Erro na limpeza do cache:", error);
-      }
-    }
-
-    // Obter estatísticas do cache
-    getStats() {
-      const keys = Object.keys(localStorage);
-      const dashboardKeys = keys.filter((key) =>
-        key.startsWith(this.cachePrefix)
-      );
-
-      let totalSize = 0;
-      let validItems = 0;
-      let expiredItems = 0;
-
-      dashboardKeys.forEach((key) => {
-        try {
-          const value = localStorage.getItem(key);
-          totalSize += value.length;
-
-          const item = JSON.parse(value);
-          if (Date.now() > item.expires) {
-            expiredItems++;
-          } else {
-            validItems++;
-          }
-        } catch {
-          expiredItems++;
-        }
-      });
-
-      return {
-        totalItems: dashboardKeys.length,
-        validItems,
-        expiredItems,
-        totalSize: Math.round(totalSize / 1024) + "KB",
-      };
-    }
-  }
-
-  // Instanciar o gerenciador de cache
-  const cacheManager = new CacheManager();
-
-  // Função global para atualizar dados (chamada pelos botões de atualização)
-  window.atualizarDashboard = function () {
-    console.log("🔄 Forçando atualização do dashboard...");
-
-    // Limpar cache relacionado ao dashboard
-    const mes = dashboardMesFilter?.value || "";
-    const grupo = dashboardGrupoFilter?.value || "";
-    const cacheKey = cacheManager.generateKey("dashboard-stats", {
-      mes,
-      grupo,
-    });
-    cacheManager.remove(cacheKey);
-
-    // Recarregar dados
-    carregarDadosDashboard(mes, grupo);
-  };
-
-  // Função para limpar todo o cache
-  window.limparCache = function () {
-    cacheManager.clear();
-    console.log("🧹 Cache limpo! Recarregando página...");
-    window.location.reload();
-  };
-
-  // Função para mostrar estatísticas do cache (para debug)
-  window.mostrarStatsCache = function () {
-    const stats = cacheManager.getStats();
-    console.log("📊 Estatísticas do Cache:", stats);
-
-    // Mostrar no console de forma organizada
-    console.table({
-      "Total de itens": stats.totalItems,
-      "Itens válidos": stats.validItems,
-      "Itens expirados": stats.expiredItems,
-      "Tamanho total": stats.totalSize,
-    });
-
-    return stats;
-  };
-
-  // Função para invalidar cache específico
-  window.invalidarCache = function (endpoint, params = {}) {
-    const key = cacheManager.generateKey(endpoint, params);
-    cacheManager.remove(key);
-    console.log(`🗑️ Cache invalidado: ${endpoint}`);
-  };
-
-  // Inicialização do sistema de cache
-  function initializeCache() {
-    // Limpeza automática na inicialização
-    cacheManager.cleanupCache();
-
-    // Mostrar estatísticas do cache
-    const stats = cacheManager.getStats();
-    console.log("🚀 Sistema de Cache inicializado");
-    console.log("📊 Estatísticas:", stats);
-
-    // Configurar limpeza automática a cada 10 minutos
-    setInterval(() => {
-      cacheManager.cleanupCache();
-    }, 10 * 60 * 1000);
-  }
-
-  // Chamar inicialização quando o DOM estiver pronto
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", initializeCache);
-  } else {
-    initializeCache();
+    return {
+      isAdmin: false,
+      userGroup: userGroup,
+    };
   }
 
   // --- Seletores de Elementos Globais ---
@@ -633,6 +438,10 @@ if (typeof window.dashboardInitialized === "undefined") {
   }
 
   async function handlePhotoUpload(file, memberName) {
+    console.log("🎯 handlePhotoUpload chamada:", {
+      file: file?.name,
+      memberName,
+    });
     if (!file) return;
 
     // Validações
@@ -647,79 +456,9 @@ if (typeof window.dashboardInitialized === "undefined") {
       return;
     }
 
-    // Mostra loading durante o processamento
-    showGlobalLoading(true, "Processando imagem...");
-
-    const reader = new FileReader();
-
-    reader.onload = async function (e) {
-      const img = new Image();
-
-      img.onload = async function () {
-        try {
-          // Cria canvas para redimensionar a imagem
-          const canvas = document.createElement("canvas");
-          const ctx = canvas.getContext("2d");
-
-          // Define tamanho máximo (200x200 pixels)
-          const maxSize = 200;
-          let { width, height } = img;
-
-          if (width > height) {
-            if (width > maxSize) {
-              height = (height * maxSize) / width;
-              width = maxSize;
-            }
-          } else {
-            if (height > maxSize) {
-              width = (width * maxSize) / height;
-              height = maxSize;
-            }
-          }
-
-          canvas.width = width;
-          canvas.height = height;
-
-          // Desenha a imagem redimensionada
-          ctx.drawImage(img, 0, 0, width, height);
-
-          // Converte para base64 com qualidade comprimida
-          const compressedBase64 = canvas.toDataURL("image/jpeg", 0.8);
-
-          // Salva a foto no servidor
-          const photoUrl = await saveMemberPhoto(memberName, compressedBase64);
-
-          // Atualiza a foto na interface
-          updateMemberPhotoInCard(memberName, photoUrl);
-
-          // Recarrega os membros para ter as URLs atualizadas
-          await fetchMembers();
-
-          showGlobalLoading(false);
-          showMessage(
-            `✅ Foto de ${memberName} atualizada com sucesso!`,
-            "success"
-          );
-        } catch (error) {
-          showGlobalLoading(false);
-          showMessage("Erro ao salvar foto no servidor", "error");
-        }
-      };
-
-      img.onerror = function () {
-        showGlobalLoading(false);
-        showMessage("Erro ao processar a imagem", "error");
-      };
-
-      img.src = e.target.result;
-    };
-
-    reader.onerror = function () {
-      showGlobalLoading(false);
-      showMessage("Erro ao ler o arquivo de imagem", "error");
-    };
-
-    reader.readAsDataURL(file);
+    console.log("✅ Arquivo validado, abrindo editor de fotos...");
+    // Abre o editor de fotos diretamente
+    showPhotoEditor(file, memberName);
   }
 
   function updateMemberPhotoInCard(memberName, photoUrl) {
@@ -855,6 +594,297 @@ if (typeof window.dashboardInitialized === "undefined") {
     } finally {
       showGlobalLoading(false);
     }
+  }
+
+  // Função para capturar foto da câmera
+  // Função para abrir editor de fotos com recorte
+  async function openPhotoEditor(memberName) {
+    console.log("🖼️ Abrindo editor de fotos para:", memberName);
+
+    // Cria input de arquivo temporário
+    const fileInput = document.createElement("input");
+    fileInput.type = "file";
+    fileInput.accept = "image/*";
+    fileInput.style.display = "none";
+
+    fileInput.onchange = (e) => {
+      const file = e.target.files[0];
+      if (file) {
+        showPhotoEditor(file, memberName);
+      }
+    };
+
+    document.body.appendChild(fileInput);
+    fileInput.click();
+    document.body.removeChild(fileInput);
+  }
+
+  // Editor de fotos com recorte e redimensionamento
+  function showPhotoEditor(file, memberName) {
+    console.log("✂️ Mostrando editor de fotos para:", memberName);
+
+    const reader = new FileReader();
+
+    reader.onload = (e) => {
+      // Cria modal do editor
+      const editorModal = document.createElement("div");
+      editorModal.className =
+        "fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50";
+      editorModal.innerHTML = `
+        <div class="bg-white rounded-lg p-6 max-w-2xl w-full mx-4 max-h-[90vh] overflow-auto">
+          <h3 class="text-lg font-semibold mb-4 text-center">Editor de Foto - ${memberName}</h3>
+          
+          <!-- Área do editor -->
+          <div class="relative mb-4">
+            <canvas id="photoCanvas" class="border border-gray-300 rounded-lg max-w-full"></canvas>
+          </div>
+          
+          <!-- Controles -->
+          <div class="space-y-4">
+            <!-- Controles de recorte -->
+            <div class="grid grid-cols-2 gap-4">
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Posição X:</label>
+                <input type="range" id="cropX" min="0" max="100" value="0" class="w-full">
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Posição Y:</label>
+                <input type="range" id="cropY" min="0" max="100" value="0" class="w-full">
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Largura:</label>
+                <input type="range" id="cropWidth" min="20" max="100" value="100" class="w-full">
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Altura:</label>
+                <input type="range" id="cropHeight" min="20" max="100" value="100" class="w-full">
+              </div>
+            </div>
+            
+            <!-- Botões de ação -->
+            <div class="flex gap-3">
+              <button id="resetCrop" class="flex-1 bg-gray-500 text-white py-2 px-4 rounded-lg hover:bg-gray-600 transition-colors">
+                <i class="fas fa-undo mr-2"></i>Resetar
+              </button>
+              <button id="centerCrop" class="flex-1 bg-blue-500 text-white py-2 px-4 rounded-lg hover:bg-blue-600 transition-colors">
+                <i class="fas fa-crosshairs mr-2"></i>Centralizar
+              </button>
+              <button id="squareCrop" class="flex-1 bg-purple-500 text-white py-2 px-4 rounded-lg hover:bg-purple-600 transition-colors">
+                <i class="fas fa-square mr-2"></i>Quadrado
+              </button>
+            </div>
+            
+            <!-- Botões principais -->
+            <div class="flex gap-3">
+              <button id="savePhoto" class="flex-1 bg-green-500 text-white py-2 px-4 rounded-lg hover:bg-green-600 transition-colors">
+                <i class="fas fa-save mr-2"></i>Salvar Foto
+              </button>
+              <button id="cancelEdit" class="flex-1 bg-red-500 text-white py-2 px-4 rounded-lg hover:bg-red-600 transition-colors">
+                <i class="fas fa-times mr-2"></i>Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      `;
+
+      document.body.appendChild(editorModal);
+
+      // Inicializa o editor
+      initializePhotoEditor(e.target.result, memberName, editorModal);
+    };
+
+    reader.readAsDataURL(file);
+  }
+
+  function initializePhotoEditor(imageSrc, memberName, modal) {
+    const canvas = document.getElementById("photoCanvas");
+    const ctx = canvas.getContext("2d");
+    const img = new Image();
+
+    let originalWidth, originalHeight;
+    let cropX = 0,
+      cropY = 0,
+      cropWidth = 100,
+      cropHeight = 100;
+
+    img.onload = () => {
+      originalWidth = img.width;
+      originalHeight = img.height;
+
+      // Define tamanho do canvas (máximo 500px para facilitar edição)
+      const maxSize = 500;
+      const scale = Math.min(maxSize / originalWidth, maxSize / originalHeight);
+      canvas.width = originalWidth * scale;
+      canvas.height = originalHeight * scale;
+
+      // Desenha a imagem inicial
+      redrawCanvas();
+
+      // Configura event listeners
+      setupEditorControls();
+    };
+
+    function redrawCanvas() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // Desenha a imagem original
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+      // Desenha overlay de recorte
+      const cropXPx = (cropX / 100) * canvas.width;
+      const cropYPx = (cropY / 100) * canvas.height;
+      const cropWidthPx = (cropWidth / 100) * canvas.width;
+      const cropHeightPx = (cropHeight / 100) * canvas.height;
+
+      // Overlay escuro
+      ctx.fillStyle = "rgba(0, 0, 0, 0.5)";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Área de recorte (transparente)
+      ctx.clearRect(cropXPx, cropYPx, cropWidthPx, cropHeightPx);
+      ctx.drawImage(
+        img,
+        (cropX / 100) * originalWidth,
+        (cropY / 100) * originalHeight,
+        (cropWidth / 100) * originalWidth,
+        (cropHeight / 100) * originalHeight,
+        cropXPx,
+        cropYPx,
+        cropWidthPx,
+        cropHeightPx
+      );
+
+      // Borda da seleção
+      ctx.strokeStyle = "#3b82f6";
+      ctx.lineWidth = 2;
+      ctx.strokeRect(cropXPx, cropYPx, cropWidthPx, cropHeightPx);
+    }
+
+    function setupEditorControls() {
+      const cropXSlider = document.getElementById("cropX");
+      const cropYSlider = document.getElementById("cropY");
+      const cropWidthSlider = document.getElementById("cropWidth");
+      const cropHeightSlider = document.getElementById("cropHeight");
+
+      // Event listeners para sliders
+      [cropXSlider, cropYSlider, cropWidthSlider, cropHeightSlider].forEach(
+        (slider) => {
+          slider.addEventListener("input", () => {
+            cropX = parseInt(cropXSlider.value);
+            cropY = parseInt(cropYSlider.value);
+            cropWidth = parseInt(cropWidthSlider.value);
+            cropHeight = parseInt(cropHeightSlider.value);
+
+            // Ajusta limites
+            cropXSlider.max = 100 - cropWidth;
+            cropYSlider.max = 100 - cropHeight;
+
+            if (cropX > 100 - cropWidth) cropX = 100 - cropWidth;
+            if (cropY > 100 - cropHeight) cropY = 100 - cropHeight;
+
+            cropXSlider.value = cropX;
+            cropYSlider.value = cropY;
+
+            redrawCanvas();
+          });
+        }
+      );
+
+      // Botão resetar
+      document.getElementById("resetCrop").onclick = () => {
+        cropX = 0;
+        cropY = 0;
+        cropWidth = 100;
+        cropHeight = 100;
+        cropXSlider.value = 0;
+        cropYSlider.value = 0;
+        cropWidthSlider.value = 100;
+        cropHeightSlider.value = 100;
+        redrawCanvas();
+      };
+
+      // Botão centralizar
+      document.getElementById("centerCrop").onclick = () => {
+        cropX = (100 - cropWidth) / 2;
+        cropY = (100 - cropHeight) / 2;
+        cropXSlider.value = cropX;
+        cropYSlider.value = cropY;
+        redrawCanvas();
+      };
+
+      // Botão quadrado
+      document.getElementById("squareCrop").onclick = () => {
+        const size = Math.min(cropWidth, cropHeight);
+        cropWidth = size;
+        cropHeight = size;
+        cropWidthSlider.value = size;
+        cropHeightSlider.value = size;
+        redrawCanvas();
+      };
+
+      // Botão salvar
+      document.getElementById("savePhoto").onclick = async () => {
+        try {
+          showGlobalLoading(true, "Processando foto...");
+
+          // Cria canvas para o resultado final
+          const resultCanvas = document.createElement("canvas");
+          const resultCtx = resultCanvas.getContext("2d");
+
+          // Define tamanho final (200x200 para perfil)
+          resultCanvas.width = 200;
+          resultCanvas.height = 200;
+
+          // Calcula área de recorte na imagem original
+          const srcX = (cropX / 100) * originalWidth;
+          const srcY = (cropY / 100) * originalHeight;
+          const srcWidth = (cropWidth / 100) * originalWidth;
+          const srcHeight = (cropHeight / 100) * originalHeight;
+
+          // Desenha a área recortada redimensionada
+          resultCtx.drawImage(
+            img,
+            srcX,
+            srcY,
+            srcWidth,
+            srcHeight,
+            0,
+            0,
+            200,
+            200
+          );
+
+          // Converte para base64
+          const photoBase64 = resultCanvas.toDataURL("image/jpeg", 0.8);
+
+          // Salva no servidor
+          const photoUrl = await saveMemberPhoto(memberName, photoBase64);
+
+          if (photoUrl) {
+            updateMemberPhotoInCard(memberName, photoUrl);
+            await fetchMembers();
+            showMessage(
+              `✅ Foto de ${memberName} salva com sucesso!`,
+              "success"
+            );
+          }
+
+          modal.remove();
+        } catch (error) {
+          console.error("Erro ao salvar foto:", error);
+          showMessage("Erro ao salvar foto", "error");
+        } finally {
+          showGlobalLoading(false);
+        }
+      };
+
+      // Botão cancelar
+      document.getElementById("cancelEdit").onclick = () => {
+        modal.remove();
+      };
+    }
+
+    img.src = imageSrc;
   }
 
   // Função para capturar foto da câmera
@@ -1078,15 +1108,19 @@ if (typeof window.dashboardInitialized === "undefined") {
 
     menu.innerHTML = `
       <div class="px-3 py-2 text-sm font-semibold text-gray-700 border-b border-gray-200">
-        ${memberName}
+        📸 Opções de Foto - ${memberName}
       </div>
       <button id="selectFile" class="w-full px-4 py-2 text-left hover:bg-blue-50 text-blue-600 flex items-center gap-2">
         <i class="fas fa-folder-open"></i>
-        Selecionar arquivo
+        Selecionar da galeria
+      </button>
+      <button id="editPhoto" class="w-full px-4 py-2 text-left hover:bg-purple-50 text-purple-600 flex items-center gap-2">
+        <i class="fas fa-edit"></i>
+        Editor com recorte
       </button>
       <button id="useCamera" class="w-full px-4 py-2 text-left hover:bg-green-50 text-green-600 flex items-center gap-2">
         <i class="fas fa-camera"></i>
-        Usar câmera
+        Tirar foto (câmera)
       </button>
       ${
         hasCustomPhoto
@@ -1105,14 +1139,49 @@ if (typeof window.dashboardInitialized === "undefined") {
 
     // Event listeners para as opções
     document.getElementById("selectFile").onclick = () => {
+      console.log("📁 Botão 'Selecionar da galeria' clicado para:", memberName);
       menu.remove();
-      // Encontra o input de arquivo correspondente e clica nele
-      const photoInput = document.querySelector(
-        `input[data-member-name="${memberName}"]`
-      );
-      if (photoInput) {
-        photoInput.click();
-      }
+
+      // Cria input de arquivo temporário para seleção da galeria
+      const fileInput = document.createElement("input");
+      fileInput.type = "file";
+      fileInput.accept = "image/*";
+      fileInput.style.display = "none";
+
+      fileInput.onchange = (e) => {
+        const file = e.target.files[0];
+        console.log("📄 Arquivo selecionado:", file ? file.name : "nenhum");
+        if (file) {
+          handlePhotoUpload(file, memberName);
+        }
+        // Remove o input após o uso
+        if (fileInput.parentNode) {
+          fileInput.parentNode.removeChild(fileInput);
+        }
+      };
+
+      // Adiciona evento para limpar caso o usuário cancele
+      fileInput.oncancel = () => {
+        console.log("❌ Seleção de arquivo cancelada");
+        if (fileInput.parentNode) {
+          fileInput.parentNode.removeChild(fileInput);
+        }
+      };
+
+      document.body.appendChild(fileInput);
+      fileInput.click();
+
+      // Fallback para remover após 30 segundos se não foi usado
+      setTimeout(() => {
+        if (fileInput.parentNode) {
+          fileInput.parentNode.removeChild(fileInput);
+        }
+      }, 30000);
+    };
+
+    document.getElementById("editPhoto").onclick = () => {
+      menu.remove();
+      openPhotoEditor(memberName);
     };
 
     document.getElementById("useCamera").onclick = () => {
@@ -1194,57 +1263,6 @@ if (typeof window.dashboardInitialized === "undefined") {
     }
 
     try {
-      // Verificar cache primeiro
-      const cacheKeyMembers = cacheManager.generateKey("get-membros");
-      const cacheKeyPresences = cacheManager.generateKey(
-        "get-all-last-presences"
-      );
-
-      const cachedMembers = cacheManager.get(cacheKeyMembers);
-      const cachedPresences = cacheManager.get(cacheKeyPresences);
-
-      // Se temos cache válido, usar primeiro e buscar atualização em background
-      if (cachedMembers && cachedPresences) {
-        console.log("📦 Usando dados do cache...");
-
-        // Usar dados do cache imediatamente
-        allMembersData = cachedMembers.membros || [];
-        lastPresencesData = cachedPresences.data || {};
-
-        fillSelectOptions();
-        applyFilters();
-        showGlobalLoading(false);
-        setupLeaderView();
-
-        // Inicializar autocomplete
-        setTimeout(() => {
-          initializeNameAutocomplete();
-        }, 100);
-
-        // Buscar atualizações em background (opcional)
-        fetchMembersFromServer(true);
-        return;
-      }
-
-      // Se não há cache, buscar do servidor
-      await fetchMembersFromServer(false);
-    } catch (error) {
-      showMessage(`Erro ao carregar dados: ${error.message}`, "error");
-    } finally {
-      if (!cachedMembers || !cachedPresences) {
-        showGlobalLoading(false);
-        setupLeaderView();
-      }
-    }
-  }
-
-  // Função separada para buscar do servidor
-  async function fetchMembersFromServer(isBackgroundUpdate = false) {
-    try {
-      if (!isBackgroundUpdate) {
-        showGlobalLoading(true, "Buscando dados atualizados...");
-      }
-
       const [membersResponse, presencesResponse] = await Promise.all([
         fetch(`${BACKEND_URL}/get-membros`),
         fetch(`${BACKEND_URL}/get-all-last-presences`),
@@ -1258,21 +1276,8 @@ if (typeof window.dashboardInitialized === "undefined") {
       }
 
       const membersData = await membersResponse.json();
-      const lastPresencesRawData = await presencesResponse.json();
-
-      // Salvar no cache
-      const cacheKeyMembers = cacheManager.generateKey("get-membros");
-      const cacheKeyPresences = cacheManager.generateKey(
-        "get-all-last-presences"
-      );
-
-      cacheManager.set(cacheKeyMembers, membersData, 3 * 60 * 1000); // 3 minutos para membros
-      cacheManager.set(cacheKeyPresences, lastPresencesRawData, 2 * 60 * 1000); // 2 minutos para presenças
-
       console.log("📊 Dados dos membros recebidos:", membersData);
       allMembersData = membersData.membros || [];
-      lastPresencesData = lastPresencesRawData.data || {};
-
       console.log("👥 Membros processados:", allMembersData.length);
       console.log("🔍 Primeiro membro:", allMembersData[0]);
       console.log("🖼️ FotoURL do primeiro membro:", allMembersData[0]?.FotoURL);
@@ -1300,43 +1305,44 @@ if (typeof window.dashboardInitialized === "undefined") {
         });
       }
 
-      // Atualizar interface apenas se não for update em background
-      if (!isBackgroundUpdate) {
-        fillSelectOptions();
-        applyFilters();
+      const lastPresencesRawData = await presencesResponse.json();
+      lastPresencesData = lastPresencesRawData.data || {};
 
-        // Reinicializa o autocomplete após carregar os dados
-        setTimeout(() => {
-          initializeNameAutocomplete();
-        }, 100);
-      } else {
-        // Se for background update, apenas atualizar dados silenciosamente
-        console.log("🔄 Dados atualizados em background");
-      }
+      fillSelectOptions();
+      applyFilters();
+
+      // Reinicializa o autocomplete após carregar os dados
+      setTimeout(() => {
+        initializeNameAutocomplete();
+      }, 100);
     } catch (error) {
-      if (!isBackgroundUpdate) {
-        showMessage(`Erro ao carregar dados: ${error.message}`, "error");
-      } else {
-        console.warn("⚠️ Erro na atualização em background:", error.message);
-      }
+      showMessage(`Erro ao carregar dados: ${error.message}`, "error");
     } finally {
-      if (!isBackgroundUpdate) {
-        showGlobalLoading(false);
-      }
+      showGlobalLoading(false);
+      setupLeaderView();
     }
   }
 
   function applyFilters() {
     const filters = {
-      name: (filterNameInput?.value || "").toLowerCase().trim(),
+      name: normalizeString(filterNameInput?.value || ""),
       periodo: (filterPeriodoSelect?.value || "").toLowerCase().trim(),
       lider: (filterLiderInput?.value || "").toLowerCase().trim(),
       gape: (filterGapeInput?.value || "").toLowerCase().trim(),
     };
 
+    // Obtém as restrições de grupo do usuário logado
+    const { isAdmin, userGroup } = getUserGroupRestriction();
+
     filteredMembers = allMembersData.filter((member) => {
-      const memberName = (member.Nome || "").toLowerCase();
+      const memberName = normalizeString(member.Nome || "");
+
+      // Restrição por grupo: se não for admin, só mostra membros do mesmo grupo
+      const groupRestriction =
+        isAdmin || !userGroup || member.GAPE === userGroup;
+
       return (
+        groupRestriction &&
         (!filters.name || memberName.includes(filters.name)) &&
         (!filters.periodo ||
           (member.Periodo || "").toLowerCase().includes(filters.periodo)) &&
@@ -1346,6 +1352,16 @@ if (typeof window.dashboardInitialized === "undefined") {
           (member.GAPE || "").toLowerCase().includes(filters.gape))
       );
     });
+
+    console.log(
+      `📋 Filtros aplicados: ${filteredMembers.length} de ${allMembersData.length} membros`
+    );
+    if (!isAdmin && userGroup) {
+      const membersInUserGroup = allMembersData.filter(
+        (m) => m.GAPE === userGroup
+      ).length;
+      console.log(`👥 Membros no grupo "${userGroup}": ${membersInUserGroup}`);
+    }
 
     displayMembers(filteredMembers);
   }
@@ -1399,7 +1415,7 @@ if (typeof window.dashboardInitialized === "undefined") {
                     <div class="relative w-16 h-16 rounded-full overflow-hidden border-2 border-indigo-400 flex-shrink-0 group cursor-pointer">
                         <img src="${photoUrl}" alt="Foto de ${
         member.Nome
-      }" class="member-photo w-full h-full object-cover transition-transform duration-200 group-hover:scale-105" title="Clique para trocar a foto">
+      }" class="member-photo w-full h-full object-cover object-center transition-transform duration-200 group-hover:scale-105" title="Clique para trocar a foto" style="object-position: center center;">
                         <input type="file" class="photo-upload-input hidden" accept="image/*" data-member-name="${
                           member.Nome
                         }">
@@ -1415,9 +1431,16 @@ if (typeof window.dashboardInitialized === "undefined") {
                             : ""
                         }
                     </div>
-                    <div class="font-bold text-lg text-gray-800">${
-                      member.Nome || "N/A"
-                    }</div>
+                    <div>
+                      <div class="font-bold text-lg text-gray-800">${
+                        member.Nome || "N/A"
+                      }</div>
+                      ${
+                        member.RI
+                          ? `<div class="text-sm text-blue-600 font-mono">RI - ${member.RI}</div>`
+                          : ""
+                      }
+                    </div>
                 </div>
                 <button class="btn-history text-gray-400 hover:text-blue-600 transition" data-member-name="${
                   member.Nome
@@ -1727,19 +1750,13 @@ if (typeof window.dashboardInitialized === "undefined") {
       }
 
       const summaryData = summaryResponse.data;
+      const presencesDetails = summaryData.presences || {};
+      const absencesDetails = summaryData.absences || {};
 
-      // NOVO: Aplicar sistema de reuniões fixas
-      const summaryComSistemaFIxo = aplicarSistemaReunioesFIxas(summaryData);
-
-      const presencesDetails = summaryComSistemaFIxo.presences || {};
-      const absencesDetails = summaryComSistemaFIxo.absences || {};
-
-      console.log("📈 Dados recebidos com sistema fixo:", {
+      console.log("📈 Dados recebidos:", {
         presencesCount: Object.keys(presencesDetails).length,
         absencesCount: Object.keys(absencesDetails).length,
-        totalMeetingDays: summaryComSistemaFIxo.totalMeetingDays,
-        totalReunioesFIxas: summaryComSistemaFIxo.totalReunioesFIxas,
-        sistemaFIxo: summaryComSistemaFIxo.sistemaFIxo,
+        totalMeetingDays: summaryData.totalMeetingDays,
         presencesDetails: presencesDetails,
         absencesDetails: absencesDetails,
       });
@@ -1747,7 +1764,7 @@ if (typeof window.dashboardInitialized === "undefined") {
       // 🔍 DEBUG DETALHADO - Verificação matemática no frontend
       console.log("🔢 Verificação matemática no frontend:");
       console.log(
-        `📅 Total de reuniões encontradas no período: ${summaryComSistemaFIxo.totalMeetingDays} (fixo: ${summaryComSistemaFIxo.totalReunioesFIxas})`
+        `📅 Total de reuniões encontradas no período: ${summaryData.totalMeetingDays}`
       );
       Object.keys(presencesDetails).forEach((nome) => {
         const presencas = presencesDetails[nome]?.totalPresencas || 0;
@@ -1757,22 +1774,22 @@ if (typeof window.dashboardInitialized === "undefined") {
           `${nome}: ${presencas} presenças + ${faltas} faltas = ${total} reuniões`
         );
 
-        if (total !== summaryComSistemaFIxo.totalMeetingDays) {
+        if (total !== summaryData.totalMeetingDays) {
           console.warn(
-            `⚠️ INCONSISTÊNCIA: ${nome} tem total ${total} mas esperado ${summaryComSistemaFIxo.totalMeetingDays}`
+            `⚠️ INCONSISTÊNCIA: ${nome} tem total ${total} mas esperado ${summaryData.totalMeetingDays}`
           );
         }
       });
 
-      // Explicação clara da matemática com sistema fixo
+      // Explicação clara da matemática
       console.log(
-        "💡 EXPLICAÇÃO: Sistema fixo de",
-        summaryComSistemaFIxo.totalReunioesFIxas,
-        "reuniões no período (3 por semana):"
+        "💡 EXPLICAÇÃO: Se houve",
+        summaryData.totalMeetingDays,
+        "reuniões no período:"
       );
       console.log(
         "   • Cada membro deveria ter: Presenças + Faltas =",
-        summaryComSistemaFIxo.totalMeetingDays
+        summaryData.totalMeetingDays
       );
       console.log(
         "   • É normal que membros com poucas presenças tenham muitas faltas!"
@@ -1788,28 +1805,56 @@ if (typeof window.dashboardInitialized === "undefined") {
         0
       );
 
-      console.log("🔢 Totais calculados:", {
-        totalPresences,
-        totalAbsences,
-        filteredMembersCount: filteredMembers.length,
+      // Calcula estatísticas melhoradas conforme solicitado
+      const totalPeopleInGroup = filteredMembers.length;
+
+      // CORREÇÃO: Calcular porcentagem baseada nos membros com/sem presença
+      // Contar membros com presença registrada usando presencesDetails
+      const membersWithPresenceCount = Object.keys(presencesDetails).filter(
+        (memberName) => {
+          const memberData = presencesDetails[memberName];
+          return memberData && memberData.totalPresencas > 0;
+        }
+      ).length;
+
+      console.log("🔍 DEBUG presencesDetails:", Object.keys(presencesDetails));
+      console.log(
+        "🔍 Membros com presença:",
+        Object.keys(presencesDetails).filter((memberName) => {
+          const memberData = presencesDetails[memberName];
+          return memberData && memberData.totalPresencas > 0;
+        })
+      );
+
+      const membersWithoutPresenceCount =
+        totalPeopleInGroup - membersWithPresenceCount;
+
+      const generalPresencePercentage =
+        totalPeopleInGroup > 0
+          ? Math.round((membersWithPresenceCount / totalPeopleInGroup) * 100)
+          : 0;
+      const absencePercentage =
+        totalPeopleInGroup > 0
+          ? Math.round((membersWithoutPresenceCount / totalPeopleInGroup) * 100)
+          : 0;
+
+      console.log("🔢 Totais calculados (CORRIGIDO - baseado em membros):", {
+        totalPeopleInGroup,
+        membersWithPresenceCount,
+        membersWithoutPresenceCount,
+        generalPresencePercentage,
+        absencePercentage,
       });
 
-      dashboardPresencasMes.textContent = totalPresences;
-      dashboardFaltasMes.textContent = totalAbsences;
+      // Atualiza com porcentagem geral do grupo em vez do total absoluto
+      dashboardPresencasMes.textContent = `${generalPresencePercentage}%`;
+      // Atualiza com porcentagem de faltas em vez do total absoluto
+      dashboardFaltasMes.textContent = `${absencePercentage}%`;
 
-      // Adiciona informação sobre total de reuniões para maior clareza
+      // Adiciona informação sobre total de pessoas do grupo
       const dashboardInfo = document.getElementById("dashboardTotalReunions");
       if (dashboardInfo) {
-        dashboardInfo.textContent = summaryComSistemaFIxo.totalMeetingDays || 0;
-      }
-
-      // NOVO: Mostrar notificação sobre sistema fixo
-      if (summaryComSistemaFIxo.sistemaFIxo) {
-        showMessage(
-          `📅 Sistema de frequência fixo ativo: ${summaryComSistemaFIxo.totalReunioesFIxas} reuniões (3 por semana)`,
-          "info",
-          5000
-        );
+        dashboardInfo.textContent = totalPeopleInGroup;
       }
 
       dashboardPeriodo.textContent =
@@ -1835,30 +1880,14 @@ if (typeof window.dashboardInitialized === "undefined") {
         sortedPresences.length > 0
           ? sortedPresences
               .map(([name, data]) => {
-                // NOVO: Usar sistema de reuniões fixas
-                const totalReunioesFIxas = summaryComSistemaFIxo.sistemaFIxo
-                  ? summaryComSistemaFIxo.totalReunioesFIxas ||
-                    summaryComSistemaFIxo.totalMeetingDays
-                  : summaryComSistemaFIxo.totalMeetingDays;
-
-                const percentage = calcularPorcentagemFIxa(
-                  data.totalPresencas,
-                  totalReunioesFIxas
-                );
-
-                // Adicionar indicador visual para diferentes faixas
-                let indicador = "";
-                if (percentage >= 100) indicador = "🏆";
-                else if (percentage >= 67) indicador = "✅";
-                else if (percentage >= 34) indicador = "⚠️";
-                else indicador = "❌";
-
-                return `<div class="text-sm text-green-300 py-1 border-b border-gray-600 last:border-b-0">
-                  <span class="font-semibold text-green-100">${name}:</span> 
-                  ${data.totalPresencas} presenças 
-                  <span class="text-green-200">(${percentage}%)</span>
-                  <span class="ml-1">${indicador}</span>
-                </div>`;
+                const percentage =
+                  summaryData.totalMeetingDays > 0
+                    ? Math.round(
+                        (data.totalPresencas / summaryData.totalMeetingDays) *
+                          100
+                      )
+                    : 0;
+                return `<div class="text-sm text-green-300 py-1 border-b border-gray-600 last:border-b-0"><span class="font-semibold text-green-100">${name}:</span> ${data.totalPresencas} presenças <span class="text-green-200">(${percentage}%)</span></div>`;
               })
               .join("")
           : '<div class="text-sm text-gray-400 text-center">Nenhuma presença.</div>';
@@ -1879,38 +1908,25 @@ if (typeof window.dashboardInitialized === "undefined") {
         sortedAbsences.length > 0
           ? sortedAbsences
               .map(([name, data]) => {
-                // NOVO: Usar sistema de reuniões fixas
-                const totalReunioesFIxas = summaryComSistemaFIxo.sistemaFIxo
-                  ? summaryComSistemaFIxo.totalReunioesFIxas ||
-                    summaryComSistemaFIxo.totalMeetingDays
-                  : summaryComSistemaFIxo.totalMeetingDays;
-
-                const percentage = calcularPorcentagemFIxa(
-                  data.totalFaltas,
-                  totalReunioesFIxas
-                );
-
-                // Indicador visual para faltas
-                let indicador = "";
-                if (percentage >= 67) indicador = "🚨";
-                else if (percentage >= 34) indicador = "⚠️";
-                else if (percentage > 0) indicador = "📋";
-                else indicador = "✅";
-
-                return `<div class="text-sm text-red-300 py-1 border-b border-gray-600 last:border-b-0">
-                  <span class="font-semibold text-red-100">${name}:</span> 
-                  ${data.totalFaltas} faltas 
-                  <span class="text-red-200">(${percentage}%)</span>
-                  <span class="ml-1">${indicador}</span>
-                </div>`;
+                const percentage =
+                  summaryData.totalMeetingDays > 0
+                    ? Math.round(
+                        (data.totalFaltas / summaryData.totalMeetingDays) * 100
+                      )
+                    : 0;
+                return `<div class="text-sm text-red-300 py-1 border-b border-gray-600 last:border-b-0"><span class="font-semibold text-red-100">${name}:</span> ${data.totalFaltas} faltas <span class="text-red-200">(${percentage}%)</span></div>`;
               })
               .join("")
           : '<div class="text-sm text-gray-400 text-center">Nenhuma falta.</div>';
     } catch (error) {
       console.error("❌ Erro ao carregar resumo:", error);
       showMessage(`Erro ao carregar resumo: ${error.message}`, "error");
-      dashboardPresencasMes.textContent = "-";
-      dashboardFaltasMes.textContent = "-";
+      dashboardPresencasMes.textContent = "0%";
+      dashboardFaltasMes.textContent = "0%";
+      const dashboardInfo = document.getElementById("dashboardTotalReunions");
+      if (dashboardInfo) {
+        dashboardInfo.textContent = "0";
+      }
     } finally {
       showGlobalLoading(false);
     }
@@ -2378,75 +2394,64 @@ if (typeof window.dashboardInitialized === "undefined") {
             0
           );
 
+          // Armazenar dados reais para uso no PDF
+          lastRealSummaryData = {
+            presencesDetails,
+            absencesDetails,
+            totalPresences,
+            totalAbsences,
+            totalMeetingDays: summaryData.totalMeetingDays,
+            selectedMemberName,
+            membersToAnalyze,
+            filters: {
+              startDate: document.getElementById("summaryStartDate")?.value,
+              endDate: document.getElementById("summaryEndDate")?.value,
+              period: filterPeriodoSelect?.value,
+              leader: filterLiderInput?.value,
+              gape: filterGapeInput?.value,
+            },
+          };
+
           let summaryHtml, chartData, chartLabels, chartTitle;
 
           if (selectedMemberName) {
-            // === VISÃO INDIVIDUAL APRIMORADA COM SISTEMA FIXO ===
+            // === VISÃO INDIVIDUAL APRIMORADA ===
+            const totalMeetingDays =
+              summaryData.totalMeetingDays || totalPresences + totalAbsences;
+            const presenceRate =
+              totalMeetingDays > 0
+                ? ((totalPresences / totalMeetingDays) * 100).toFixed(1)
+                : 0;
+            const absenceRate =
+              totalMeetingDays > 0
+                ? ((totalAbsences / totalMeetingDays) * 100).toFixed(1)
+                : 0;
 
-            // Aplicar sistema de reuniões fixas
-            const startDate = summaryStartDateInput?.value
-              ? new Date(summaryStartDateInput.value)
-              : null;
-            const endDate = summaryEndDateInput?.value
-              ? new Date(summaryEndDateInput.value)
-              : null;
-            const summaryComReunioesFIxas = aplicarSistemaReunioesFIxas(
-              summaryData,
-              startDate,
-              endDate
-            );
-
-            const totalReunioesFIxas =
-              summaryComReunioesFIxas.totalReunioesFIxas;
-            const presenceRate = calcularPorcentagemFIxa(
-              totalPresences,
-              totalReunioesFIxas
-            );
-            const absenceRate = calcularPorcentagemFIxa(
-              totalAbsences,
-              totalReunioesFIxas
-            );
-
-            // Classificação de assiduidade baseada no sistema fixo
+            // Classificação de assiduidade
             let attendanceLevel = "";
             let attendanceColor = "";
-            let attendanceIcon = "";
-
-            if (presenceRate >= 100) {
-              attendanceLevel = "Perfeito";
-              attendanceColor = "text-purple-600";
-              attendanceIcon = "🏆";
-            } else if (presenceRate >= 67) {
+            if (presenceRate >= 90) {
               attendanceLevel = "Excelente";
               attendanceColor = "text-green-600";
-              attendanceIcon = "✅";
-            } else if (presenceRate >= 34) {
+            } else if (presenceRate >= 75) {
+              attendanceLevel = "Boa";
+              attendanceColor = "text-blue-600";
+            } else if (presenceRate >= 60) {
               attendanceLevel = "Regular";
               attendanceColor = "text-yellow-600";
-              attendanceIcon = "⚠️";
             } else {
               attendanceLevel = "Precisa Melhorar";
               attendanceColor = "text-red-600";
-              attendanceIcon = "❌";
             }
 
             summaryHtml = `
               <h3 class="text-lg font-semibold text-gray-800 mb-4">${title}</h3>
               
-              <!-- Sistema de Frequência Fixo -->
-              <div class="bg-blue-50 p-3 rounded-lg mb-4 border-l-4 border-blue-500">
-                <h4 class="font-semibold text-blue-800 mb-2">📅 Sistema de Frequência</h4>
-                <p class="text-sm text-blue-700">
-                  <strong>3 reuniões fixas por semana</strong> (Domingo, Terça, Quinta)<br>
-                  Total no período: <strong>${totalReunioesFIxas} reuniões</strong>
-                </p>
-              </div>
-              
               <!-- Métricas Principais -->
               <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
                 <div class="bg-blue-50 p-3 rounded-lg text-center">
-                  <div class="text-2xl font-bold text-blue-600">${totalReunioesFIxas}</div>
-                  <div class="text-sm text-gray-600">Reuniões Fixas</div>
+                  <div class="text-2xl font-bold text-blue-600">${totalMeetingDays}</div>
+                  <div class="text-sm text-gray-600">Total Reuniões</div>
                 </div>
                 <div class="bg-green-50 p-3 rounded-lg text-center">
                   <div class="text-2xl font-bold text-green-600">${totalPresences}</div>
@@ -2467,38 +2472,7 @@ if (typeof window.dashboardInitialized === "undefined") {
                 <h4 class="font-semibold text-gray-800 mb-2">📊 Análise de Assiduidade</h4>
                 <div class="flex items-center gap-2 mb-2">
                   <span class="text-gray-600">Nível de Frequência:</span>
-                  <span class="font-bold ${attendanceColor}">${attendanceLevel} ${attendanceIcon}</span>
-                </div>
-                
-                <!-- Escala Visual -->
-                <div class="mt-3">
-                  <div class="text-sm text-gray-600 mb-1">Escala de Frequência:</div>
-                  <div class="grid grid-cols-3 gap-2 text-xs">
-                    <div class="text-center p-2 rounded ${
-                      presenceRate >= 67
-                        ? "bg-green-100 text-green-700"
-                        : "bg-gray-100"
-                    }">
-                      <div class="font-bold">3/3</div>
-                      <div>100%</div>
-                    </div>
-                    <div class="text-center p-2 rounded ${
-                      presenceRate >= 34 && presenceRate < 67
-                        ? "bg-yellow-100 text-yellow-700"
-                        : "bg-gray-100"
-                    }">
-                      <div class="font-bold">2/3</div>
-                      <div>67%</div>
-                    </div>
-                    <div class="text-center p-2 rounded ${
-                      presenceRate < 34
-                        ? "bg-red-100 text-red-700"
-                        : "bg-gray-100"
-                    }">
-                      <div class="font-bold">1/3</div>
-                      <div>33%</div>
-                    </div>
-                  </div>
+                  <span class="font-bold ${attendanceColor}">${attendanceLevel}</span>
                 </div>
                 <div class="w-full bg-gray-200 rounded-full h-2 mb-2">
                   <div class="bg-gradient-to-r from-green-400 to-green-600 h-2 rounded-full transition-all duration-500" 
@@ -2557,15 +2531,22 @@ if (typeof window.dashboardInitialized === "undefined") {
             const membersWithPresence = Object.keys(presencesDetails).length;
             const membersWithoutPresence =
               membersToAnalyze.length - membersWithPresence;
+
+            // CORREÇÃO: Cálculo correto da média de presença baseada em membros
+            // Fórmula: (Membros com Presença / Total de Membros) x 100
             const avgPresenceRate =
               membersToAnalyze.length > 0
                 ? (
-                    (totalPresences /
-                      (membersToAnalyze.length *
-                        summaryData.totalMeetingDays)) *
+                    (membersWithPresence / membersToAnalyze.length) *
                     100
                   ).toFixed(1)
                 : 0;
+
+            console.log(`📊 Cálculo da média de presença por membros:
+              - Membros com presença: ${membersWithPresence}
+              - Total de membros: ${membersToAnalyze.length}
+              - Membros sem presença: ${membersWithoutPresence}
+              - Taxa calculada: ${avgPresenceRate}%`);
 
             // Ranking dos Top 5 mais presentes
             const topMembers = Object.entries(presencesDetails)
@@ -2712,7 +2693,8 @@ if (typeof window.dashboardInitialized === "undefined") {
             addInsightsSection(
               chartRenderData,
               selectedMemberName,
-              summaryData
+              summaryData,
+              membersToAnalyze
             );
           }, 100);
 
@@ -2908,249 +2890,10 @@ if (typeof window.dashboardInitialized === "undefined") {
 
   async function handleDownloadPdf() {
     try {
-      console.log("📄 Iniciando geração de PDF...");
+      console.log("📄 Iniciando geração de PDF com dados reais...");
 
       // Mostra loading
       showGlobalLoading(true, "Gerando PDF...");
-
-      const container = document.getElementById("detailedSummaryContent");
-      if (!container) {
-        throw new Error("Container do resumo detalhado não encontrado");
-      }
-
-      // Captura as estatísticas atuais do resumo detalhado
-      const getStatisticsFromSummary = () => {
-        console.log("🔍 Iniciando captura de estatísticas do resumo...");
-        console.log(
-          "📄 HTML do container:",
-          container.innerHTML.substring(0, 500) + "..."
-        );
-
-        let totalReunions = 0;
-        let totalPresences = 0;
-        let totalAbsences = 0;
-        let presenceRate = 0;
-        let membersCount = 0;
-
-        // Abordagem mais direta: procurar pelo texto específico no HTML
-        const htmlContent = container.innerHTML;
-        const textContent = container.textContent;
-
-        console.log(
-          "📝 Texto do container:",
-          textContent.substring(0, 300) + "..."
-        );
-
-        // Busca por padrões específicos no texto
-        // Para presenças: "1 presenças", "5 presenças", etc.
-        const presencePatterns = [
-          /(\d+)\s+presenças?/gi,
-          /presenças?[:\s]+(\d+)/gi,
-          /Total[:\s]+(\d+)[:\s]+presenças?/gi,
-          /<span[^>]*text-green-600[^>]*>(\d+)<\/span>/gi,
-        ];
-
-        for (const pattern of presencePatterns) {
-          const matches = [...textContent.matchAll(pattern)];
-          if (matches.length > 0) {
-            // Pega o menor valor (mais provável de ser o correto)
-            const values = matches
-              .map((m) => parseInt(m[1]))
-              .filter((v) => v >= 0);
-            if (values.length > 0) {
-              totalPresences = Math.min(...values);
-              console.log(
-                `✅ Presenças encontradas (padrão ${pattern}):`,
-                values,
-                "→ Selecionado:",
-                totalPresences
-              );
-              break;
-            }
-          }
-        }
-
-        // Para faltas
-        const absencePatterns = [
-          /(\d+)\s+faltas?/gi,
-          /faltas?[:\s]+(\d+)/gi,
-          /Total[:\s]+(\d+)[:\s]+faltas?/gi,
-          /<span[^>]*text-red-600[^>]*>(\d+)<\/span>/gi,
-        ];
-
-        for (const pattern of absencePatterns) {
-          const matches = [...textContent.matchAll(pattern)];
-          if (matches.length > 0) {
-            const values = matches
-              .map((m) => parseInt(m[1]))
-              .filter((v) => v >= 0);
-            if (values.length > 0) {
-              totalAbsences = Math.min(...values);
-              console.log(
-                `✅ Faltas encontradas (padrão ${pattern}):`,
-                values,
-                "→ Selecionado:",
-                totalAbsences
-              );
-              break;
-            }
-          }
-        }
-
-        // Para reuniões
-        const meetingPatterns = [
-          /(\d+)\s+reuniões?/gi,
-          /Total\s+Reuniões[:\s]+(\d+)/gi,
-          /reuniões?[:\s]+(\d+)/gi,
-        ];
-
-        for (const pattern of meetingPatterns) {
-          const matches = [...textContent.matchAll(pattern)];
-          if (matches.length > 0) {
-            const values = matches
-              .map((m) => parseInt(m[1]))
-              .filter((v) => v > 0);
-            if (values.length > 0) {
-              totalReunions = Math.max(...values);
-              console.log(
-                `✅ Reuniões encontradas (padrão ${pattern}):`,
-                values,
-                "→ Selecionado:",
-                totalReunions
-              );
-              break;
-            }
-          }
-        }
-
-        // Para membros
-        const memberPatterns = [
-          /(\d+)\s+membros?/gi,
-          /Total\s+Membros[:\s]+(\d+)/gi,
-          /membros?[:\s]+(\d+)/gi,
-        ];
-
-        for (const pattern of memberPatterns) {
-          const matches = [...textContent.matchAll(pattern)];
-          if (matches.length > 0) {
-            const values = matches
-              .map((m) => parseInt(m[1]))
-              .filter((v) => v > 0);
-            if (values.length > 0) {
-              membersCount = Math.max(...values);
-              console.log(
-                `✅ Membros encontrados (padrão ${pattern}):`,
-                values,
-                "→ Selecionado:",
-                membersCount
-              );
-              break;
-            }
-          }
-        }
-
-        // Para taxa de presença
-        const ratePatterns = [
-          /(\d+(?:\.\d+)?)%/g,
-          /taxa[^:]*:\s*(\d+(?:\.\d+)?)%/gi,
-        ];
-
-        for (const pattern of ratePatterns) {
-          const matches = [...textContent.matchAll(pattern)];
-          if (matches.length > 0) {
-            const values = matches
-              .map((m) => parseFloat(m[1]))
-              .filter((v) => v >= 0 && v <= 100);
-            if (values.length > 0) {
-              presenceRate = values[0]; // Pega o primeiro percentual encontrado
-              console.log(
-                `✅ Taxa encontrada (padrão ${pattern}):`,
-                values,
-                "→ Selecionado:",
-                presenceRate
-              );
-              break;
-            }
-          }
-        }
-
-        // Se ainda não encontrou dados, tenta buscar nas métricas visuais
-        if (totalPresences === 0 && totalAbsences === 0) {
-          console.log("🔍 Buscando nas métricas visuais...");
-
-          const metricCards = container.querySelectorAll(
-            ".text-2xl, .font-bold"
-          );
-          metricCards.forEach((card, index) => {
-            const value = parseInt(card.textContent) || 0;
-            const parentText =
-              card.parentElement?.textContent?.toLowerCase() || "";
-
-            console.log(
-              `� Card ${index}: valor=${value}, contexto="${parentText}"`
-            );
-
-            if (value > 0 && value < 1000) {
-              // Filtro para valores razoáveis
-              if (parentText.includes("presença") && totalPresences === 0) {
-                totalPresences = value;
-                console.log(`✅ Presenças da métrica visual: ${value}`);
-              } else if (parentText.includes("falta") && totalAbsences === 0) {
-                totalAbsences = value;
-                console.log(`✅ Faltas da métrica visual: ${value}`);
-              } else if (
-                parentText.includes("reunião") &&
-                totalReunions === 0
-              ) {
-                totalReunions = value;
-                console.log(`✅ Reuniões da métrica visual: ${value}`);
-              }
-            }
-          });
-        }
-
-        const result = {
-          totalReunions,
-          totalPresences,
-          totalAbsences,
-          presenceRate,
-          membersCount,
-        };
-
-        console.log("📊 Resultado final da captura:", result);
-        return result;
-      };
-
-      const statistics = getStatisticsFromSummary();
-
-      // Temporarily hide the download button during PDF generation
-      const downloadBtn = document.getElementById("downloadPdfBtn");
-      const originalDisplay = downloadBtn ? downloadBtn.style.display : "";
-      if (downloadBtn) downloadBtn.style.display = "none";
-
-      console.log("📸 Capturando conteúdo...");
-
-      // Configurações otimizadas para captura mais compacta
-      const canvas = await html2canvas(container, {
-        scale: 1.5, // Reduzido de 2 para 1.5 para economizar espaço
-        useCORS: true,
-        allowTaint: true,
-        backgroundColor: "#ffffff",
-        logging: false,
-        height: container.scrollHeight, // Captura altura real do conteúdo
-        width: container.scrollWidth, // Captura largura real do conteúdo
-        scrollX: 0,
-        scrollY: 0,
-      });
-
-      // Restore the download button
-      if (downloadBtn) downloadBtn.style.display = originalDisplay;
-
-      console.log("📄 Criando documento PDF...");
-
-      // Usa a versão global do jsPDF
-      const { jsPDF } = window.jspdf;
-      const doc = new jsPDF("p", "mm", "a4");
 
       // Obter informações dos filtros atuais
       const grupoInfo =
@@ -3167,6 +2910,78 @@ if (typeof window.dashboardInitialized === "undefined") {
       const membroSelecionado =
         summaryMemberSelect?.options[summaryMemberSelect.selectedIndex]?.text ||
         "Todos os Membros";
+
+      // Função para calcular estatísticas se não tiver dados reais armazenados
+      function calculateStatisticsFromFilteredData() {
+        const membersToAnalyze = filteredMembers || [];
+
+        if (!presencesDetails || Object.keys(presencesDetails).length === 0) {
+          return {
+            totalPresences: 0,
+            totalAbsences: 0,
+            totalMeetingDays,
+            membersCount: membersToAnalyze.length,
+            presenceRate: 0,
+          };
+        }
+
+        let totalPresences = 0;
+        let totalAbsences = 0;
+
+        // Contar presenças e faltas dos membros filtrados
+        Object.values(presencesDetails).forEach((memberData) => {
+          if (memberData.presenceCount !== undefined) {
+            totalPresences += memberData.presenceCount;
+          }
+          if (memberData.absenceCount !== undefined) {
+            totalAbsences += memberData.absenceCount;
+          }
+        });
+
+        return {
+          totalPresences,
+          totalAbsences,
+          totalMeetingDays,
+          membersCount: membersToAnalyze.length,
+          presenceRate:
+            totalPresences + totalAbsences > 0
+              ? (
+                  (totalPresences / (totalPresences + totalAbsences)) *
+                  100
+                ).toFixed(1)
+              : 0,
+        };
+      }
+
+      // Usar dados reais armazenados ou calcular a partir dos dados atuais
+      let statistics;
+      if (lastRealSummaryData) {
+        console.log("📊 Usando dados reais armazenados:", lastRealSummaryData);
+
+        const totalMembers = lastRealSummaryData.membersToAnalyze?.length || 0;
+        const totalPresences = lastRealSummaryData.totalPresences || 0;
+        const totalAbsences = totalMembers - totalPresences; // Calcular ausentes corretamente
+
+        statistics = {
+          totalPresences: totalPresences,
+          totalAbsences: totalAbsences,
+          totalMeetingDays: lastRealSummaryData.totalMeetingDays || 0,
+          membersCount: totalMembers,
+          presenceRate:
+            totalMembers > 0
+              ? ((totalPresences / totalMembers) * 100).toFixed(1)
+              : 0,
+        };
+      } else {
+        console.log("📊 Calculando estatísticas dos dados filtrados atuais");
+        statistics = calculateStatisticsFromFilteredData();
+      }
+
+      console.log("� Estatísticas para PDF:", statistics);
+
+      // Usa a versão global do jsPDF
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF("p", "mm", "a4");
 
       // Configurações responsivas e otimizadas para layout compacto
       const isMobile = window.innerWidth < 768;
@@ -3186,192 +3001,666 @@ if (typeof window.dashboardInitialized === "undefined") {
         return false;
       };
 
-      // CABEÇALHO DO RELATÓRIO - Compacto
-      doc.setFontSize(11);
+      // =================== CABEÇALHO PRINCIPAL PROFISSIONAL ===================
+      doc.setFillColor(52, 73, 93); // Azul escuro profissional
+      doc.rect(0, 0, pageWidth, 25, "F");
+
+      // Título principal
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(14);
       doc.setFont(undefined, "bold");
-      doc.text(
-        "RELATÓRIO DE PRESENÇAS - AD BRAS - VILA SOLANGE",
-        margin,
-        currentY
-      );
+      doc.text("RELATÓRIO ANALÍTICO DE PRESENÇAS", margin, 12);
+
+      doc.setFontSize(11);
+      doc.setFont(undefined, "normal");
+      doc.text("Assembleia de Deus BRAS - Vila Solange/SP", margin, 18);
+
+      // Data e hora no canto direito
+      const dataGeracao = new Date();
+      const dateTimeStr = `${dataGeracao.toLocaleDateString(
+        "pt-BR"
+      )} - ${dataGeracao.toLocaleTimeString("pt-BR", {
+        hour: "2-digit",
+        minute: "2-digit",
+      })}`;
+      doc.setFontSize(8);
+      doc.text(`Gerado: ${dateTimeStr}`, pageWidth - margin - 35, 15);
+
+      currentY = 32;
+      doc.setTextColor(0, 0, 0);
+
+      // =================== SEÇÃO DE FILTROS E PERÍODO ===================
+      doc.setFillColor(240, 248, 255); // Azul muito claro
+      doc.rect(margin, currentY, contentWidth, 18, "F");
+
+      // Barra de título da seção
+      doc.setFillColor(70, 130, 180);
+      doc.rect(margin, currentY, contentWidth, 4, "F");
+
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(8);
+      doc.setFont(undefined, "bold");
+      doc.text("PARÂMETROS E CRITÉRIOS DE ANÁLISE", margin + 2, currentY + 2.8);
+
+      currentY += 6;
+      doc.setTextColor(0, 0, 0);
+      doc.setFontSize(7);
+      doc.setFont(undefined, "normal");
+
+      // Organizar informações em duas colunas
+      const col1X = margin + 3;
+      const col2X = margin + contentWidth / 2 + 5;
+
+      doc.text(`Grupo/GAPE: ${grupoInfo}`, col1X, currentY);
+      doc.text(`Período: ${periodoInfo}`, col2X, currentY);
       currentY += 3.5;
 
-      doc.setFontSize(6);
-      doc.setFont(undefined, "normal");
-      const dataGeracao = new Date();
-      doc.text(
-        `Gerado em: ${dataGeracao.toLocaleDateString(
-          "pt-BR"
-        )} às ${dataGeracao.toLocaleTimeString("pt-BR")}`,
-        margin,
-        currentY
-      );
-      currentY += 4;
+      doc.text(`Lider: ${liderInfo}`, col1X, currentY);
+      doc.text(`Membro: ${membroSelecionado}`, col2X, currentY);
+      currentY += 3.5;
 
-      // INFORMAÇÕES DO FILTRO - Compacto
-      doc.setFontSize(8);
-      doc.setFont(undefined, "bold");
-      doc.text("INFORMAÇÕES DO RELATÓRIO", margin, currentY);
-      currentY += 2.5;
+      doc.text(`Data Inicio: ${dataInicio}`, col1X, currentY);
+      doc.text(`Data Fim: ${dataFim}`, col2X, currentY);
 
-      doc.setFontSize(6);
-      doc.setFont(undefined, "normal");
+      currentY += 8;
 
-      const infoLines = [
-        `Grupo (GAPE): ${grupoInfo}`,
-        `Líder: ${liderInfo}`,
-        `Período: ${periodoInfo}`,
-        `Data Início: ${dataInicio}`,
-        `Data Fim: ${dataFim}`,
-        `Membro Selecionado: ${membroSelecionado}`,
-      ];
-
-      infoLines.forEach((line) => {
-        checkPageBreak(5);
-        doc.text(line, margin, currentY);
-        currentY += 2;
-      });
-
-      currentY += 3;
-
-      // ESTATÍSTICAS GERAIS - Layout compacto
-      checkPageBreak(35);
-      doc.setFontSize(8);
-      doc.setFont(undefined, "bold");
-      doc.text("ESTATÍSTICAS GERAIS", margin, currentY);
-      currentY += 2.5;
-
-      doc.setFontSize(6);
-      doc.setFont(undefined, "normal");
-
-      console.log("📊 Estatísticas capturadas:", statistics);
-
-      const statsLines = [];
-
-      if (statistics.totalReunions > 0) {
-        statsLines.push(
-          `Total de Reuniões no Período: ${statistics.totalReunions}`
-        );
-      }
-      if (statistics.membersCount > 0) {
-        statsLines.push(
-          `Total de Membros Analisados: ${statistics.membersCount}`
-        );
-      }
-      if (statistics.totalPresences > 0) {
-        statsLines.push(
-          `Total de Presenças Registradas: ${statistics.totalPresences}`
-        );
-      }
-      if (statistics.totalAbsences > 0) {
-        statsLines.push(
-          `Total de Faltas Registradas: ${statistics.totalAbsences}`
-        );
-      }
-      if (statistics.presenceRate > 0) {
-        statsLines.push(`Taxa de Presença Média: ${statistics.presenceRate}%`);
-      }
-
-      // Calcula estatísticas adicionais se possível
-      if (statistics.totalPresences > 0 && statistics.totalAbsences > 0) {
-        const totalEvents =
-          statistics.totalPresences + statistics.totalAbsences;
-        const calculatedPresenceRate = (
-          (statistics.totalPresences / totalEvents) *
-          100
-        ).toFixed(1);
-        if (!statistics.presenceRate || statistics.presenceRate === 0) {
-          statsLines.push(
-            `Taxa de Presença Calculada: ${calculatedPresenceRate}%`
-          );
+      // Função melhorada para quebra de página com cabeçalho
+      function checkPageBreakWithHeader(neededHeight) {
+        if (currentY + neededHeight > pageHeight - margin - 15) {
+          addPageHeader();
+          return true;
         }
+        return false;
       }
 
-      if (statsLines.length === 0) {
-        statsLines.push(
-          "Estatísticas não disponíveis para o período/filtro selecionado"
-        );
-      }
-
-      statsLines.forEach((line) => {
-        checkPageBreak(5);
-        doc.text(line, margin, currentY);
-        currentY += 2.5;
-      });
-
-      currentY += 3;
-
-      // CONTEÚDO DETALHADO - Seção mais compacta
-      checkPageBreak(50);
-      doc.setFontSize(9);
-      doc.setFont(undefined, "bold");
-      doc.text("DETALHAMENTO COMPLETO", margin, currentY);
-      currentY += 3;
-
-      // Otimização de dimensões da imagem para máximo aproveitamento
-      const imgData = canvas.toDataURL("image/png");
-      const maxImgWidth = contentWidth;
-      const maxImgHeight = pageHeight - currentY - margin - 10; // Reserva espaço mínimo para rodapé
-
-      // Calcula dimensões mantendo proporção
-      let imgWidth = maxImgWidth;
-      let imgHeight = (canvas.height * imgWidth) / canvas.width;
-
-      // Se a imagem for muito alta, redimensiona baseado na altura disponível
-      if (imgHeight > maxImgHeight) {
-        imgHeight = maxImgHeight;
-        imgWidth = (canvas.width * imgHeight) / canvas.height;
-      }
-
-      // Verifica se a imagem cabe na página atual
-      if (currentY + imgHeight > pageHeight - margin - 8) {
+      // Função para adicionar cabeçalho em novas páginas
+      function addPageHeader() {
         doc.addPage();
         currentY = margin;
-        // Recalcula para nova página
-        const newMaxHeight = pageHeight - currentY - margin - 8;
-        if (imgHeight > newMaxHeight) {
-          imgHeight = newMaxHeight;
-          imgWidth = (canvas.width * imgHeight) / canvas.height;
+
+        // Cabeçalho simplificado para páginas subsequentes
+        doc.setFillColor(52, 73, 93);
+        doc.rect(0, 0, pageWidth, 12, "F");
+
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(10);
+        doc.setFont(undefined, "bold");
+        doc.text("RELATÓRIO DE PRESENÇAS - BRAS", margin, 8);
+
+        doc.setTextColor(0, 0, 0);
+        currentY = 18;
+      }
+
+      // Função para calcular estatísticas se não tiver dados reais armazenados
+      function calculateStatisticsFromFilteredData() {
+        const membersToAnalyze = filteredMembers || [];
+
+        if (!presencesDetails || Object.keys(presencesDetails).length === 0) {
+          return {
+            totalPresences: 0,
+            totalAbsences: 0,
+            totalMeetingDays,
+            membersCount: membersToAnalyze.length,
+            presenceRate: 0,
+          };
         }
+
+        let totalPresences = 0;
+        let totalAbsences = 0;
+
+        // Contar presenças e faltas dos membros filtrados
+        Object.values(presencesDetails).forEach((memberData) => {
+          if (memberData.presenceCount !== undefined) {
+            totalPresences += memberData.presenceCount;
+          }
+          if (memberData.absenceCount !== undefined) {
+            totalAbsences += memberData.absenceCount;
+          }
+        });
+
+        return {
+          totalPresences,
+          totalAbsences,
+          totalMeetingDays,
+          membersCount: membersToAnalyze.length,
+          presenceRate:
+            totalPresences + totalAbsences > 0
+              ? (
+                  (totalPresences / (totalPresences + totalAbsences)) *
+                  100
+                ).toFixed(1)
+              : 0,
+        };
       }
 
-      // Renderização otimizada da imagem
-      let heightLeft = imgHeight;
-      let position = currentY;
+      // Coletar informações detalhadas dos membros para o PDF
+      function collectMembersDetailForPdf() {
+        let membersToUse = [];
+        let presenceDataToUse = {};
+        let totalMeetings = 1; // Default
 
-      // Adiciona a primeira parte da imagem
-      doc.addImage(imgData, "PNG", margin, position, imgWidth, imgHeight);
-      heightLeft -= pageHeight - position - margin - 8;
+        if (lastRealSummaryData && lastRealSummaryData.membersToAnalyze) {
+          membersToUse = lastRealSummaryData.membersToAnalyze;
+          presenceDataToUse = lastRealSummaryData.presencesDetails || {};
+          totalMeetings = lastRealSummaryData.totalMeetingDays || 1;
 
-      // Adiciona páginas extras apenas se necessário e com aproveitamento máximo
-      while (heightLeft > 0) {
-        doc.addPage();
-        position = heightLeft - imgHeight + margin;
+          console.log(
+            "🔍 Debug: Dados de presença disponíveis:",
+            Object.keys(presenceDataToUse)
+          );
+          console.log(
+            "🔍 Debug: Primeiro membro com dados:",
+            presenceDataToUse[Object.keys(presenceDataToUse)[0]]
+          );
+          console.log(
+            "🔍 Debug: Estrutura completa do primeiro membro:",
+            JSON.stringify(
+              presenceDataToUse[Object.keys(presenceDataToUse)[0]],
+              null,
+              2
+            )
+          );
+        } else if (filteredMembers && filteredMembers.length > 0) {
+          membersToUse = filteredMembers;
+          presenceDataToUse = presencesDetails || {};
+          totalMeetings = totalMeetingDays || 1;
+        }
 
-        // Calcula altura disponível na nova página
-        const availableHeight = pageHeight - margin - 8;
-        const renderHeight = Math.min(imgHeight, availableHeight);
+        if (membersToUse.length === 0) {
+          return [];
+        }
 
-        doc.addImage(imgData, "PNG", margin, position, imgWidth, renderHeight);
-        heightLeft -= availableHeight;
+        const membersDetail = [];
+
+        membersToUse.forEach((member) => {
+          const memberPresenceData = presenceDataToUse[member.Nome] || {};
+
+          // Debug para verificar os dados de cada membro
+          if (memberPresenceData.presenceCount > 0) {
+            console.log(
+              `🎯 Membro com presença: ${member.Nome}`,
+              memberPresenceData
+            );
+          }
+
+          // Obter dados de presença real - usar a propriedade correta
+          let presencas = 0;
+          if (memberPresenceData.totalPresencas !== undefined) {
+            presencas = memberPresenceData.totalPresencas;
+          } else if (memberPresenceData.presenceCount !== undefined) {
+            presencas = memberPresenceData.presenceCount;
+          } else if (memberPresenceData.presences !== undefined) {
+            presencas = memberPresenceData.presences;
+          }
+
+          const faltas = totalMeetings - presencas;
+          const taxa =
+            totalMeetings > 0
+              ? ((presencas / totalMeetings) * 100).toFixed(1)
+              : 0;
+
+          const detail = {
+            nome: member.Nome || "N/A",
+            gape: member.GAPE || "N/A",
+            lider: member.Lider || "N/A",
+            periodo: member.Periodo || "N/A",
+            presencas: presencas,
+            faltas: faltas,
+            taxa: parseFloat(taxa),
+            status: parseFloat(taxa) >= 80 ? "Ativo" : "Irregular",
+          };
+
+          membersDetail.push(detail);
+        });
+
+        // Ordenar por taxa de presença (maior para menor) e depois por nome
+        return membersDetail.sort((a, b) => {
+          if (b.taxa !== a.taxa) {
+            return b.taxa - a.taxa; // Taxa decrescente
+          }
+          return a.nome.localeCompare(b.nome); // Nome crescente
+        });
       }
 
-      // RODAPÉ COMPACTO EM TODAS AS PÁGINAS
+      const membersDetail = collectMembersDetailForPdf();
+      console.log(
+        "👥 Detalhes dos membros coletados:",
+        membersDetail.length,
+        "membros"
+      );
+      console.log(
+        "📊 Primeiros 3 membros com dados:",
+        membersDetail.slice(0, 3)
+      );
+
+      // =================== ESTATÍSTICAS GERAIS ===================
+      checkPageBreakWithHeader(40);
+
+      // Cabeçalho da seção de estatísticas
+      doc.setFillColor(34, 139, 34); // Verde para estatísticas
+      doc.rect(margin, currentY, contentWidth, 6, "F");
+
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(9);
+      doc.setFont(undefined, "bold");
+      doc.text(
+        "INDICADORES E ESTATÍSTICAS DE FREQUÊNCIA",
+        margin + 2,
+        currentY + 4
+      );
+      currentY += 8;
+      doc.setTextColor(0, 0, 0);
+
+      console.log("📊 Estatísticas processadas:", statistics);
+
+      // Layout em cards para as estatísticas principais
+      const cardWidth = (contentWidth - 9) / 4; // 4 colunas com espaços
+      const cardHeight = 12;
+
+      // Card 1: Membros
+      doc.setFillColor(240, 248, 255);
+      doc.rect(margin, currentY, cardWidth, cardHeight, "F");
+      doc.setDrawColor(70, 130, 180);
+      doc.rect(margin, currentY, cardWidth, cardHeight);
+
+      doc.setFontSize(7);
+      doc.setFont(undefined, "bold");
+      doc.setTextColor(70, 130, 180);
+      doc.text("MEMBROS", margin + 2, currentY + 3);
+
+      doc.setFontSize(11);
+      doc.setTextColor(0, 0, 0);
+      const membersText = statistics.membersCount?.toString() || "0";
+      doc.text(membersText, margin + 2, currentY + 8);
+
+      // Card 2: Presenças
+      const card2X = margin + cardWidth + 3;
+      doc.setFillColor(240, 255, 240);
+      doc.rect(card2X, currentY, cardWidth, cardHeight, "F");
+      doc.setDrawColor(34, 139, 34);
+      doc.rect(card2X, currentY, cardWidth, cardHeight);
+
+      doc.setFontSize(7);
+      doc.setFont(undefined, "bold");
+      doc.setTextColor(34, 139, 34);
+      doc.text("PRESENTES", card2X + 2, currentY + 3);
+
+      doc.setFontSize(11);
+      doc.setTextColor(0, 0, 0);
+      const presencesText = statistics.totalPresences?.toString() || "0";
+      doc.text(presencesText, card2X + 2, currentY + 8);
+
+      // Card 3: Ausentes
+      const card3X = margin + (cardWidth + 3) * 2;
+      doc.setFillColor(255, 240, 240);
+      doc.rect(card3X, currentY, cardWidth, cardHeight, "F");
+      doc.setDrawColor(220, 20, 60);
+      doc.rect(card3X, currentY, cardWidth, cardHeight);
+
+      doc.setFontSize(7);
+      doc.setFont(undefined, "bold");
+      doc.setTextColor(220, 20, 60);
+      doc.text("AUSENTES", card3X + 2, currentY + 3);
+
+      doc.setFontSize(11);
+      doc.setTextColor(0, 0, 0);
+      const absencesText = statistics.totalAbsences?.toString() || "0";
+      doc.text(absencesText, card3X + 2, currentY + 8);
+
+      // Card 4: Taxa de Presença
+      const card4X = margin + (cardWidth + 3) * 3;
+      doc.setFillColor(255, 248, 240);
+      doc.rect(card4X, currentY, cardWidth, cardHeight, "F");
+      doc.setDrawColor(255, 140, 0);
+      doc.rect(card4X, currentY, cardWidth, cardHeight);
+
+      doc.setFontSize(7);
+      doc.setFont(undefined, "bold");
+      doc.setTextColor(255, 140, 0);
+      doc.text("TAXA", card4X + 2, currentY + 3);
+
+      doc.setFontSize(11);
+      doc.setTextColor(0, 0, 0);
+      const rateText = statistics.presenceRate
+        ? `${statistics.presenceRate}%`
+        : "0%";
+      doc.text(rateText, card4X + 2, currentY + 8);
+
+      currentY += cardHeight + 5;
+
+      // Estatísticas detalhadas em lista
+      doc.setFontSize(7);
+      doc.setFont(undefined, "normal");
+      doc.setTextColor(60, 60, 60);
+
+      const detailStats = [];
+
+      if (statistics.totalMeetingDays > 0) {
+        detailStats.push(
+          `- Total de Eventos/Reuniões Analisados: ${statistics.totalMeetingDays}`
+        );
+      }
+
+      if (statistics.membersCount > 0) {
+        const participacao =
+          statistics.totalPresences > 0
+            ? `${(
+                (statistics.totalPresences / statistics.membersCount) *
+                100
+              ).toFixed(1)}%`
+            : "0%";
+        detailStats.push(
+          `- Índice Geral de Participação: ${participacao} dos membros estiveram presentes`
+        );
+      }
+
+      // Mostrar breakdown por status se tiver dados dos membros
+      if (membersDetail.length > 0) {
+        const ativos = membersDetail.filter((m) => m.taxa >= 80).length;
+        const irregulares = membersDetail.filter(
+          (m) => m.taxa < 80 && m.taxa > 0
+        ).length;
+        const ausentes = membersDetail.filter((m) => m.taxa === 0).length;
+
+        // Calcular porcentagens baseadas no total real de membros analisados
+        const totalMembros = membersDetail.length;
+        const percAtivos =
+          totalMembros > 0 ? ((ativos / totalMembros) * 100).toFixed(1) : 0;
+        const percIrregulares =
+          totalMembros > 0
+            ? ((irregulares / totalMembros) * 100).toFixed(1)
+            : 0;
+        const percAusentes =
+          totalMembros > 0 ? ((ausentes / totalMembros) * 100).toFixed(1) : 0;
+
+        if (ativos > 0)
+          detailStats.push(
+            `- Membros com Frequência Ativa (>=80%): ${ativos} pessoas (${percAtivos}%)`
+          );
+        if (irregulares > 0)
+          detailStats.push(
+            `- Membros com Frequência Irregular (<80%): ${irregulares} pessoas (${percIrregulares}%)`
+          );
+        if (ausentes > 0)
+          detailStats.push(
+            `- Membros Ausentes no Período (0%): ${ausentes} pessoas (${percAusentes}%)`
+          );
+      }
+
+      // Adicionar linha informativa com total de membros analisados
+      if (membersDetail.length > 0) {
+        detailStats.push(
+          `- Total de Membros Analisados: ${membersDetail.length} pessoas`
+        );
+      }
+
+      if (detailStats.length === 0) {
+        detailStats.push(
+          "- Não foram encontrados dados suficientes para análise estatística"
+        );
+      }
+
+      detailStats.forEach((stat) => {
+        checkPageBreakWithHeader(4);
+        doc.text(stat, margin + 2, currentY);
+        currentY += 3;
+      });
+
+      currentY += 4;
+
+      // =================== TABELA DE MEMBROS ===================
+      if (membersDetail.length > 0) {
+        checkPageBreakWithHeader(30);
+
+        // Cabeçalho da seção de membros
+        doc.setFillColor(128, 0, 128); // Roxo para membros
+        doc.rect(margin, currentY, contentWidth, 6, "F");
+
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(9);
+        doc.setFont(undefined, "bold");
+        doc.text(
+          `DETALHAMENTO POR MEMBRO (${membersDetail.length} analisados)`,
+          margin + 2,
+          currentY + 4
+        );
+
+        currentY += 8;
+        doc.setTextColor(0, 0, 0);
+
+        // Verificar se deve mostrar colunas completas (quando filtro for "todos")
+        const isShowingAllMembers =
+          grupoInfo.includes("Todos") &&
+          liderInfo.includes("Todos") &&
+          periodoInfo.includes("Todos");
+
+        let colWidths, headers;
+        if (isShowingAllMembers) {
+          // Configuração completa da tabela (7 colunas)
+          colWidths = [55, 25, 20, 20, 20, 20, 25]; // Nome, GAPE, Líder, Período, Presenças, Faltas, Taxa
+          headers = [
+            "Nome do Membro",
+            "GAPE",
+            "Líder",
+            "Período",
+            "Presenças",
+            "Faltas",
+            "Taxa %",
+          ];
+        } else {
+          // Configuração simplificada da tabela (4 colunas)
+          colWidths = [80, 25, 25, 25]; // Nome, Presenças, Faltas, Taxa
+          headers = ["Nome do Membro", "Presenças", "Faltas", "Taxa %"];
+        }
+
+        const tableStartY = currentY;
+        const rowHeight = 4;
+
+        // Cabeçalho da tabela com fundo colorido
+        doc.setFillColor(230, 230, 230);
+        doc.rect(margin, currentY, contentWidth, rowHeight + 1, "F");
+
+        doc.setDrawColor(100, 100, 100);
+        doc.rect(margin, currentY, contentWidth, rowHeight + 1);
+
+        doc.setFontSize(7);
+        doc.setFont(undefined, "bold");
+        doc.setTextColor(50, 50, 50);
+
+        let xPos = margin + 1;
+        headers.forEach((header, i) => {
+          doc.text(header, xPos, currentY + 3);
+          // Linhas verticais
+          if (i < headers.length - 1) {
+            doc.line(
+              xPos + colWidths[i] - 1,
+              currentY,
+              xPos + colWidths[i] - 1,
+              currentY + rowHeight + 1
+            );
+          }
+          xPos += colWidths[i];
+        });
+
+        currentY += rowHeight + 1;
+
+        // Mostrar todos os membros analisados (sem limite de 20)
+        const membersToShow = membersDetail;
+        let rowIndex = 0;
+
+        membersToShow.forEach((member) => {
+          checkPageBreakWithHeader(rowHeight + 2);
+
+          // Alternância de cores nas linhas
+          if (rowIndex % 2 === 0) {
+            doc.setFillColor(248, 248, 248);
+            doc.rect(margin, currentY, contentWidth, rowHeight, "F");
+          }
+
+          // Borda da linha
+          doc.setDrawColor(200, 200, 200);
+          doc.rect(margin, currentY, contentWidth, rowHeight);
+
+          xPos = margin + 1;
+          doc.setFontSize(6);
+          doc.setFont(undefined, "normal");
+          doc.setTextColor(0, 0, 0);
+
+          let rowData;
+          if (isShowingAllMembers) {
+            // Dados completos com 7 colunas
+            rowData = [
+              member.nome.substring(0, 30), // Nome mais curto para caber
+              (member.gape || "N/A").substring(0, 15),
+              (member.lider || "N/A").substring(0, 12),
+              (member.periodo || "N/A").substring(0, 12),
+              member.presencas?.toString() || "0",
+              member.faltas?.toString() || "0",
+              member.taxa ? `${member.taxa}%` : "0%",
+            ];
+          } else {
+            // Dados simplificados com 4 colunas
+            rowData = [
+              member.nome.substring(0, 40), // Nome com mais espaço
+              member.presencas?.toString() || "0",
+              member.faltas?.toString() || "0",
+              member.taxa ? `${member.taxa}%` : "0%",
+            ];
+          }
+
+          rowData.forEach((data, i) => {
+            // Cor especial para taxa baseada no valor (última coluna)
+            const taxaColumnIndex = isShowingAllMembers ? 6 : 3; // 7ª coluna (índice 6) ou 4ª coluna (índice 3)
+            if (i === taxaColumnIndex) {
+              const taxa = parseFloat(member.taxa) || 0;
+              if (taxa >= 80) {
+                doc.setTextColor(0, 128, 0); // Verde para boa frequência
+              } else if (taxa >= 60) {
+                doc.setTextColor(255, 140, 0); // Laranja para frequência regular
+              } else {
+                doc.setTextColor(220, 20, 60); // Vermelho para baixa frequência
+              }
+            } else {
+              doc.setTextColor(0, 0, 0);
+            }
+
+            doc.text(data, xPos, currentY + 2.8);
+
+            // Linhas verticais
+            if (i < rowData.length - 1) {
+              doc.setDrawColor(200, 200, 200);
+              doc.line(
+                xPos + colWidths[i] - 1,
+                currentY,
+                xPos + colWidths[i] - 1,
+                currentY + rowHeight
+              );
+            }
+
+            xPos += colWidths[i];
+          });
+
+          currentY += rowHeight;
+          rowIndex++;
+        });
+
+        // Rodapé da tabela se houver mais membros
+        // Resumo por status com porcentagens
+        currentY += 4;
+        const ativos = membersDetail.filter((m) => (m.taxa || 0) >= 80).length;
+        const irregulares = membersDetail.length - ativos;
+        const totalMembros = membersDetail.length;
+        const percAtivos =
+          totalMembros > 0 ? ((ativos / totalMembros) * 100).toFixed(1) : 0;
+        const percIrregulares =
+          totalMembros > 0
+            ? ((irregulares / totalMembros) * 100).toFixed(1)
+            : 0;
+
+        doc.setFontSize(7);
+        doc.setFont(undefined, "normal");
+        doc.setTextColor(0, 0, 0);
+        doc.text(
+          `CONSOLIDADO: ${ativos} com frequência ativa (${percAtivos}%) | ${irregulares} com frequência irregular (${percIrregulares}%) | Total: ${totalMembros} membros`,
+          margin,
+          currentY
+        );
+
+        currentY += 6;
+      }
+
+      // =================== INFORMAÇÕES FINAIS ===================
+      checkPageBreakWithHeader(15);
+
+      doc.setFillColor(245, 245, 245);
+      doc.rect(margin, currentY, contentWidth, 12, "F");
+      doc.setDrawColor(150, 150, 150);
+      doc.rect(margin, currentY, contentWidth, 12);
+
+      doc.setFontSize(7);
+      doc.setFont(undefined, "bold");
+      doc.setTextColor(70, 70, 70);
+      doc.text("OBSERVAÇÕES E METODOLOGIA", margin + 2, currentY + 3);
+
+      doc.setFontSize(6);
+      doc.setFont(undefined, "normal");
+      doc.text(
+        "- Este relatório foi gerado automaticamente pelo Sistema de Gestão BRAS",
+        margin + 2,
+        currentY + 6
+      );
+      doc.text(
+        "- Análise baseada nos registros de presença do período especificado nos filtros",
+        margin + 2,
+        currentY + 8.5
+      );
+      doc.text(
+        "- Classificação: Ativo (>=80%), Irregular (<80%), Ausente (0%)",
+        margin + 2,
+        currentY + 11
+      );
+      doc.text(
+        "- Para esclarecimentos ou correções, contate a liderança responsável",
+        margin + 2,
+        currentY + 13.5
+      );
+
+      // =================== RODAPÉ PROFISSIONAL ===================
       const totalPages = doc.internal.getNumberOfPages();
       for (let i = 1; i <= totalPages; i++) {
         doc.setPage(i);
+
+        // Linha superior do rodapé
+        doc.setDrawColor(52, 73, 93);
+        doc.line(margin, pageHeight - 12, pageWidth - margin, pageHeight - 12);
+
+        // Informações do sistema
         doc.setFontSize(6);
         doc.setFont(undefined, "normal");
+        doc.setTextColor(100, 100, 100);
+        doc.text(
+          "Sistema de Controle de Presenças - AD BRAS Vila Solange",
+          margin,
+          pageHeight - 8
+        );
+
+        // Data de geração
+        doc.text(`Gerado em: ${dateTimeStr}`, margin, pageHeight - 5);
+
+        // Paginação
+        doc.setFont(undefined, "bold");
+        doc.setTextColor(52, 73, 93);
         doc.text(
           `Página ${i} de ${totalPages}`,
-          pageWidth - margin - 18,
-          pageHeight - 5
+          pageWidth - margin - 20,
+          pageHeight - 6.5
         );
-        doc.text(
-          "Sistema de Controle de Presenças BRAS",
-          margin,
-          pageHeight - 5
-        );
+
+        // Logo/marca (simulado com texto)
+        doc.setFontSize(8);
+        doc.setFont(undefined, "bold");
+        doc.setTextColor(52, 73, 93);
+        doc.text("BRAS", pageWidth - margin - 20, pageHeight - 3);
       }
 
       // Gera o nome do arquivo com informações relevantes
@@ -3409,6 +3698,9 @@ if (typeof window.dashboardInitialized === "undefined") {
     const gapes = [
       ...new Set(allMembersData.map((m) => m.GAPE).filter(Boolean)),
     ].sort();
+    const periodos = [
+      ...new Set(allMembersData.map((m) => m.Periodo).filter(Boolean)),
+    ].sort();
 
     if (filterLiderInput) {
       filterLiderInput.innerHTML =
@@ -3419,6 +3711,247 @@ if (typeof window.dashboardInitialized === "undefined") {
       filterGapeInput.innerHTML =
         '<option value="">Todos</option>' +
         gapes.map((g) => `<option value="${g}">${g}</option>`).join("");
+    }
+    if (filterPeriodoSelect) {
+      filterPeriodoSelect.innerHTML =
+        '<option value="">Todos</option>' +
+        periodos.map((p) => `<option value="${p}">${p}</option>`).join("");
+    }
+  }
+
+  // Função para atualizar filtros dinamicamente baseado nas seleções
+  function updateFiltersBasedOnSelection() {
+    const currentLider = filterLiderInput?.value;
+    const currentGape = filterGapeInput?.value;
+    const currentPeriodo = filterPeriodoSelect?.value;
+
+    // Verifica se é admin
+    const leaderName = localStorage.getItem("loggedInLeaderName");
+    const isAdmin = !leaderName || leaderName === "admin";
+
+    console.log("🔄 Atualizando filtros dinamicamente:", {
+      lider: currentLider,
+      gape: currentGape,
+      periodo: currentPeriodo,
+      isAdmin: isAdmin,
+    });
+
+    // Para admin: auto-seleção e correspondência de filtros
+    if (isAdmin) {
+      if (currentLider && currentLider !== "") {
+        // Quando seleciona um líder, preenche automaticamente GAPE e período
+        const membrosDoLider = allMembersData.filter(
+          (m) => m.Lider === currentLider
+        );
+
+        // Pega os GAPEs únicos deste líder
+        const gapesDoLider = [
+          ...new Set(membrosDoLider.map((m) => m.GAPE).filter(Boolean)),
+        ];
+        // Pega os períodos únicos deste líder
+        const periodosDoLider = [
+          ...new Set(membrosDoLider.map((m) => m.Periodo).filter(Boolean)),
+        ];
+
+        console.log(`👨‍💼 Líder "${currentLider}" selecionado:`, {
+          gapes: gapesDoLider,
+          periodos: periodosDoLider,
+          totalMembros: membrosDoLider.length,
+        });
+
+        // Atualiza e seleciona automaticamente o GAPE (se houver apenas um)
+        if (filterGapeInput) {
+          filterGapeInput.innerHTML =
+            '<option value="">Todos</option>' +
+            gapesDoLider
+              .map((g) => `<option value="${g}">${g}</option>`)
+              .join("");
+
+          if (gapesDoLider.length === 1) {
+            filterGapeInput.value = gapesDoLider[0];
+            console.log(
+              `🎯 GAPE "${gapesDoLider[0]}" selecionado automaticamente`
+            );
+          } else if (gapesDoLider.length > 1) {
+            // Se há múltiplos GAPEs, seleciona o primeiro por padrão
+            filterGapeInput.value = gapesDoLider[0];
+            console.log(
+              `🎯 GAPE "${gapesDoLider[0]}" selecionado (primeiro da lista)`
+            );
+          }
+        }
+
+        // Atualiza e seleciona automaticamente o período (se houver apenas um)
+        if (filterPeriodoSelect) {
+          filterPeriodoSelect.innerHTML =
+            '<option value="">Todos</option>' +
+            periodosDoLider
+              .map((p) => `<option value="${p}">${p}</option>`)
+              .join("");
+
+          if (periodosDoLider.length === 1) {
+            filterPeriodoSelect.value = periodosDoLider[0];
+            console.log(
+              `📅 Período "${periodosDoLider[0]}" selecionado automaticamente`
+            );
+          } else if (periodosDoLider.length > 1) {
+            // Se há múltiplos períodos, seleciona o primeiro por padrão
+            filterPeriodoSelect.value = periodosDoLider[0];
+            console.log(
+              `📅 Período "${periodosDoLider[0]}" selecionado (primeiro da lista)`
+            );
+          }
+        }
+
+        return; // Sai da função para não executar a lógica padrão
+      }
+
+      if (currentGape && currentGape !== "") {
+        // Quando seleciona um GAPE, preenche automaticamente líder e período
+        const membrosDoGape = allMembersData.filter(
+          (m) => m.GAPE === currentGape
+        );
+
+        // Pega os líderes únicos deste GAPE
+        const lideresDoGape = [
+          ...new Set(membrosDoGape.map((m) => m.Lider).filter(Boolean)),
+        ];
+        // Pega os períodos únicos deste GAPE
+        const periodosDoGape = [
+          ...new Set(membrosDoGape.map((m) => m.Periodo).filter(Boolean)),
+        ];
+
+        console.log(`👥 GAPE "${currentGape}" selecionado:`, {
+          lideres: lideresDoGape,
+          periodos: periodosDoGape,
+          totalMembros: membrosDoGape.length,
+        });
+
+        // Atualiza e seleciona automaticamente o líder (se houver apenas um)
+        if (filterLiderInput) {
+          filterLiderInput.innerHTML =
+            '<option value="">Todos</option>' +
+            lideresDoGape
+              .map((l) => `<option value="${l}">${l}</option>`)
+              .join("");
+
+          if (lideresDoGape.length === 1) {
+            filterLiderInput.value = lideresDoGape[0];
+            console.log(
+              `🎯 Líder "${lideresDoGape[0]}" selecionado automaticamente`
+            );
+          } else if (lideresDoGape.length > 1) {
+            // Se há múltiplos líderes, seleciona o primeiro por padrão
+            filterLiderInput.value = lideresDoGape[0];
+            console.log(
+              `🎯 Líder "${lideresDoGape[0]}" selecionado (primeiro da lista)`
+            );
+          }
+        }
+
+        // Atualiza e seleciona automaticamente o período (se houver apenas um)
+        if (filterPeriodoSelect) {
+          filterPeriodoSelect.innerHTML =
+            '<option value="">Todos</option>' +
+            periodosDoGape
+              .map((p) => `<option value="${p}">${p}</option>`)
+              .join("");
+
+          if (periodosDoGape.length === 1) {
+            filterPeriodoSelect.value = periodosDoGape[0];
+            console.log(
+              `📅 Período "${periodosDoGape[0]}" selecionado automaticamente`
+            );
+          } else if (periodosDoGape.length > 1) {
+            // Se há múltiplos períodos, seleciona o primeiro por padrão
+            filterPeriodoSelect.value = periodosDoGape[0];
+            console.log(
+              `📅 Período "${periodosDoGape[0]}" selecionado (primeiro da lista)`
+            );
+          }
+        }
+
+        return; // Sai da função para não executar a lógica padrão
+      }
+    }
+
+    // Lógica padrão para não-admin ou quando não há seleção específica
+    let filteredData = allMembersData;
+
+    if (currentLider) {
+      filteredData = filteredData.filter((m) => m.Lider === currentLider);
+    }
+
+    if (currentGape) {
+      filteredData = filteredData.filter((m) => m.GAPE === currentGape);
+    }
+
+    // Atualiza as opções de período baseado nos membros filtrados
+    if (filterPeriodoSelect && (currentLider || currentGape)) {
+      const availablePeriodos = [
+        ...new Set(filteredData.map((m) => m.Periodo).filter(Boolean)),
+      ].sort();
+
+      console.log("📅 Períodos disponíveis após filtro:", availablePeriodos);
+
+      const currentSelected = filterPeriodoSelect.value;
+
+      filterPeriodoSelect.innerHTML =
+        '<option value="">Todos</option>' +
+        availablePeriodos
+          .map((p) => `<option value="${p}">${p}</option>`)
+          .join("");
+
+      // Mantém a seleção se ainda estiver disponível
+      if (availablePeriodos.includes(currentSelected)) {
+        filterPeriodoSelect.value = currentSelected;
+      }
+    }
+
+    // Atualiza as opções de líder baseado nas seleções
+    if (filterLiderInput && currentGape && !isAdmin) {
+      // Só para não-admin
+      const availableLideres = [
+        ...new Set(filteredData.map((m) => m.Lider).filter(Boolean)),
+      ].sort();
+
+      console.log("👨‍💼 Líderes disponíveis após filtro:", availableLideres);
+
+      const currentSelected = filterLiderInput.value;
+
+      filterLiderInput.innerHTML =
+        '<option value="">Todos</option>' +
+        availableLideres
+          .map((l) => `<option value="${l}">${l}</option>`)
+          .join("");
+
+      // Mantém a seleção se ainda estiver disponível
+      if (availableLideres.includes(currentSelected)) {
+        filterLiderInput.value = currentSelected;
+      }
+    }
+
+    // Atualiza as opções de GAPE baseado nas seleções
+    if (filterGapeInput && currentLider && !isAdmin) {
+      // Só para não-admin
+      const availableGapes = [
+        ...new Set(filteredData.map((m) => m.GAPE).filter(Boolean)),
+      ].sort();
+
+      console.log("👥 GAPEs disponíveis após filtro:", availableGapes);
+
+      const currentSelected = filterGapeInput.value;
+
+      filterGapeInput.innerHTML =
+        '<option value="">Todos</option>' +
+        availableGapes
+          .map((g) => `<option value="${g}">${g}</option>`)
+          .join("");
+
+      // Mantém a seleção se ainda estiver disponível
+      if (availableGapes.includes(currentSelected)) {
+        filterGapeInput.value = currentSelected;
+      }
     }
   }
 
@@ -3461,8 +3994,7 @@ if (typeof window.dashboardInitialized === "undefined") {
     if (leaderName && leaderName !== "admin") {
       const loggedInMember = allMembersData.find(
         (member) =>
-          (member.Nome || "").toLowerCase().trim() ===
-          leaderName.toLowerCase().trim()
+          normalizeString(member.Nome || "") === normalizeString(leaderName)
       );
       if (loggedInMember) {
         if (filterLiderInput) filterLiderInput.value = loggedInMember.Lider;
@@ -3500,7 +4032,8 @@ if (typeof window.dashboardInitialized === "undefined") {
   }
 
   function handleNameInput(event) {
-    const query = event.target.value.toLowerCase().trim();
+    const originalQuery = event.target.value.trim();
+    const query = normalizeString(originalQuery);
 
     if (query.length === 0) {
       hideNameAutocomplete();
@@ -3514,19 +4047,31 @@ if (typeof window.dashboardInitialized === "undefined") {
       return;
     }
 
-    // Filtra nomes que contenham a query
+    // Obtém as restrições de grupo do usuário logado
+    const { isAdmin, userGroup } = getUserGroupRestriction();
+
+    // Filtra nomes que contenham a query, restringindo por grupo se necessário
     const matchingNames = allMembersData
+      .filter((member) => {
+        // Restrição por grupo: se não for admin, só mostra membros do mesmo grupo
+        const groupRestriction =
+          isAdmin || !userGroup || member.GAPE === userGroup;
+        return (
+          groupRestriction &&
+          member.Nome &&
+          normalizeString(member.Nome).includes(query)
+        );
+      })
       .map((member) => member.Nome)
-      .filter((name) => name && name.toLowerCase().includes(query))
       .sort()
       .slice(0, 8); // Limita a 8 sugestões
 
     if (matchingNames.length === 0) {
-      showNoResultsMessage(query);
+      showNoResultsMessage(originalQuery);
       return;
     }
 
-    showNameSuggestions(matchingNames, query);
+    showNameSuggestions(matchingNames, originalQuery);
   }
 
   function showNameSuggestions(names, query) {
@@ -3538,7 +4083,7 @@ if (typeof window.dashboardInitialized === "undefined") {
       // Busca dados do membro para mostrar informações extras
       const memberData = allMembersData.find(
         (member) =>
-          member.Nome && member.Nome.toLowerCase() === name.toLowerCase()
+          member.Nome && normalizeString(member.Nome) === normalizeString(name)
       );
 
       const suggestionItem = document.createElement("div");
@@ -3584,11 +4129,43 @@ if (typeof window.dashboardInitialized === "undefined") {
   }
 
   function highlightMatch(text, query) {
-    const regex = new RegExp(`(${escapeRegExp(query)})`, "gi");
-    return text.replace(
-      regex,
-      '<span class="bg-yellow-200 font-semibold">$1</span>'
-    );
+    if (!text || !query) return text;
+
+    // Normaliza o texto e a query para comparação
+    const normalizedText = normalizeString(text);
+    const normalizedQuery = normalizeString(query);
+
+    // Encontra todas as ocorrências da query no texto normalizado
+    let result = text;
+    let searchIndex = 0;
+    let offset = 0;
+
+    while (true) {
+      const matchIndex = normalizedText.indexOf(normalizedQuery, searchIndex);
+      if (matchIndex === -1) break;
+
+      // Calcula as posições no texto original considerando o offset das tags HTML já inseridas
+      const realMatchStart = matchIndex + offset;
+      const realMatchEnd = realMatchStart + normalizedQuery.length;
+
+      // Extrai a parte original do texto que corresponde à match
+      const originalMatch = result.substring(realMatchStart, realMatchEnd);
+
+      // Substitui no texto com destaque
+      const highlighted = `<span class="bg-yellow-200 font-semibold">${originalMatch}</span>`;
+      result =
+        result.substring(0, realMatchStart) +
+        highlighted +
+        result.substring(realMatchEnd);
+
+      // Atualiza o offset devido às tags HTML inseridas
+      offset += highlighted.length - originalMatch.length;
+
+      // Move para a próxima posição de busca
+      searchIndex = matchIndex + normalizedQuery.length;
+    }
+
+    return result;
   }
 
   function escapeRegExp(string) {
@@ -3604,7 +4181,7 @@ if (typeof window.dashboardInitialized === "undefined") {
       const selectedMember = allMembersData.find(
         (member) =>
           member.Nome &&
-          member.Nome.toLowerCase() === selectedName.toLowerCase()
+          normalizeString(member.Nome) === normalizeString(selectedName)
       );
 
       if (selectedMember) {
@@ -3788,6 +4365,10 @@ if (typeof window.dashboardInitialized === "undefined") {
         if (!filterLiderInput?.disabled) filterLiderInput.value = "";
         if (!filterGapeInput?.disabled) filterGapeInput.value = "";
         hideNameAutocomplete(); // Esconde autocomplete se estiver aberto
+
+        // Restaura todas as opções dos filtros
+        fillSelectOptions();
+
         applyFilters();
         if (isDashboardOpen) fetchAndDisplaySummary();
         showMessage("🔄 Todos os filtros foram limpos", "info");
@@ -3852,12 +4433,16 @@ if (typeof window.dashboardInitialized === "undefined") {
 
     if (filterLiderInput) {
       filterLiderInput.addEventListener("change", () => {
+        updateFiltersBasedOnSelection();
+        applyFilters();
         if (isDashboardOpen) fetchAndDisplaySummary();
       });
     }
 
     if (filterGapeInput) {
       filterGapeInput.addEventListener("change", () => {
+        updateFiltersBasedOnSelection();
+        applyFilters();
         if (isDashboardOpen) fetchAndDisplaySummary();
       });
     }
@@ -3888,7 +4473,8 @@ if (typeof window.dashboardInitialized === "undefined") {
   function addInsightsSection(
     chartRenderData,
     selectedMemberName,
-    summaryData
+    summaryData,
+    membersToAnalyze = []
   ) {
     try {
       console.log("🎯 Iniciando geração de insights...");
@@ -3970,20 +4556,21 @@ if (typeof window.dashboardInitialized === "undefined") {
       } else {
         console.log("🔍 Processando insights para grupo completo");
         // Insights para grupo
-        const totalMembers =
-          Object.keys(presencesDetails).length +
-          Object.keys(absencesDetails).length;
+        // Calcular total de membros no escopo atual usando membersToAnalyze
+        const membersWithPresence = Object.keys(presencesDetails).length;
+        const totalMembers = membersToAnalyze.length || membersWithPresence;
         console.log("📊 Total de membros:", totalMembers);
 
+        // CORREÇÃO: Cálculo correto da média de presença baseado em membros
         const avgPresenceRate =
           totalMembers > 0
-            ? (Object.values(presencesDetails).reduce(
-                (sum, data) => sum + data.totalPresencas,
-                0
-              ) /
-                (totalMembers * summaryData.totalMeetingDays)) *
-              100
+            ? ((membersWithPresence / totalMembers) * 100).toFixed(1)
             : 0;
+
+        console.log(`📊 Cálculo da média de presença do grupo (por membros):
+          - Membros com presença: ${membersWithPresence}
+          - Total de membros: ${totalMembers}
+          - Taxa calculada: ${avgPresenceRate}%`);
 
         console.log("📈 Taxa média de presença do grupo:", avgPresenceRate);
 
@@ -4088,102 +4675,6 @@ if (typeof window.dashboardInitialized === "undefined") {
       detailedSummaryText.innerHTML += fallbackHtml;
     }
   }
-  // --- SISTEMA DE FREQUÊNCIA FIXO (3 REUNIÕES POR SEMANA) ---
-
-  /**
-   * Calcula o número de reuniões fixas baseado no período
-   * Regra: 3 reuniões por semana (domingo, terça, quinta)
-   * @param {Date} startDate - Data de início do período
-   * @param {Date} endDate - Data de fim do período
-   * @returns {number} - Número total de reuniões no período
-   */
-  function calcularReunioesFIxas(startDate, endDate) {
-    if (!startDate || !endDate) {
-      // Se não há período definido, usar semana atual como padrão
-      const today = new Date();
-      const currentWeek = getWeekRange(today);
-      return 3; // 3 reuniões na semana atual
-    }
-
-    // Calcular número de semanas completas no período
-    const diffTime = Math.abs(endDate - startDate);
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    const weeks = Math.ceil(diffDays / 7);
-
-    // Cada semana tem 3 reuniões fixas
-    const totalReunioes = weeks * 3;
-
-    console.log(
-      `📅 Período: ${diffDays} dias (${weeks} semanas) = ${totalReunioes} reuniões fixas`
-    );
-    return totalReunioes;
-  }
-
-  /**
-   * Calcula porcentagem baseada no sistema fixo de reuniões
-   * @param {number} presencas - Número de presenças do membro
-   * @param {number} totalReunioesFIxas - Total de reuniões fixas no período
-   * @returns {number} - Porcentagem (0-100)
-   */
-  function calcularPorcentagemFIxa(presencas, totalReunioesFIxas) {
-    if (!totalReunioesFIxas || totalReunioesFIxas === 0) return 0;
-
-    const porcentagem = Math.round((presencas / totalReunioesFIxas) * 100);
-
-    // Garantir que não ultrapasse 100%
-    return Math.min(porcentagem, 100);
-  }
-
-  /**
-   * Obtém o range de uma semana (domingo a sábado)
-   * @param {Date} date - Data de referência
-   * @returns {Object} - {start: Date, end: Date}
-   */
-  function getWeekRange(date) {
-    const d = new Date(date);
-    const day = d.getDay(); // 0 = domingo, 1 = segunda, etc.
-
-    // Calcular início da semana (domingo)
-    const start = new Date(d);
-    start.setDate(d.getDate() - day);
-    start.setHours(0, 0, 0, 0);
-
-    // Calcular fim da semana (sábado)
-    const end = new Date(start);
-    end.setDate(start.getDate() + 6);
-    end.setHours(23, 59, 59, 999);
-
-    return { start, end };
-  }
-
-  /**
-   * Substitui o totalMeetingDays pelo sistema fixo
-   * @param {Object} summaryData - Dados do resumo original
-   * @param {Date} startDate - Data início (opcional)
-   * @param {Date} endDate - Data fim (opcional)
-   * @returns {Object} - Dados atualizados com reuniões fixas
-   */
-  function aplicarSistemaReunioesFIxas(
-    summaryData,
-    startDate = null,
-    endDate = null
-  ) {
-    // Calcular reuniões fixas para o período
-    const totalReunioesFIxas = calcularReunioesFIxas(startDate, endDate);
-
-    // Criar nova estrutura com reuniões fixas
-    const summaryAtualizado = {
-      ...summaryData,
-      totalMeetingDays: totalReunioesFIxas,
-      totalReunioesFIxas: totalReunioesFIxas,
-      sistemaFIxo: true,
-    };
-
-    console.log(
-      `🔧 Sistema fixo aplicado: ${totalReunioesFIxas} reuniões fixas`
-    );
-    return summaryAtualizado;
-  }
 } // Fim da verificação dashboardInitialized
 
 /*
@@ -4238,54 +4729,6 @@ Arquitetura:
 
 // --- FUNÇÕES DO DASHBOARD PRINCIPAL ---
 
-// Sistema de cache simples para funções externas ao escopo principal
-const simpleCacheManager = {
-  generateKey: function (endpoint, params = {}) {
-    const sortedParams = Object.keys(params)
-      .sort()
-      .map((key) => `${key}=${params[key]}`)
-      .join("&");
-    return `simple_cache_${endpoint}_${sortedParams}`;
-  },
-
-  set: function (key, data, ttl = 2 * 60 * 1000) {
-    try {
-      const cacheItem = {
-        data: data,
-        expires: Date.now() + ttl,
-      };
-      localStorage.setItem(key, JSON.stringify(cacheItem));
-      console.log(`💾 Cache simples salvo: ${key}`);
-      return true;
-    } catch (error) {
-      console.warn("⚠️ Erro ao salvar cache simples:", error);
-      return false;
-    }
-  },
-
-  get: function (key) {
-    try {
-      const cached = localStorage.getItem(key);
-      if (!cached) return null;
-
-      const cacheItem = JSON.parse(cached);
-
-      if (Date.now() > cacheItem.expires) {
-        localStorage.removeItem(key);
-        console.log(`🗑️ Cache simples expirado removido: ${key}`);
-        return null;
-      }
-
-      console.log(`📦 Cache simples encontrado: ${key}`);
-      return cacheItem.data;
-    } catch (error) {
-      console.warn("⚠️ Erro ao ler cache simples:", error);
-      localStorage.removeItem(key);
-      return null;
-    }
-  },
-};
-
 // Definição da URL do backend para o dashboard
 const DASHBOARD_BACKEND_URL = (function () {
   const isLocalhost =
@@ -4299,46 +4742,13 @@ const DASHBOARD_BACKEND_URL = (function () {
 let presencaPorGrupoChart = null;
 let evolucaoSemanalChart = null;
 
-// Função para carregar dados do dashboard com cache
+// Função para carregar dados do dashboard
 async function carregarDadosDashboard(mes = "", grupo = "") {
   try {
     console.log("🎯 Carregando dados do dashboard...", { mes, grupo });
 
-    // Gerar chave do cache baseada nos parâmetros
-    const params = { mes, grupo };
-    const cacheKey = simpleCacheManager.generateKey("dashboard-stats", params);
-
-    // Verificar cache primeiro
-    const cachedData = simpleCacheManager.get(cacheKey);
-    if (cachedData) {
-      console.log("📦 Usando dados do dashboard do cache...");
-      atualizarInterfaceDashboard(cachedData, true);
-
-      // Buscar atualizações em background
-      carregarDadosDashboardFromServer(mes, grupo, true);
-      return cachedData;
-    }
-
-    // Se não há cache, buscar do servidor
-    return await carregarDadosDashboardFromServer(mes, grupo, false);
-  } catch (error) {
-    console.error("❌ Erro ao carregar dados do dashboard:", error);
-    // Fallback para dados simulados
-    return await carregarDadosSimulados();
-  }
-}
-
-// Função separada para buscar dados do servidor
-async function carregarDadosDashboardFromServer(
-  mes = "",
-  grupo = "",
-  isBackgroundUpdate = false
-) {
-  try {
-    if (!isBackgroundUpdate) {
-      // Mostrar indicador de carregamento
-      mostrarCarregandoDashboard();
-    }
+    // Mostrar indicador de carregamento
+    mostrarCarregandoDashboard();
 
     const params = new URLSearchParams();
     if (mes) params.append("mes", mes);
@@ -4362,13 +4772,6 @@ async function carregarDadosDashboardFromServer(
     if (result.success) {
       console.log("✅ Dados do dashboard carregados:", result.data);
 
-      // Salvar no cache (TTL de 2 minutos para dados do dashboard)
-      const cacheKey = simpleCacheManager.generateKey("dashboard-stats", {
-        mes,
-        grupo,
-      });
-      simpleCacheManager.set(cacheKey, result.data, 2 * 60 * 1000);
-
       // Verificar se os dados são simulados e mostrar aviso
       if (result.data.isSimulated) {
         console.log("⚠️ Usando dados simulados como fallback");
@@ -4378,16 +4781,10 @@ async function carregarDadosDashboardFromServer(
         esconderAvisoSimulacao();
       }
 
-      if (!isBackgroundUpdate) {
-        // Esconder indicador de carregamento
-        esconderCarregandoDashboard();
-        atualizarInterfaceDashboard(result.data, false);
-      } else {
-        // Atualizar silenciosamente se for background update
-        console.log("🔄 Dados do dashboard atualizados em background");
-        atualizarInterfaceDashboard(result.data, false);
-      }
+      // Esconder indicador de carregamento
+      esconderCarregandoDashboard();
 
+      atualizarInterfaceDashboard(result.data);
       return result.data;
     } else {
       throw new Error(result.message || "Erro ao carregar dados");
@@ -4395,74 +4792,67 @@ async function carregarDadosDashboardFromServer(
   } catch (error) {
     console.error("❌ Erro ao carregar dados do dashboard:", error);
 
-    if (!isBackgroundUpdate) {
-      // Esconder indicador de carregamento em caso de erro
-      esconderCarregandoDashboard();
+    // Esconder indicador de carregamento em caso de erro
+    esconderCarregandoDashboard();
 
-      // Mostrar erro para o usuário
-      mostrarErroCarregamento(error.message);
-    }
+    // Mostrar erro para o usuário
+    mostrarErroCarregamento(error.message);
 
     // Dados simulados para fallback local
-    return await carregarDadosSimulados();
+    const dadosSimulados = {
+      totalPessoas: 235,
+      totalGrupos: 12,
+      presencaMedia: 87,
+      melhorGrupo: { nome: "Grupo A", percentual: 95 },
+      piorGrupo: { nome: "Grupo F", percentual: 65 },
+      grupos: [
+        { nome: "Grupo A", totalMembros: 25, presencaPercentual: 95 },
+        { nome: "Grupo B", totalMembros: 22, presencaPercentual: 88 },
+        { nome: "Grupo C", totalMembros: 20, presencaPercentual: 82 },
+        { nome: "Grupo D", totalMembros: 18, presencaPercentual: 76 },
+        { nome: "Grupo E", totalMembros: 15, presencaPercentual: 70 },
+        { nome: "Grupo F", totalMembros: 12, presencaPercentual: 65 },
+      ],
+      ultimosRegistros: [
+        {
+          dataHora: "22/07 08:10",
+          grupo: "Grupo B",
+          pessoa: "João Silva",
+          status: "Presente",
+        },
+        {
+          dataHora: "22/07 08:12",
+          grupo: "Grupo A",
+          pessoa: "Maria Costa",
+          status: "Presente",
+        },
+        {
+          dataHora: "22/07 08:15",
+          grupo: "Grupo C",
+          pessoa: "Pedro Santos",
+          status: "Presente",
+        },
+        {
+          dataHora: "22/07 08:18",
+          grupo: "Grupo D",
+          pessoa: "Ana Oliveira",
+          status: "Presente",
+        },
+        {
+          dataHora: "22/07 08:20",
+          grupo: "Grupo E",
+          pessoa: "Carlos Lima",
+          status: "Presente",
+        },
+      ],
+      isSimulated: true,
+    };
+
+    console.log("🔄 Usando dados simulados locais como fallback final");
+    mostrarAvisoSimulacao();
+    atualizarInterfaceDashboard(dadosSimulados);
+    return dadosSimulados;
   }
-}
-
-// Função para carregar dados simulados como fallback
-async function carregarDadosSimulados() {
-  const dadosSimulados = {
-    totalPessoas: 235,
-    totalGrupos: 12,
-    presencaMedia: 87,
-    melhorGrupo: { nome: "Grupo A", percentual: 95 },
-    piorGrupo: { nome: "Grupo F", percentual: 65 },
-    grupos: [
-      { nome: "Grupo A", totalMembros: 25, presencaPercentual: 95 },
-      { nome: "Grupo B", totalMembros: 22, presencaPercentual: 88 },
-      { nome: "Grupo C", totalMembros: 20, presencaPercentual: 82 },
-      { nome: "Grupo D", totalMembros: 18, presencaPercentual: 76 },
-      { nome: "Grupo E", totalMembros: 15, presencaPercentual: 70 },
-      { nome: "Grupo F", totalMembros: 12, presencaPercentual: 65 },
-    ],
-    ultimosRegistros: [
-      {
-        dataHora: "22/07 08:10",
-        grupo: "Grupo B",
-        pessoa: "João Silva",
-        status: "Presente",
-      },
-      {
-        dataHora: "22/07 08:12",
-        grupo: "Grupo A",
-        pessoa: "Maria Costa",
-        status: "Presente",
-      },
-      {
-        dataHora: "22/07 08:15",
-        grupo: "Grupo C",
-        pessoa: "Pedro Santos",
-        status: "Presente",
-      },
-      {
-        dataHora: "22/07 08:18",
-        grupo: "Grupo D",
-        pessoa: "Ana Oliveira",
-        status: "Presente",
-      },
-      {
-        dataHora: "22/07 08:20",
-        grupo: "Grupo E",
-        pessoa: "Carlos Lima",
-        status: "Presente",
-      },
-    ],
-    isSimulated: true,
-  };
-
-  console.log("🔄 Usando dados simulados locais como fallback final");
-  mostrarAvisoSimulacao();
-  atualizarInterfaceDashboard(dadosSimulados);
-  return dadosSimulados;
 }
 
 // Função para mostrar aviso de simulação
@@ -4581,21 +4971,7 @@ function esconderCarregandoDashboard() {
 }
 
 // Função para atualizar a interface do dashboard
-function atualizarInterfaceDashboard(dados, fromCache = false) {
-  // Mostrar/ocultar indicador de cache
-  const cacheIndicator = document.getElementById("cacheIndicator");
-  if (cacheIndicator) {
-    if (fromCache) {
-      cacheIndicator.classList.remove("hidden");
-      // Esconder após 3 segundos
-      setTimeout(() => {
-        cacheIndicator.classList.add("hidden");
-      }, 3000);
-    } else {
-      cacheIndicator.classList.add("hidden");
-    }
-  }
-
+function atualizarInterfaceDashboard(dados) {
   // Atualizar título do dashboard principal
   if (dashboardTitle) {
     if (
@@ -5472,3 +5848,4 @@ document.addEventListener("click", (e) => {
 });
 
 // Fim da verificação dashboardInitialized
+
