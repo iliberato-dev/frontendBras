@@ -19,6 +19,23 @@ if (typeof window.dashboardInitialized === "undefined") {
     return name ? name.replace(/[^a-zA-Z0-9]/g, "_").toLowerCase() : "";
   }
 
+  // Função para normalizar URLs de fotos garantindo HTTPS em produção
+  function normalizePhotoURL(url) {
+    if (!url) return url;
+
+    // Se é localhost, manter como está
+    if (isLocalhost) {
+      return url;
+    }
+
+    // Em produção, garantir que URLs do backend usem HTTPS
+    if (url.startsWith("http://backendbras.onrender.com")) {
+      return url.replace("http://", "https://");
+    }
+
+    return url;
+  }
+
   // Função para normalizar strings removendo acentos e convertendo para minúsculas
   // Permite busca insensível a acentos: "Jose" encontra "José" e vice-versa
   // Exemplos: "José" → "jose", "María" → "maria", "João" → "joao"
@@ -385,7 +402,7 @@ if (typeof window.dashboardInitialized === "undefined") {
 
       if (result.success) {
         console.log(`✅ Foto salva no servidor para ${memberName}`);
-        return result.photoUrl;
+        return normalizePhotoURL(result.photoUrl);
       } else {
         throw new Error(result.message || "Erro ao salvar foto");
       }
@@ -406,7 +423,7 @@ if (typeof window.dashboardInitialized === "undefined") {
 
       if (response.ok) {
         const result = await response.json();
-        return result.success ? result.photoUrl : null;
+        return result.success ? normalizePhotoURL(result.photoUrl) : null;
       } else if (response.status === 404) {
         return null; // Foto não encontrada, usar padrão
       } else {
@@ -427,6 +444,16 @@ if (typeof window.dashboardInitialized === "undefined") {
         const result = await response.json();
         console.log("📸 Resposta do servidor:", result);
         console.log("📊 Fotos recebidas:", result.photos);
+
+        // Normalizar URLs das fotos
+        if (result.success && result.photos) {
+          const normalizedPhotos = {};
+          for (const [memberName, photoUrl] of Object.entries(result.photos)) {
+            normalizedPhotos[memberName] = normalizePhotoURL(photoUrl);
+          }
+          return normalizedPhotos;
+        }
+
         return result.success ? result.photos : {};
       } else {
         throw new Error("Erro ao buscar fotos");
@@ -466,7 +493,7 @@ if (typeof window.dashboardInitialized === "undefined") {
       `img[alt="Foto de ${memberName}"]`
     );
     photoElements.forEach((img) => {
-      img.src = photoUrl;
+      img.src = normalizePhotoURL(photoUrl);
     });
   }
 
@@ -1056,7 +1083,7 @@ if (typeof window.dashboardInitialized === "undefined") {
             `img[alt="Foto de ${memberName}"]`
           );
           photoElements.forEach((img) => {
-            img.src = photoUrl;
+            img.src = normalizePhotoURL(photoUrl);
           });
 
           showMessage(
@@ -1278,6 +1305,13 @@ if (typeof window.dashboardInitialized === "undefined") {
       const membersData = await membersResponse.json();
       console.log("📊 Dados dos membros recebidos:", membersData);
       allMembersData = membersData.membros || [];
+
+      // Normalizar URLs de fotos para garantir HTTPS em produção
+      allMembersData = allMembersData.map((member) => ({
+        ...member,
+        FotoURL: normalizePhotoURL(member.FotoURL),
+      }));
+
       console.log("👥 Membros processados:", allMembersData.length);
       console.log("🔍 Primeiro membro:", allMembersData[0]);
       console.log("🖼️ FotoURL do primeiro membro:", allMembersData[0]?.FotoURL);
@@ -1394,9 +1428,10 @@ if (typeof window.dashboardInitialized === "undefined") {
       }
 
       // Usa a foto que vem do backend ou a padrão
-      const photoUrl =
+      const photoUrl = normalizePhotoURL(
         member.FotoURL ||
-        "https://png.pngtree.com/png-vector/20191208/ourmid/pngtree-beautiful-create-user-glyph-vector-icon-png-image_2084391.jpg";
+          "https://png.pngtree.com/png-vector/20191208/ourmid/pngtree-beautiful-create-user-glyph-vector-icon-png-image_2084391.jpg"
+      );
 
       // Verifica se é uma foto personalizada (do servidor)
       const hasCustomPhoto =
@@ -4729,6 +4764,26 @@ Arquitetura:
 
 // --- FUNÇÕES DO DASHBOARD PRINCIPAL ---
 
+// Função global para normalizar URLs garantindo HTTPS em produção
+function globalNormalizeURL(url) {
+  if (!url) return url;
+
+  // Se é localhost, manter como está
+  const isLocalhost =
+    window.location.hostname === "localhost" ||
+    window.location.hostname === "127.0.0.1";
+  if (isLocalhost) {
+    return url;
+  }
+
+  // Em produção, garantir que URLs do backend usem HTTPS
+  if (url.startsWith("http://backendbras.onrender.com")) {
+    return url.replace("http://", "https://");
+  }
+
+  return url;
+}
+
 // Definição da URL do backend para o dashboard
 const DASHBOARD_BACKEND_URL = (function () {
   const isLocalhost =
@@ -5848,4 +5903,3 @@ document.addEventListener("click", (e) => {
 });
 
 // Fim da verificação dashboardInitialized
-
