@@ -4238,6 +4238,54 @@ Arquitetura:
 
 // --- FUNÇÕES DO DASHBOARD PRINCIPAL ---
 
+// Sistema de cache simples para funções externas ao escopo principal
+const simpleCacheManager = {
+  generateKey: function (endpoint, params = {}) {
+    const sortedParams = Object.keys(params)
+      .sort()
+      .map((key) => `${key}=${params[key]}`)
+      .join("&");
+    return `simple_cache_${endpoint}_${sortedParams}`;
+  },
+
+  set: function (key, data, ttl = 2 * 60 * 1000) {
+    try {
+      const cacheItem = {
+        data: data,
+        expires: Date.now() + ttl,
+      };
+      localStorage.setItem(key, JSON.stringify(cacheItem));
+      console.log(`💾 Cache simples salvo: ${key}`);
+      return true;
+    } catch (error) {
+      console.warn("⚠️ Erro ao salvar cache simples:", error);
+      return false;
+    }
+  },
+
+  get: function (key) {
+    try {
+      const cached = localStorage.getItem(key);
+      if (!cached) return null;
+
+      const cacheItem = JSON.parse(cached);
+
+      if (Date.now() > cacheItem.expires) {
+        localStorage.removeItem(key);
+        console.log(`🗑️ Cache simples expirado removido: ${key}`);
+        return null;
+      }
+
+      console.log(`📦 Cache simples encontrado: ${key}`);
+      return cacheItem.data;
+    } catch (error) {
+      console.warn("⚠️ Erro ao ler cache simples:", error);
+      localStorage.removeItem(key);
+      return null;
+    }
+  },
+};
+
 // Definição da URL do backend para o dashboard
 const DASHBOARD_BACKEND_URL = (function () {
   const isLocalhost =
@@ -4258,10 +4306,10 @@ async function carregarDadosDashboard(mes = "", grupo = "") {
 
     // Gerar chave do cache baseada nos parâmetros
     const params = { mes, grupo };
-    const cacheKey = cacheManager.generateKey("dashboard-stats", params);
+    const cacheKey = simpleCacheManager.generateKey("dashboard-stats", params);
 
     // Verificar cache primeiro
-    const cachedData = cacheManager.get(cacheKey);
+    const cachedData = simpleCacheManager.get(cacheKey);
     if (cachedData) {
       console.log("📦 Usando dados do dashboard do cache...");
       atualizarInterfaceDashboard(cachedData, true);
@@ -4315,11 +4363,11 @@ async function carregarDadosDashboardFromServer(
       console.log("✅ Dados do dashboard carregados:", result.data);
 
       // Salvar no cache (TTL de 2 minutos para dados do dashboard)
-      const cacheKey = cacheManager.generateKey("dashboard-stats", {
+      const cacheKey = simpleCacheManager.generateKey("dashboard-stats", {
         mes,
         grupo,
       });
-      cacheManager.set(cacheKey, result.data, 2 * 60 * 1000);
+      simpleCacheManager.set(cacheKey, result.data, 2 * 60 * 1000);
 
       // Verificar se os dados são simulados e mostrar aviso
       if (result.data.isSimulated) {
