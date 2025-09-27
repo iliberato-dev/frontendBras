@@ -200,6 +200,194 @@ if (typeof window.dashboardInitialized === "undefined") {
     });
   }
 
+  // --- Função para calcular total de reuniões baseado em 3 reuniões semanais ---
+  // NOVA LÓGICA: Domingo, Terça e Quinta = 3 reuniões por semana
+  function calculateTotalMeetingsFor3PerWeek(periodo) {
+    const currentYear = new Date().getFullYear();
+    const currentMonth = new Date().getMonth() + 1; // getMonth() retorna 0-11
+
+    if (!periodo || periodo === "todos") {
+      // Se não há filtro de período, usar ano atual completo
+      // 12 meses × ~12 reuniões por mês (4 semanas × 3) = 144 reuniões
+      console.log(
+        "📅 Calculando para ano completo: 12 meses × 12 reuniões = 144 reuniões (3 por semana)"
+      );
+      return 144; // 12 meses × 12 reuniões mensais
+    }
+
+    // Verifica se é um período específico (ex: "2024-01" para janeiro de 2024)
+    const periodoMatch = periodo.match(/^(\d{4})-(\d{2})$/);
+    if (periodoMatch) {
+      const [, year, month] = periodoMatch;
+      const reunioesMensais = calculateMeetingsInMonth(
+        parseInt(year),
+        parseInt(month)
+      );
+      console.log(
+        `📅 Calculando para ${month}/${year}: ${reunioesMensais} reuniões (3 por semana: Dom, Ter, Qui)`
+      );
+      return reunioesMensais;
+    }
+
+    // Se é só um número (mês), assumir mês do ano atual
+    const mesNumero = parseInt(periodo);
+    if (mesNumero >= 1 && mesNumero <= 12) {
+      const reunioesMensais = calculateMeetingsInMonth(currentYear, mesNumero);
+      console.log(
+        `📅 Calculando para mês ${mesNumero}/${currentYear}: ${reunioesMensais} reuniões (3 por semana: Dom, Ter, Qui)`
+      );
+      return reunioesMensais;
+    }
+
+    // Fallback: assumir mês atual
+    const reunioesMensais = calculateMeetingsInMonth(currentYear, currentMonth);
+    console.log(
+      `📅 Fallback para mês atual: ${reunioesMensais} reuniões (3 por semana: Dom, Ter, Qui)`
+    );
+    return reunioesMensais;
+  }
+
+  // Função auxiliar para calcular reuniões em um mês específico
+  // Conta quantos domingos, terças e quintas existem no mês
+  function calculateMeetingsInMonth(year, month) {
+    const diasReuniao = [0, 2, 4]; // 0=Domingo, 2=Terça, 4=Quinta
+    let totalReunions = 0;
+
+    // Obter o último dia do mês
+    const ultimoDia = new Date(year, month, 0).getDate();
+
+    // Lista de feriados a serem excluídos (formato: "DD/MM")
+    const feriadosExcluidos = getFeriadosDoMes(month);
+
+    // Contar cada dia específico no mês
+    for (let dia = 1; dia <= ultimoDia; dia++) {
+      const dataAtual = new Date(year, month - 1, dia); // month-1 porque Date usa 0-11
+      const diaSemana = dataAtual.getDay(); // 0=Domingo, 1=Segunda, ..., 6=Sábado
+
+      if (diasReuniao.includes(diaSemana)) {
+        // Verificar se não é feriado
+        const dataFormatada = `${dia.toString().padStart(2, "0")}/${month
+          .toString()
+          .padStart(2, "0")}`;
+
+        if (!feriadosExcluidos.includes(dataFormatada)) {
+          totalReunions++;
+        } else {
+          console.log(`🚫 Feriado excluído: ${dataFormatada}/${year}`);
+        }
+      }
+    }
+
+    console.log(
+      `📊 Mês ${month}/${year}: ${totalReunions} reuniões (Domingos + Terças + Quintas, excl. feriados)`
+    );
+    return totalReunions;
+  }
+
+  // Função para definir feriados por mês (pode ser customizada)
+  function getFeriadosDoMes(month) {
+    const feriados = {
+      1: ["01/01"], // Janeiro: Ano Novo
+      2: [], // Fevereiro: Carnaval (data móvel - pode ser adicionado manualmente)
+      3: [], // Março
+      4: ["21/04"], // Abril: Tiradentes
+      5: ["01/05"], // Maio: Dia do Trabalho
+      6: [], // Junho: Corpus Christi (data móvel)
+      7: [], // Julho
+      8: [], // Agosto
+      9: ["07/09"], // Setembro: Independência
+      10: ["12/10"], // Outubro: Nossa Senhora Aparecida
+      11: ["02/11", "15/11"], // Novembro: Finados, Proclamação da República
+      12: ["25/12"], // Dezembro: Natal
+    };
+
+    return feriados[month] || [];
+  }
+
+  // Função helper para buscar dados de um membro por nome
+  function getMemberDataByName(memberName) {
+    if (!allMembersData || allMembersData.length === 0) {
+      return null;
+    }
+
+    const member = allMembersData.find(
+      (m) => normalizeString(m.Nome || "") === normalizeString(memberName || "")
+    );
+
+    return member;
+  }
+
+  // Função para formatar nome com RI para relatórios
+  function formatMemberNameWithRI(memberName) {
+    const memberData = getMemberDataByName(memberName);
+    const ri = memberData?.RI;
+
+    if (ri && ri.toString().trim() !== "") {
+      return `RI-${ri} - ${memberName}`;
+    }
+
+    return memberName; // Se não tem RI, retorna só o nome
+  }
+
+  // Função para calcular porcentagem de presença semanal
+  function calculateWeeklyPresencePercentage(presencas, totalPossivel = 3) {
+    if (totalPossivel === 0) return 0;
+    const percentage = Math.round((presencas / totalPossivel) * 100);
+
+    // Sistema específico solicitado
+    if (presencas === 1) return 33;
+    if (presencas === 2) return 66;
+    if (presencas >= 3) return 100;
+    return 0;
+  }
+
+  // Função para analisar presenças por dia da semana
+  function analyzePresencesByWeekday(presencesData) {
+    const weekdayStats = {
+      0: { name: "Domingo", count: 0, total: 0 }, // Domingo
+      2: { name: "Terça", count: 0, total: 0 }, // Terça
+      4: { name: "Quinta", count: 0, total: 0 }, // Quinta
+    };
+
+    // Analisar dados de presença (se disponíveis com datas específicas)
+    Object.values(presencesData).forEach((memberData) => {
+      if (memberData.presences && Array.isArray(memberData.presences)) {
+        memberData.presences.forEach((presence) => {
+          if (presence.data) {
+            try {
+              // Assumir formato DD/MM/YYYY
+              const [day, month, year] = presence.data.split("/");
+              const date = new Date(year, month - 1, day);
+              const weekday = date.getDay();
+
+              if (weekdayStats[weekday]) {
+                weekdayStats[weekday].count++;
+              }
+            } catch (error) {
+              console.warn("Erro ao processar data:", presence.data);
+            }
+          }
+        });
+      }
+    });
+
+    // Calcular porcentagens
+    const totalPresences = Object.values(weekdayStats).reduce(
+      (sum, day) => sum + day.count,
+      0
+    );
+    Object.keys(weekdayStats).forEach((day) => {
+      const dayData = weekdayStats[day];
+      dayData.percentage =
+        totalPresences > 0
+          ? Math.round((dayData.count / totalPresences) * 100)
+          : 0;
+    });
+
+    console.log("📊 Análise por dia da semana:", weekdayStats);
+    return weekdayStats;
+  }
+
   // Função de debounce para otimizar event listeners
   function debounce(func, wait) {
     let timeout;
@@ -336,7 +524,12 @@ if (typeof window.dashboardInitialized === "undefined") {
   }
 
   function showMessage(message, type = "info") {
-    if (!messageArea) return;
+    // Fallback para alert se messageArea não existir
+    if (!messageArea) {
+      alert(message);
+      return;
+    }
+
     if (message.includes("Carregando") || !message.trim()) return;
 
     messageArea.textContent = message;
@@ -1495,10 +1688,18 @@ if (typeof window.dashboardInitialized === "undefined") {
                 <i class="fas fa-users text-purple-600 fa-fw"></i>
                 <span><b>GAPE:</b> ${member.GAPE || "N/A"}</span>
             </div>
-            <label class="flex items-center gap-2 mt-2">
-                <input type="checkbox" class="h-5 w-5 text-blue-600 rounded focus:ring-blue-500 presence-checkbox">
-                <span class="text-sm text-gray-700">Presente</span>
-            </label>
+            <div class="presence-controls mt-3">
+                <div class="flex gap-4 mb-2">
+                    <label class="flex items-center gap-2">
+                        <input type="checkbox" class="h-4 w-4 text-blue-600 rounded focus:ring-blue-500 presence-checkbox-morning">
+                        <span class="text-sm text-gray-700">Manhã</span>
+                    </label>
+                    <label class="flex items-center gap-2">
+                        <input type="checkbox" class="h-4 w-4 text-blue-600 rounded focus:ring-blue-500 presence-checkbox-evening">
+                        <span class="text-sm text-gray-700">Noite</span>
+                    </label>
+                </div>
+            </div>
             <div class="presence-date-container mt-2 hidden" style="display: none;">
                 <label class="text-sm text-gray-600 font-semibold">Escolha a data da presença (opcional):</label>
                 <input type="date" class="presence-date-input mt-1 block w-full rounded-md border-gray-300 shadow-sm">
@@ -1509,7 +1710,8 @@ if (typeof window.dashboardInitialized === "undefined") {
       container.appendChild(card);
 
       // O restante da sua função (event listeners, etc.) permanece exatamente o mesmo
-      const checkbox = card.querySelector(".presence-checkbox");
+      const checkboxMorning = card.querySelector(".presence-checkbox-morning");
+      const checkboxEvening = card.querySelector(".presence-checkbox-evening");
       const infoDiv = card.querySelector(".presence-info");
       const confirmBtn = card.querySelector(".btn-confirm-presence");
       const dateContainer = card.querySelector(".presence-date-container");
@@ -1534,11 +1736,16 @@ if (typeof window.dashboardInitialized === "undefined") {
           ) {
             displayText += ` às ${presence.hora}`;
           }
+          if (presence.periodo) {
+            displayText += ` (${presence.periodo})`;
+          }
           if (presence.diaSemana) {
             const diaFormatado =
               presence.diaSemana.charAt(0).toUpperCase() +
               presence.diaSemana.slice(1);
-            displayText += ` (${diaFormatado})`;
+            displayText += ` ${presence.periodo ? "-" : "("} ${diaFormatado}${
+              presence.periodo ? "" : ")"
+            }`;
           }
           infoDiv.textContent = displayText;
           infoDiv.className = "text-xs text-green-700 mt-1 presence-info";
@@ -1554,14 +1761,20 @@ if (typeof window.dashboardInitialized === "undefined") {
         showPresenceHistory(member.Nome, member)
       );
 
-      checkbox.addEventListener("change", function () {
-        // Usa tanto classes CSS quanto style.display para garantir compatibilidade
-        if (this.checked) {
+      // Função para atualizar visibilidade dos controles baseado nos checkboxes
+      const updateControlsVisibility = () => {
+        const anyChecked = checkboxMorning.checked || checkboxEvening.checked;
+        if (anyChecked) {
           dateContainer.classList.remove("hidden");
           dateContainer.style.display = "block";
           confirmBtn.classList.remove("hidden");
           confirmBtn.style.display = "block";
-          infoDiv.textContent = "Clique em confirmar para registrar.";
+
+          let periodText = [];
+          if (checkboxMorning.checked) periodText.push("manhã");
+          if (checkboxEvening.checked) periodText.push("noite");
+
+          infoDiv.textContent = `Registrar presença: ${periodText.join(" e ")}`;
           infoDiv.className = "text-xs text-gray-500 mt-1 presence-info";
         } else {
           dateContainer.classList.add("hidden");
@@ -1570,11 +1783,28 @@ if (typeof window.dashboardInitialized === "undefined") {
           confirmBtn.style.display = "none";
           updatePresenceStatus();
         }
-      });
+      };
+
+      checkboxMorning.addEventListener("change", updateControlsVisibility);
+      checkboxEvening.addEventListener("change", updateControlsVisibility);
 
       confirmBtn.addEventListener("click", async () => {
+        const selectedPeriods = [];
+        if (checkboxMorning.checked) selectedPeriods.push("manhã");
+        if (checkboxEvening.checked) selectedPeriods.push("noite");
+
+        console.log("🔍 Períodos selecionados:", selectedPeriods);
+
+        if (selectedPeriods.length === 0) {
+          showMessage(
+            "Selecione pelo menos um período (manhã ou noite)",
+            "error"
+          );
+          return;
+        }
+
         confirmBtn.disabled = true;
-        infoDiv.textContent = `Registrando...`;
+        infoDiv.textContent = `Registrando presença...`;
         infoDiv.className =
           "text-xs text-blue-700 mt-1 presence-info animate-pulse";
 
@@ -1589,28 +1819,47 @@ if (typeof window.dashboardInitialized === "undefined") {
           presenceTime = now.toLocaleTimeString("pt-BR");
         }
 
+        console.log("🔍 Enviando para:", `${BACKEND_URL}/presenca`);
+
         try {
-          const response = await fetch(`${BACKEND_URL}/presenca`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
+          // Registrar presença para cada período selecionado
+          for (const periodo of selectedPeriods) {
+            const requestData = {
               action: "add",
               nome: member.Nome,
               data: presenceDate,
               hora: presenceTime,
-              grupo: member.GAPE, // Incluir grupo
-            }),
-          });
-          const result = await response.json();
-          if (!result.success) throw new Error(result.message);
+              grupo: member.GAPE,
+              periodo: periodo,
+            };
 
-          showMessage("Presença registrada com sucesso!", "success");
+            console.log("🔍 Dados enviados:", requestData);
+
+            const response = await fetch(`${BACKEND_URL}/presenca`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(requestData),
+            });
+
+            const result = await response.json();
+            console.log("🔍 Resposta:", result);
+
+            if (!result.success) throw new Error(result.message);
+          }
+
+          const periodText = selectedPeriods.join(" e ");
+          showMessage(
+            `Presença registrada com sucesso para ${periodText}!`,
+            "success"
+          );
           fetchMembers();
         } catch (error) {
+          console.error("� Erro:", error);
           showMessage(`Erro: ${error.message}`, "error");
           updatePresenceStatus();
         } finally {
-          checkbox.checked = false;
+          checkboxMorning.checked = false;
+          checkboxEvening.checked = false;
           confirmBtn.classList.add("hidden");
           confirmBtn.style.display = "none";
           dateContainer.classList.add("hidden");
@@ -1630,7 +1879,9 @@ if (typeof window.dashboardInitialized === "undefined") {
     // Armazenar o objeto membro para uso posterior
     window.currentMemberForHistory = memberObj;
 
-    historyModalTitle.textContent = `Histórico de Presenças de ${memberName}`;
+    historyModalTitle.textContent = `Histórico de Presenças de ${formatMemberNameWithRI(
+      memberName
+    )}`;
     historyListContainer.innerHTML = `<p class="text-center text-gray-500">Carregando...</p>`;
     historyModal.classList.remove("hidden");
 
@@ -1648,12 +1899,13 @@ if (typeof window.dashboardInitialized === "undefined") {
       }
 
       // --- ALTERAÇÃO AQUI ---
-      // Modificamos o HTML para incluir o dia da semana
+      // Modificamos o HTML para incluir o dia da semana e período
       historyListContainer.innerHTML = `<ul class="space-y-2" id="history-ul">${presences
         .map((p) => {
           const diaSemanaFormatado = p.diaSemana ? `(${p.diaSemana})` : "";
           const horaFormatada =
             p.hora && p.hora !== "00:00:00" ? `às ${p.hora}` : "";
+          const periodoFormatado = p.periodo ? `[${p.periodo}]` : "";
 
           return `
             <li class="flex justify-between items-center bg-gray-100 p-2 rounded-md">
@@ -1662,8 +1914,15 @@ if (typeof window.dashboardInitialized === "undefined") {
                     <strong>Data:</strong> ${p.data}
                     <span class="text-gray-600 text-sm ml-2">${diaSemanaFormatado}</span>
                     <span class="text-gray-500 text-xs ml-2">${horaFormatada}</span>
+                    ${
+                      periodoFormatado
+                        ? `<span class="text-blue-600 text-xs ml-2 font-medium">${periodoFormatado}</span>`
+                        : ""
+                    }
                 </span>
-                <button class="btn-remove-presence text-red-500 hover:text-red-700 font-bold" data-nome="${memberName}" data-data="${p.data}" title="Remover">&times;</button>
+                <button class="btn-remove-presence text-red-500 hover:text-red-700 font-bold" data-nome="${memberName}" data-data="${
+            p.data
+          }" title="Remover">&times;</button>
             </li>`;
         })
         .join("")}</ul>`;
@@ -1788,18 +2047,70 @@ if (typeof window.dashboardInitialized === "undefined") {
       const presencesDetails = summaryData.presences || {};
       const absencesDetails = summaryData.absences || {};
 
-      console.log("📈 Dados recebidos:", {
+      // *** NOVA LÓGICA: SUBSTITUIR totalMeetingDays pelo cálculo de 3 reuniões semanais ***
+      const originalTotalMeetingDays = summaryData.totalMeetingDays;
+      const calculatedTotalMeetings = calculateTotalMeetingsFor3PerWeek(
+        filterPeriodoSelect.value
+      );
+
+      // Sobrescrever o valor para usar nossa lógica de 3 reuniões semanais (Dom, Ter, Qui)
+      summaryData.totalMeetingDays = calculatedTotalMeetings;
+
+      console.log("📈 Dados recebidos e ajustados:", {
         presencesCount: Object.keys(presencesDetails).length,
         absencesCount: Object.keys(absencesDetails).length,
-        totalMeetingDays: summaryData.totalMeetingDays,
+        originalTotalMeetingDays: originalTotalMeetingDays,
+        newTotalMeetingDays: summaryData.totalMeetingDays,
+        periodo: filterPeriodoSelect.value,
         presencesDetails: presencesDetails,
         absencesDetails: absencesDetails,
       });
 
-      // 🔍 DEBUG DETALHADO - Verificação matemática no frontend
-      console.log("🔢 Verificação matemática no frontend:");
+      // *** RECALCULAR FALTAS baseado na nova lógica de 3 reuniões semanais ***
       console.log(
-        `📅 Total de reuniões encontradas no período: ${summaryData.totalMeetingDays}`
+        "🔄 Recalculando faltas baseado em 3 reuniões semanais (Dom, Ter, Qui)..."
+      );
+
+      // Para cada membro nas presenças, recalcular suas faltas
+      Object.keys(presencesDetails).forEach((nome) => {
+        const presencasOriginais = presencesDetails[nome]?.totalPresencas || 0;
+
+        // NOVA LÓGICA: Limitar presenças ao máximo permitido no período
+        const presencasLimitadas = Math.min(
+          presencasOriginais,
+          summaryData.totalMeetingDays
+        );
+        const faltasCalculadas =
+          summaryData.totalMeetingDays - presencasLimitadas;
+
+        // Atualizar os dados com os valores corrigidos
+        presencesDetails[nome].totalPresencas = presencasLimitadas;
+
+        // Atualizar ou criar entrada de faltas para este membro
+        if (!absencesDetails[nome]) {
+          absencesDetails[nome] = {};
+        }
+        absencesDetails[nome].totalFaltas = faltasCalculadas;
+
+        // Log diferenciado para mostrar quando houve limitação
+        if (presencasOriginais > summaryData.totalMeetingDays) {
+          console.log(
+            `⚠️ ${nome}: ${presencasOriginais} presenças registradas → LIMITADO para ${presencasLimitadas} presenças + ${faltasCalculadas} faltas = ${summaryData.totalMeetingDays} reuniões`
+          );
+        } else {
+          const porcentagemSemanal = calculateWeeklyPresencePercentage(
+            presencasLimitadas % 3 || 3
+          );
+          console.log(
+            `✅ ${nome}: ${presencasLimitadas} presenças + ${faltasCalculadas} faltas = ${summaryData.totalMeetingDays} reuniões (última semana: ${porcentagemSemanal}%)`
+          );
+        }
+      });
+
+      // 🔍 DEBUG DETALHADO - Verificação matemática no frontend
+      console.log("🔢 Verificação matemática no frontend (APÓS RECÁLCULO):");
+      console.log(
+        `📅 Total de reuniões no período (3 por mês): ${summaryData.totalMeetingDays}`
       );
       Object.keys(presencesDetails).forEach((nome) => {
         const presencas = presencesDetails[nome]?.totalPresencas || 0;
@@ -1818,7 +2129,7 @@ if (typeof window.dashboardInitialized === "undefined") {
 
       // Explicação clara da matemática
       console.log(
-        "💡 EXPLICAÇÃO: Se houve",
+        "💡 EXPLICAÇÃO (NOVA LÓGICA - 3 reuniões/semana): Se houve",
         summaryData.totalMeetingDays,
         "reuniões no período:"
       );
@@ -1826,8 +2137,12 @@ if (typeof window.dashboardInitialized === "undefined") {
         "   • Cada membro deveria ter: Presenças + Faltas =",
         summaryData.totalMeetingDays
       );
+      console.log("   • Faltas = Total de Reuniões - Presenças Registradas");
       console.log(
-        "   • É normal que membros com poucas presenças tenham muitas faltas!"
+        "   • Sistema configurado para 3 reuniões por semana: Domingo, Terça e Quinta"
+      );
+      console.log(
+        "   • Porcentagem semanal: 1 reunião = 33%, 2 reuniões = 66%, 3 reuniões = 100%"
       );
 
       // Processa os dados recebidos para os cards principais
@@ -1922,7 +2237,11 @@ if (typeof window.dashboardInitialized === "undefined") {
                           100
                       )
                     : 0;
-                return `<div class="text-sm text-green-300 py-1 border-b border-gray-600 last:border-b-0"><span class="font-semibold text-green-100">${name}:</span> ${data.totalPresencas} presenças <span class="text-green-200">(${percentage}%)</span></div>`;
+                return `<div class="text-sm text-green-300 py-1 border-b border-gray-600 last:border-b-0"><span class="font-semibold text-green-100">${formatMemberNameWithRI(
+                  name
+                )}:</span> ${
+                  data.totalPresencas
+                } presenças <span class="text-green-200">(${percentage}%)</span></div>`;
               })
               .join("")
           : '<div class="text-sm text-gray-400 text-center">Nenhuma presença.</div>';
@@ -1949,7 +2268,11 @@ if (typeof window.dashboardInitialized === "undefined") {
                         (data.totalFaltas / summaryData.totalMeetingDays) * 100
                       )
                     : 0;
-                return `<div class="text-sm text-red-300 py-1 border-b border-gray-600 last:border-b-0"><span class="font-semibold text-red-100">${name}:</span> ${data.totalFaltas} faltas <span class="text-red-200">(${percentage}%)</span></div>`;
+                return `<div class="text-sm text-red-300 py-1 border-b border-gray-600 last:border-b-0"><span class="font-semibold text-red-100">${formatMemberNameWithRI(
+                  name
+                )}:</span> ${
+                  data.totalFaltas
+                } faltas <span class="text-red-200">(${percentage}%)</span></div>`;
               })
               .join("")
           : '<div class="text-sm text-gray-400 text-center">Nenhuma falta.</div>';
@@ -2363,7 +2686,9 @@ if (typeof window.dashboardInitialized === "undefined") {
       // Etapa 4: Definir escopo da análise
       updateLoaderStatus("Definindo escopo da análise...");
       if (selectedMemberName) {
-        title = `Estatísticas para ${selectedMemberName}`;
+        title = `Estatísticas para ${formatMemberNameWithRI(
+          selectedMemberName
+        )}`;
         membersToAnalyze = allMembersData.filter(
           (m) => m.Nome === selectedMemberName
         );
@@ -2402,6 +2727,22 @@ if (typeof window.dashboardInitialized === "undefined") {
         if (!summaryResponse.success) throw new Error(summaryResponse.message);
 
         summaryData = summaryResponse.data;
+
+        // *** APLICAR MESMA LÓGICA: SUBSTITUIR totalMeetingDays pelo cálculo de 3 reuniões semanais ***
+        const originalTotalMeetingDays = summaryData.totalMeetingDays;
+        const currentPeriod = filterPeriodoSelect?.value || "";
+        const calculatedTotalMeetings =
+          calculateTotalMeetingsFor3PerWeek(currentPeriod);
+
+        // Sobrescrever o valor para usar nossa lógica de 3 reuniões semanais (Dom, Ter, Qui)
+        summaryData.totalMeetingDays = calculatedTotalMeetings;
+
+        console.log("📈 Dados do resumo detalhado ajustados:", {
+          originalTotalMeetingDays,
+          newTotalMeetingDays: summaryData.totalMeetingDays,
+          periodo: currentPeriod,
+        });
+
         updateLoaderStatus("Salvando dados em cache...");
         setCachedData(cacheKey, summaryData);
       } else {
@@ -2419,6 +2760,39 @@ if (typeof window.dashboardInitialized === "undefined") {
         requestAnimationFrame(() => {
           const presencesDetails = summaryData.presences || {};
           const absencesDetails = summaryData.absences || {};
+
+          // *** RECALCULAR FALTAS também no resumo detalhado ***
+          console.log(
+            "🔄 (Resumo Detalhado) Recalculando faltas baseado em 3 reuniões semanais (Dom, Ter, Qui)..."
+          );
+
+          Object.keys(presencesDetails).forEach((nome) => {
+            const presencasOriginais =
+              presencesDetails[nome]?.totalPresencas || 0;
+
+            // NOVA LÓGICA: Limitar presenças ao máximo permitido no período
+            const presencasLimitadas = Math.min(
+              presencasOriginais,
+              summaryData.totalMeetingDays
+            );
+            const faltasCalculadas =
+              summaryData.totalMeetingDays - presencasLimitadas;
+
+            // Atualizar os dados com os valores corrigidos
+            presencesDetails[nome].totalPresencas = presencasLimitadas;
+
+            if (!absencesDetails[nome]) {
+              absencesDetails[nome] = {};
+            }
+            absencesDetails[nome].totalFaltas = faltasCalculadas;
+
+            // Log diferenciado
+            if (presencasOriginais > summaryData.totalMeetingDays) {
+              console.log(
+                `⚠️ (Detalhado) ${nome}: ${presencasOriginais} → LIMITADO para ${presencasLimitadas} presenças + ${faltasCalculadas} faltas`
+              );
+            }
+          });
 
           const totalPresences = Object.values(presencesDetails).reduce(
             (sum, data) => sum + data.totalPresencas,
@@ -2563,25 +2937,49 @@ if (typeof window.dashboardInitialized === "undefined") {
             chartTitle = "Proporção Presenças vs Faltas";
           } else {
             // === VISÃO DE GRUPO APRIMORADA ===
-            const membersWithPresence = Object.keys(presencesDetails).length;
+            // CORREÇÃO: Usar todos os membros que têm dados de presença OU estão nos filtros
+            const allMembersInAnalysis = new Set([
+              ...Object.keys(presencesDetails),
+              ...Object.keys(absencesDetails),
+              ...membersToAnalyze.map((m) => m.Nome),
+            ]);
+
+            const totalMembersInAnalysis = allMembersInAnalysis.size;
+            const membersWithPresence = Object.keys(presencesDetails).filter(
+              (memberName) => presencesDetails[memberName]?.totalPresencas > 0
+            ).length;
             const membersWithoutPresence =
-              membersToAnalyze.length - membersWithPresence;
+              totalMembersInAnalysis - membersWithPresence;
 
             // CORREÇÃO: Cálculo correto da média de presença baseada em membros
             // Fórmula: (Membros com Presença / Total de Membros) x 100
             const avgPresenceRate =
-              membersToAnalyze.length > 0
+              totalMembersInAnalysis > 0
                 ? (
-                    (membersWithPresence / membersToAnalyze.length) *
+                    (membersWithPresence / totalMembersInAnalysis) *
                     100
                   ).toFixed(1)
                 : 0;
 
-            console.log(`📊 Cálculo da média de presença por membros:
+            console.log(`📊 Cálculo da média de presença por membros (CORRIGIDO):
               - Membros com presença: ${membersWithPresence}
-              - Total de membros: ${membersToAnalyze.length}
+              - Total de membros na análise: ${totalMembersInAnalysis}
               - Membros sem presença: ${membersWithoutPresence}
               - Taxa calculada: ${avgPresenceRate}%`);
+
+            // DEBUG: Mostrar quais membros estão sendo considerados
+            console.log(
+              "🔍 DEBUG - Membros na análise:",
+              Array.from(allMembersInAnalysis)
+            );
+            console.log(
+              "🔍 DEBUG - Membros com presença:",
+              Object.keys(presencesDetails)
+            );
+            console.log(
+              "🔍 DEBUG - Membros com faltas:",
+              Object.keys(absencesDetails)
+            );
 
             // Ranking dos Top 5 mais presentes
             const topMembers = Object.entries(presencesDetails)
@@ -2599,9 +2997,7 @@ if (typeof window.dashboardInitialized === "undefined") {
               <!-- Métricas Principais do Grupo -->
               <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
                 <div class="bg-blue-50 p-3 rounded-lg text-center">
-                  <div class="text-2xl font-bold text-blue-600">${
-                    membersToAnalyze.length
-                  }</div>
+                  <div class="text-2xl font-bold text-blue-600">${totalMembersInAnalysis}</div>
                   <div class="text-sm text-gray-600">Total Membros</div>
                 </div>
                 <div class="bg-green-50 p-3 rounded-lg text-center">
@@ -2646,8 +3042,12 @@ if (typeof window.dashboardInitialized === "undefined") {
                             : `${index + 1}º`;
                         return `
                         <div class="flex justify-between items-center bg-white p-2 rounded">
-                          <span class="font-medium">${medal} ${name}</span>
-                          <span class="text-green-600 font-bold">${data.totalPresencas} (${rate}%)</span>
+                          <span class="font-medium">${medal} ${formatMemberNameWithRI(
+                          name
+                        )}</span>
+                          <span class="text-green-600 font-bold">${
+                            data.totalPresencas
+                          } (${rate}%)</span>
                         </div>`;
                       })
                       .join("")}
@@ -2672,7 +3072,9 @@ if (typeof window.dashboardInitialized === "undefined") {
                             : 0;
                         return `
                         <div class="flex justify-between items-center bg-white p-2 rounded">
-                          <span class="font-medium">${index + 1}º ${name}</span>
+                          <span class="font-medium">${
+                            index + 1
+                          }º ${formatMemberNameWithRI(name)}</span>
                           <span class="text-red-600 font-bold">${
                             data.totalFaltas
                           } (${rate}%)</span>
@@ -2702,7 +3104,10 @@ if (typeof window.dashboardInitialized === "undefined") {
                 </div>
               </div>`;
 
-            chartData = [membersWithPresence, membersWithoutPresence];
+            chartData = [
+              membersWithPresence,
+              Math.max(0, membersWithoutPresence),
+            ];
             chartLabels = ["Membros com Presença", "Membros Sem Presença"];
             chartTitle = "Proporção de Membros com/sem Presença";
           }
@@ -3234,13 +3639,26 @@ if (typeof window.dashboardInitialized === "undefined") {
               ? ((presencas / totalMeetings) * 100).toFixed(1)
               : 0;
 
+          // Obter informações sobre períodos de presença (manhã/noite)
+          let periodosPresenca = "N/A";
+          if (memberPresenceData.periodos) {
+            // Se tiver informação específica de períodos do backend
+            periodosPresenca = Array.isArray(memberPresenceData.periodos)
+              ? memberPresenceData.periodos.join(", ")
+              : memberPresenceData.periodos;
+          } else if (presencas > 0) {
+            // Valor padrão se não tiver informação específica
+            periodosPresenca = "Variado";
+          }
+
           const detail = {
-            nome: member.Nome || "N/A",
+            nome: formatMemberNameWithRI(member.Nome || "N/A"),
             gape: member.GAPE || "N/A",
             lider: member.Lider || "N/A",
             periodo: member.Periodo || "N/A",
             presencas: presencas,
             faltas: faltas,
+            periodos: periodosPresenca,
             taxa: parseFloat(taxa),
             status: parseFloat(taxa) >= 80 ? "Ativo" : "Irregular",
           };
@@ -3471,8 +3889,8 @@ if (typeof window.dashboardInitialized === "undefined") {
 
         let colWidths, headers;
         if (isShowingAllMembers) {
-          // Configuração completa da tabela (7 colunas)
-          colWidths = [55, 25, 20, 20, 20, 20, 25]; // Nome, GAPE, Líder, Período, Presenças, Faltas, Taxa
+          // Configuração completa da tabela (8 colunas) - adicionada coluna de períodos
+          colWidths = [50, 20, 18, 18, 18, 18, 20, 25]; // Nome, GAPE, Líder, Período, Presenças, Faltas, Períodos, Taxa
           headers = [
             "Nome do Membro",
             "GAPE",
@@ -3480,12 +3898,19 @@ if (typeof window.dashboardInitialized === "undefined") {
             "Período",
             "Presenças",
             "Faltas",
+            "Períodos",
             "Taxa %",
           ];
         } else {
-          // Configuração simplificada da tabela (4 colunas)
-          colWidths = [80, 25, 25, 25]; // Nome, Presenças, Faltas, Taxa
-          headers = ["Nome do Membro", "Presenças", "Faltas", "Taxa %"];
+          // Configuração simplificada da tabela (5 colunas) - adicionada coluna de períodos
+          colWidths = [70, 20, 20, 25, 20]; // Nome, Presenças, Faltas, Períodos, Taxa
+          headers = [
+            "Nome do Membro",
+            "Presenças",
+            "Faltas",
+            "Períodos",
+            "Taxa %",
+          ];
         }
 
         const tableStartY = currentY;
@@ -3543,22 +3968,24 @@ if (typeof window.dashboardInitialized === "undefined") {
 
           let rowData;
           if (isShowingAllMembers) {
-            // Dados completos com 7 colunas
+            // Dados completos com 8 colunas (adicionada coluna períodos)
             rowData = [
-              member.nome.substring(0, 30), // Nome mais curto para caber
-              (member.gape || "N/A").substring(0, 15),
-              (member.lider || "N/A").substring(0, 12),
-              (member.periodo || "N/A").substring(0, 12),
+              member.nome.substring(0, 28), // Nome mais curto para caber
+              (member.gape || "N/A").substring(0, 12),
+              (member.lider || "N/A").substring(0, 10),
+              (member.periodo || "N/A").substring(0, 10),
               member.presencas?.toString() || "0",
               member.faltas?.toString() || "0",
+              (member.periodos || "N/A").substring(0, 15),
               member.taxa ? `${member.taxa}%` : "0%",
             ];
           } else {
-            // Dados simplificados com 4 colunas
+            // Dados simplificados com 5 colunas (adicionada coluna períodos)
             rowData = [
-              member.nome.substring(0, 40), // Nome com mais espaço
+              member.nome.substring(0, 35), // Nome com mais espaço
               member.presencas?.toString() || "0",
               member.faltas?.toString() || "0",
+              (member.periodos || "N/A").substring(0, 18),
               member.taxa ? `${member.taxa}%` : "0%",
             ];
           }
@@ -4591,10 +5018,19 @@ if (typeof window.dashboardInitialized === "undefined") {
       } else {
         console.log("🔍 Processando insights para grupo completo");
         // Insights para grupo
-        // Calcular total de membros no escopo atual usando membersToAnalyze
-        const membersWithPresence = Object.keys(presencesDetails).length;
-        const totalMembers = membersToAnalyze.length || membersWithPresence;
-        console.log("📊 Total de membros:", totalMembers);
+        // CORREÇÃO: Usar a mesma lógica do cálculo principal
+        const allMembersInAnalysis = new Set([
+          ...Object.keys(presencesDetails),
+          ...Object.keys(absencesDetails),
+          ...(membersToAnalyze?.map((m) => m.Nome) || []),
+        ]);
+
+        const totalMembers = allMembersInAnalysis.size;
+        const membersWithPresence = Object.keys(presencesDetails).filter(
+          (memberName) => presencesDetails[memberName]?.totalPresencas > 0
+        ).length;
+
+        console.log("📊 Total de membros (CORRIGIDO):", totalMembers);
 
         // CORREÇÃO: Cálculo correto da média de presença baseado em membros
         const avgPresenceRate =
@@ -4602,7 +5038,7 @@ if (typeof window.dashboardInitialized === "undefined") {
             ? ((membersWithPresence / totalMembers) * 100).toFixed(1)
             : 0;
 
-        console.log(`📊 Cálculo da média de presença do grupo (por membros):
+        console.log(`📊 Cálculo da média de presença do grupo (CORRIGIDO):
           - Membros com presença: ${membersWithPresence}
           - Total de membros: ${totalMembers}
           - Taxa calculada: ${avgPresenceRate}%`);
