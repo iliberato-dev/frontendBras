@@ -4167,7 +4167,7 @@ if (typeof window.dashboardInitialized === "undefined") {
 
       // Calcular os valores para os novos cards
       const totalMembers = 73; // Total de membros analisados (fixo conforme estatísticas)
-      const meetingsAnalyzed = statistics.totalMeetings || 12; // Total de reuniões analisadas
+      const meetingsAnalyzed = statistics.totalMeetingDays || 12; // Total de reuniões analisadas (CORRIGIDO)
       const activeMembers = 28; // Membros com >=80% frequência (38,4%)
       const irregularMembers = 17; // Membros com <80% frequência (23,3%)
       const absentMembers = 28; // Ausentes no período (38,4%)
